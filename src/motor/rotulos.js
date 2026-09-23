@@ -9,7 +9,7 @@
  */
 import { color, trazoMm, tipografia, ptAmm } from '../estilo/tokens.js';
 import { el, grupo, texto, textoConHalo, num, escapar } from './svg.js';
-import { poloDeInaccesibilidad, rectangulo } from './ocupacion.js';
+import { poloDeInaccesibilidad, puntoEnAnillos, rectangulo } from './ocupacion.js';
 
 /**
  * Texto con las letras separadas, al modo de los rótulos de mar.
@@ -71,19 +71,6 @@ function cajaDeAnillos(anillos, marco) {
   return { x: x0, y: y0, ancho: x1 - x0, alto: y1 - y0 };
 }
 
-/** ¿Cae el punto dentro de los anillos? Regla par-impar, la de los anillos GeoJSON. */
-function dentroDeAnillos(x, y, anillos) {
-  let dentro = false;
-  for (const anillo of anillos) {
-    for (let i = 0, j = anillo.length - 1; i < anillo.length; j = i++) {
-      const [xi, yi] = anillo[i];
-      const [xj, yj] = anillo[j];
-      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dentro = !dentro;
-    }
-  }
-  return dentro;
-}
-
 /**
  * Posiciones que se prueban para un rótulo de país, en orden.
  *
@@ -100,7 +87,7 @@ function* candidatos(polo, anillos) {
       const ang = (a / 8) * Math.PI * 2;
       const x = polo.x + Math.cos(ang) * paso * vuelta;
       const y = polo.y + Math.sin(ang) * paso * vuelta;
-      if (dentroDeAnillos(x, y, anillos)) yield [x, y];
+      if (puntoEnAnillos(x, y, anillos)) yield [x, y];
     }
   }
 }
@@ -121,6 +108,10 @@ export function rotulosDeContexto({
   const piezas = [];
   const colocados = [];
   const omitidos = [];
+  /* Las cajas se devuelven para sembrar con ellas el índice de colisiones de los
+     rótulos del país: la rejilla de ocupación es demasiado gruesa para garantizar
+     que no se tocan. */
+  const cajas = [];
 
   const ePais = { familia: 'SourceSans3', variante: 'Bold', pt: tipografia.rotuloPais.pt * factor };
   const eAgua = { familia: 'SourceSans3', variante: 'It', pt: tipografia.rotuloAgua.pt * factor };
@@ -157,6 +148,7 @@ export function rotulosDeContexto({
       'font-family': ePais.familia, 'font-size': ptAmm(ePais.pt), 'font-weight': 700,
     }, { colorHalo: color.halo, grosorMm: trazoMm.haloRotulo * factor * 0.8 }));
     ocupacion.marcarBloque(sitioPais.caja);
+    cajas.push({ ...sitioPais.caja, etiqueta: nombre, nivel: 'pais' });
     colocados.push(nombre);
   }
 
@@ -174,7 +166,9 @@ export function rotulosDeContexto({
       atributos: { fill: color.oceanoRotulo, id: 'rotulo-oceano' },
     });
     piezas.push(svg);
-    ocupacion.marcarBloque(cajaDe(medida.ancho, altoMar, sitio.x, sitio.y));
+    const cajaMar = cajaDe(medida.ancho, altoMar, sitio.x, sitio.y);
+    ocupacion.marcarBloque(cajaMar);
+    cajas.push({ ...cajaMar, etiqueta: nombreMar, nivel: 'agua' });
     colocados.push(nombreMar);
   } else {
     omitidos.push(nombreMar);

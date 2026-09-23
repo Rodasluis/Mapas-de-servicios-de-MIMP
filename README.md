@@ -9,11 +9,10 @@ No es una captura de pantalla ampliada: el PDF se construye a partir de la geome
 con las fuentes incrustadas, de modo que se puede imprimir en A0 sin que aparezca un
 solo píxel.
 
-> **Estado: Fase 3 — capa de servicios y coropletas.**
-> Las muestras reproducen el contenido temático del mapa de 2020: coropleta provincial
-> por número de servicios, un ícono por tipo con su recuento, leyenda generada sola y
-> recuadros de zoom donde los símbolos no caben. Faltan el motor de rótulos (Fase 4) y
-> la interfaz web (Fase 5): la página publicada todavía no compone mapas.
+> **Estado: Fase 4 — motor de etiquetado.**
+> A lo anterior se suman los nombres de departamentos y provincias, colocados por
+> prioridad y sin una sola superposición. Falta la interfaz web (Fase 5): la página
+> publicada todavía no compone mapas.
 
 ## Puesta en marcha
 
@@ -213,6 +212,38 @@ hueco se dejan de dibujar, y eso es el máximo dinámico: A4 admite uno, A0 hast
 | A2 | 2 | 89 × 137 mm |
 | A1 | 3 | 167 × 177 mm |
 | A0 | 4 | 337 × 351 mm |
+
+## Los rótulos
+
+El problema no es escribir nombres: es decidir cuáles caben. Hay 25 departamentos y
+196 provincias, y en A4 no entran ni la mitad sin pisarse ni tapar los símbolos. Un
+mapa con rótulos superpuestos es ilegible y uno que los omita en silencio es engañoso,
+así que el motor coloca lo que cabe **por prioridad** y deja constancia de lo que no.
+
+Cada rótulo prueba hasta diez puntos interiores de su polígono —no sólo el polo, que
+es justo donde está el grupo de íconos— y, en cada uno, la posición centrada más las
+ocho de alrededor, primero en una línea y luego partido en dos. Se mide con las
+métricas reales de la tipografía incrustada y se comprueba el choque con **rectángulos
+exactos**, no con la rejilla de ocupación: su celda de 2 mm sirve para decidir si un
+bloque cabe en una esquina, pero no para garantizar que dos rótulos no se tocan.
+
+El orden es determinista —prioridad, luego superficie, luego ubigeo— porque la Fase 8
+compara PDF contra PDF.
+
+| Hoja | Departamentos | Provincias |
+|---|---:|---:|
+| A0 vertical | 24/25 | 184/196 |
+| A1 vertical | 23/25 | 161/196 |
+| A3 vertical | 18/24 | 88/195 |
+| A4 vertical | 10/24 | 51/195 |
+
+Las provincias que el mapa principal no llega a nombrar son las que su propio grupo de
+íconos llena por completo: Lima, Callao, Huamanga. Son justamente las que acaban en un
+recuadro de zoom, así que **los recuadros también rotulan sus provincias** y esos
+nombres no se pierden.
+
+El comando de muestras comprueba por pares que ninguna caja se superpone a otra, sin
+fiarse del índice que las colocó.
 
 ## El layout se coloca solo
 

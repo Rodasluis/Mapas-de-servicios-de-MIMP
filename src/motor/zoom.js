@@ -27,7 +27,14 @@ import { geoBounds } from 'd3-geo';
 import { crearProyeccion, crearRuta } from './proyeccion.js';
 import { claseDe, repartirIconos } from './servicios.js';
 import { dibujarIcono } from '../iconos/index.js';
-import { mayorRectanguloLibre, rectangulo } from './ocupacion.js';
+import { geoPath } from 'd3-geo';
+import {
+  mayorRectanguloLibre, rectangulo, recolectorDeAnillos, polosDeInaccesibilidad,
+  puntoEnAnillos,
+} from './ocupacion.js';
+import { crearIndice } from './colisiones.js';
+import { colocarEtiquetas, crearSolicitud } from './etiquetas.js';
+import { tipografia } from '../estilo/tokens.js';
 import { color, trazoMm, ptAmm } from '../estilo/tokens.js';
 import { el, grupo, texto, textoConHalo, rect } from './svg.js';
 
@@ -356,19 +363,45 @@ function dibujarRecuadro({
     'stroke-linejoin': 'round',
   }));
 
+  /* Geometría proyectada de cada miembro, calculada UNA vez: la usan los símbolos
+     para anclarse y los rótulos para buscar sitio. Antes los símbolos se anclaban en
+     el centro de la caja envolvente y los rótulos en el polo, así que la reserva que
+     hacía el motor de rótulos no coincidía con dónde estaban los íconos y el nombre
+     de Callao acababa encima de ellos. */
+  const geometria = new Map();
+  for (const f of miembros) {
+    const recolector = recolectorDeAnillos();
+    geoPath(proy, recolector)(f);
+    const anillos = recolector.anillos;
+    if (!anillos.length) continue;
+    const caja = recorteDeCaja(anillos, marcoInterno);
+    if (!caja) continue;
+    const polos = polosDeInaccesibilidad(anillos, caja, 1, 8);
+    if (!polos.length) continue;
+    geometria.set(f, { anillos, polos });
+  }
+
   const simbolos = [];
+  const cajasSimbolos = [];
   for (const f of miembros) {
     const datos = agregado.porProvincia.get(f.properties.ubigeo);
-    if (!datos) continue;
-    const [[lon0, lat0], [lon1, lat1]] = geoBounds(f);
-    const centro = proy([(lon0 + lon1) / 2, (lat0 + lat1) / 2]);
-    if (!centro) continue;
+    const geo = geometria.get(f);
+    if (!datos || !geo) continue;
+    const centro = [geo.polos[0].x, geo.polos[0].y];
     const tipos = [...datos.tipos.keys()].sort(
       (a, b) => agregado.porTipo.get(b) - agregado.porTipo.get(a) || a.localeCompare(b, 'es'),
     );
-    const { posiciones } = repartirIconos(
+    const reparto = repartirIconos(
       tipos.length, { x: centro[0], y: centro[1] }, tamanoIcono, altoCifra,
     );
+    const { posiciones } = reparto;
+    cajasSimbolos.push({
+      x: centro[0] - reparto.ancho / 2,
+      y: centro[1] - reparto.alto / 2,
+      ancho: reparto.ancho,
+      alto: reparto.alto,
+      etiqueta: `símbolos ${f.properties.nombre}`,
+    });
     tipos.forEach((tipo, i) => {
       simbolos.push(dibujarIcono({
         tipo,
@@ -389,6 +422,14 @@ function dibujarRecuadro({
     });
   }
 
+  /* Las provincias se rotulan DENTRO del recuadro. Son justamente las que el mapa
+     principal no llega a nombrar —su grupo de íconos las llena por completo—, así que
+     si el zoom tampoco las nombrara no aparecerían por ninguna parte. Aquí caben,
+     porque a esta escala sobra sitio. */
+  const rotulos = rotularMiembros({
+    geometria, cajasSimbolos, marcoInterno, medidor, factor,
+  });
+
   return grupo({ id: `bloque-${etiqueta.replace(/\s+/g, '-').toLowerCase()}` }, [
     el('defs', {}, el('clipPath', { id: idRecorte }, rect(marcoInterno))),
     rect({ x, y, ancho, alto }, {
@@ -404,7 +445,7 @@ function dibujarRecuadro({
     }),
     grupo({ 'clip-path': `url(#${idRecorte})` }, [
       rect(marcoInterno, { fill: color.oceano }),
-      ...relleno, ...limites, ...simbolos,
+      ...relleno, ...limites, ...simbolos, rotulos,
     ]),
     rect(marcoInterno, {
       fill: 'none', stroke: color.marco, 'stroke-width': trazoMm.marcoInterior,
@@ -423,4 +464,58 @@ function cajaDe(anillosRasgo) {
     }
   }
   return Number.isFinite(minX) ? { x: minX, y: minY, ancho: maxX - minX, alto: maxY - minY } : null;
+}
+
+/**
+ * Rótulos de las provincias dentro de un recuadro de zoom.
+ *
+ * Usa el mismo motor que el mapa principal, con su propio índice de colisiones
+ * sembrado con los grupos de íconos del recuadro. Los nombres van algo mayores que en
+ * el mapa grande: un zoom se mira de cerca y es donde se espera poder leerlos.
+ */
+function rotularMiembros({ geometria, cajasSimbolos, marcoInterno, medidor, factor }) {
+  const indice = crearIndice();
+  for (const c of cajasSimbolos) indice.agregar(c);
+
+  const estilo = {
+    familia: tipografia.rotuloProvincia.familia,
+    variante: 'Semibold',
+    pt: tipografia.rotuloProvincia.pt * Math.sqrt(factor) * 1.15,
+  };
+
+  const solicitudes = [];
+  for (const [f, geo] of geometria) {
+    solicitudes.push(crearSolicitud({
+      id: f.properties.ubigeo,
+      texto: f.properties.nombre,
+      nivel: 'provincia',
+      prioridad: 1,
+      peso: geo.polos[0].radioMm,
+      puntos: geo.polos,
+      estilo,
+      dentro: (x, y) => puntoEnAnillos(x, y, geo.anillos),
+    }));
+  }
+
+  const { svg } = colocarEtiquetas({
+    solicitudes, indice, medidor, marco: marcoInterno, factor,
+  });
+  return svg;
+}
+
+/** Caja envolvente de unos anillos, recortada al marco interno del recuadro. */
+function recorteDeCaja(anillos, marcoInterno) {
+  let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+  for (const a of anillos) {
+    for (const [x, y] of a) {
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+    }
+  }
+  if (!Number.isFinite(minX)) return null;
+  const x0 = Math.max(minX, marcoInterno.x);
+  const y0 = Math.max(minY, marcoInterno.y);
+  const x1 = Math.min(maxX, marcoInterno.x + marcoInterno.ancho);
+  const y1 = Math.min(maxY, marcoInterno.y + marcoInterno.alto);
+  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, ancho: x1 - x0, alto: y1 - y0 } : null;
 }

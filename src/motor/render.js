@@ -38,7 +38,9 @@ import {
 import { bloqueLeyenda } from './leyenda.js';
 import { construirRecuadros, maximoPorFormato } from './zoom.js';
 import { dibujarIcono, comprobarCobertura } from '../iconos/index.js';
-import { poloDeInaccesibilidad } from './ocupacion.js';
+import { poloDeInaccesibilidad, polosDeInaccesibilidad, puntoEnAnillos } from './ocupacion.js';
+import { crearIndice } from './colisiones.js';
+import { colocarEtiquetas, crearSolicitud } from './etiquetas.js';
 import { color, trazoMm, tipografia, layoutMm, rampaNaranjas, ptAmm } from '../estilo/tokens.js';
 import { el, grupo, texto, textoConHalo, rect, documento, num } from './svg.js';
 
@@ -133,6 +135,14 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
   const simbolos = dibujarSimbolos({
     provincias, agregado, anillos, iconos, marco, medidor, factor, tamanoIcono,
   });
+
+  /* Los grupos de íconos se reservan en la rejilla antes de colocar nada del layout.
+     Se salen de su provincia —el de Lima se adentra en el mar— así que un bloque
+     puesto sobre «espacio libre» podía caer encima: la leyenda y un recuadro de zoom
+     acabaron sobre los símbolos de Lima, y la escala sobre los de Arequipa. */
+  for (const g of simbolos.grupos) {
+    ocupacion.marcarBloque({ x: g.x, y: g.y, ancho: g.ancho, alto: g.alto });
+  }
 
   const grilla = construirGrilla(proyeccion, marco, escala.denominador);
   const dibujoGrilla = dibujarGrilla({ grilla, marco, medidor, factor, banda });
@@ -238,6 +248,35 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     forzadas: [...colocacionCabecera.forzadas, ...colocacionResto.forzadas],
   };
 
+  /* --------------------------- rótulos del país ------------------------- */
+
+  /* Los nombres de departamentos y provincias van los ÚLTIMOS: son muchos y flexibles,
+     mientras que la leyenda, los recuadros o la escala necesitan una superficie
+     concreta. Colocarlos antes dejaría a esas piezas sin sitio por un topónimo.
+     El índice se siembra con todo lo ya dibujado —bloques, recuadros, grupos de
+     íconos y rótulos de contexto— para que ningún rótulo caiga encima. */
+  const indiceRotulos = crearIndice();
+  for (const c of colocacion.colocadas) {
+    indiceRotulos.agregar({ x: c.x, y: c.y, ancho: c.ancho, alto: c.alto, etiqueta: c.pieza.nombre });
+  }
+  for (const z of recuadros.colocados) {
+    indiceRotulos.agregar({ x: z.x, y: z.y, ancho: z.ancho, alto: z.alto, etiqueta: z.nombre });
+  }
+  for (const g of simbolos.grupos) {
+    indiceRotulos.agregar({ x: g.x, y: g.y, ancho: g.ancho, alto: g.alto, etiqueta: `símbolos ${g.nombre}` });
+  }
+  for (const c of etiquetas.cajas || []) indiceRotulos.agregar(c);
+
+  const rotulos = colocarEtiquetas({
+    solicitudes: solicitudesDeRotulos({
+      departamentos, provincias, anillos, simbolos, factor, marco,
+    }),
+    indice: indiceRotulos,
+    medidor,
+    marco,
+    factor,
+  });
+
   /* La barra de escala se comprueba sobre el dibujo terminado: se invierten sus dos
      extremos por la proyección y se mide la distancia real entre ellos. Si la barra
      dijera 500 km y cubriera 480, este número lo delata. */
@@ -255,7 +294,10 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     ruta,
     marco,
     grilla: dibujoGrilla.svgLineas,
-    etiquetas: etiquetas.svg,
+    /* Los rótulos del país van DESPUÉS de los de contexto dentro de la misma capa:
+       si un nombre de provincia y el de un país llegaran a rozarse, manda el del
+       país, que es el que orienta la lectura. */
+    etiquetas: [etiquetas.svg, rotulos.svg].filter(Boolean).join('\n'),
     simbolos: simbolos.svg,
     recuadros: recuadros.referencias,
   });
@@ -333,6 +375,18 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
         forzadas: colocacion.forzadas,
       },
       rotulos: { colocados: etiquetas.colocados, omitidos: etiquetas.omitidos },
+      etiquetas: {
+        porNivel: rotulos.porNivel,
+        omitidos: rotulos.omitidos.map((o) => o.texto),
+        cajas: indiceRotulos.lista().map((c) => ({
+          etiqueta: c.etiqueta || c.id || '',
+          nivel: c.nivel || 'bloque',
+          x: Number(c.x.toFixed(2)),
+          y: Number(c.y.toFixed(2)),
+          ancho: Number(c.ancho.toFixed(2)),
+          alto: Number(c.alto.toFixed(2)),
+        })),
+      },
       datosTag: version.datosTag,
       msComposicion: Date.now() - inicio,
     },
@@ -436,6 +490,88 @@ function medirBarraDeEscala(proyeccion, colocacion, pieza) {
   };
 }
 
+/**
+ * Puntos interiores que se ofrecen a cada rótulo.
+ *
+ * Con uno solo —el polo— no se coloca casi nada: el grupo de íconos de la provincia
+ * ocupa justamente ese punto. Con diez, el nombre tiene dónde ir sin salirse de su
+ * polígono ni pisar los símbolos.
+ */
+const PUNTOS_POR_ROTULO = 10;
+
+/* ---------------------------- rótulos del país -------------------------- */
+
+/**
+ * Prepara los rótulos de departamentos y provincias.
+ *
+ * Los departamentos van en mayúsculas y con mayor cuerpo, como en el mapa de
+ * referencia: son el nivel de lectura gruesa y tienen que verse antes que el detalle.
+ * Las provincias van debajo en la jerarquía, así que ceden el sitio cuando compiten.
+ *
+ * El punto preferido de cada rótulo es el polo de inaccesibilidad de su polígono, que
+ * para las provincias ya viene calculado por la capa de símbolos. Como el grupo de
+ * íconos ocupa justo ese punto, el motor acabará colocando casi todos los nombres
+ * desplazados alrededor; ése es exactamente su trabajo.
+ */
+function solicitudesDeRotulos({ departamentos, provincias, anillos, simbolos, factor, marco }) {
+  const solicitudes = [];
+  const polosDe = new Map(simbolos.grupos.map((g) => [g.ccpp, g.polos]));
+
+  const estiloDep = {
+    familia: tipografia.rotuloDepartamento.familia,
+    variante: tipografia.rotuloDepartamento.peso,
+    pt: tipografia.rotuloDepartamento.pt * Math.sqrt(factor),
+  };
+  const estiloProv = {
+    familia: tipografia.rotuloProvincia.familia,
+    variante: tipografia.rotuloProvincia.peso,
+    pt: tipografia.rotuloProvincia.pt * Math.sqrt(factor),
+  };
+
+  for (const f of departamentos.features) {
+    const anillosDep = anillos.get(f);
+    if (!anillosDep || !anillosDep.length) continue;
+    const caja = cajaDeAnillos(anillosDep, marco);
+    const polos = caja ? polosDeInaccesibilidad(anillosDep, caja, 2, PUNTOS_POR_ROTULO) : [];
+    if (!polos.length) continue;
+    solicitudes.push(crearSolicitud({
+      id: f.properties.ubigeo,
+      texto: f.properties.nombre.toLocaleUpperCase('es'),
+      nivel: 'departamento',
+      prioridad: 1,
+      peso: polos[0].radioMm,
+      puntos: polos,
+      estilo: estiloDep,
+      color: color.tinta,
+      dentro: (x, y) => puntoEnAnillos(x, y, anillosDep),
+    }));
+  }
+
+  for (const f of provincias.features) {
+    const anillosProv = anillos.get(f);
+    if (!anillosProv || !anillosProv.length) continue;
+    let polos = polosDe.get(f.properties.ubigeo);
+    if (!polos || !polos.length) {
+      const caja = cajaDeAnillos(anillosProv, marco);
+      polos = caja ? polosDeInaccesibilidad(anillosProv, caja, 1.5, PUNTOS_POR_ROTULO) : [];
+    }
+    if (!polos.length) continue;
+    solicitudes.push(crearSolicitud({
+      id: f.properties.ubigeo,
+      texto: f.properties.nombre,
+      nivel: 'provincia',
+      prioridad: 2,
+      peso: polos[0].radioMm,
+      puntos: polos,
+      estilo: estiloProv,
+      color: color.tintaSuave,
+      dentro: (x, y) => puntoEnAnillos(x, y, anillosProv),
+    }));
+  }
+
+  return solicitudes;
+}
+
 /* -------------------------------- símbolos ------------------------------ */
 
 /**
@@ -464,7 +600,11 @@ function dibujarSimbolos({
     const anillosProv = anillos.get(f);
     if (!anillosProv || !anillosProv.length) continue;
     const caja = cajaDeAnillos(anillosProv, marco);
-    const polo = caja && poloDeInaccesibilidad(anillosProv, caja, 1.2);
+    /* Se piden varios de una vez: el primero ancla el grupo de íconos y los demás
+       quedan guardados para que el motor de rótulos tenga dónde probar el nombre sin
+       repetir el cálculo del campo de distancias. */
+    const polos = caja ? polosDeInaccesibilidad(anillosProv, caja, 1.2, PUNTOS_POR_ROTULO) : [];
+    const polo = polos[0];
     if (!polo) continue;
 
     /* Orden estable: el mismo tipo ocupa siempre el mismo sitio dentro del grupo, de
@@ -501,6 +641,9 @@ function dibujarSimbolos({
       y: polo.y - alto / 2,
       ancho,
       alto,
+      // Los polos ya están calculados; los rótulos los reutilizan en vez de rehacerlos.
+      polo: { x: polo.x, y: polo.y, radioMm: polo.radioMm },
+      polos: polos.map((p) => ({ x: p.x, y: p.y, radioMm: p.radioMm })),
       tipos: tipos.length,
       centros: datos.total,
     });

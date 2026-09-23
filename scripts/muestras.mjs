@@ -16,6 +16,7 @@ import { preview, build } from 'vite';
 import { chromium } from 'playwright';
 import { RAIZ, abortar, titulo, peso, asegurarCarpeta } from './lib/comun.mjs';
 import { verificarArchivo, ptAmm } from '../tests/verificar-pdf.mjs';
+import { buscarSolapes } from '../src/motor/colisiones.js';
 
 const DESTINO = path.join(RAIZ, 'muestras');
 const PUERTO = 4180;
@@ -260,6 +261,39 @@ for (const { muestra, salida } of resultados) {
   for (const a of s3.avisosRecuadros || []) console.log(`    ! ${a}`);
 }
 
+/* ----------------------- rótulos del mapa (Fase 4) ---------------------- */
+
+titulo('Rótulos: colocados y omitidos por nivel');
+let fallosRotulos = 0;
+for (const { muestra, salida } of resultados) {
+  const e = salida.meta.etiquetas;
+  const niveles = Object.entries(e.porNivel)
+    .map(([n, v]) => `${n}s ${v.colocados}/${v.total}`)
+    .join(' · ');
+  console.log(`  ${muestra.nombre.padEnd(24)} ${niveles}`);
+  if (e.omitidos.length) {
+    console.log(`    omitidos: ${e.omitidos.slice(0, 8).join(', ')}${e.omitidos.length > 8 ? `, … (${e.omitidos.length})` : ''}`);
+  }
+
+  /* Criterio de aceptación de la fase: cero superposiciones, comprobadas
+     geométricamente por pares y sin fiarse del índice que las colocó.
+  
+     Se excluyen los pares símbolo-contra-símbolo: que dos grupos de íconos se pisen
+     es el APIÑAMIENTO, que ya se mide aparte y se resuelve ampliando la zona en un
+     recuadro de zoom, no omitiendo símbolos. Lo que aquí no puede ocurrir es que un
+     rótulo o un bloque pisen algo. */
+  const esSimbolo = (n) => String(n).startsWith('símbolos ');
+  const solapes = buscarSolapes(e.cajas, 0.01)
+    .filter((x) => !(esSimbolo(x.a) && esSimbolo(x.b)));
+  if (solapes.length) {
+    console.log(`    ✗ ${solapes.length} superposición(es): `
+      + solapes.slice(0, 4).map((x) => `${x.a} × ${x.b} (${x.areaMm2} mm²)`).join(', '));
+    fallosRotulos += solapes.length;
+  } else {
+    console.log(`    ✓ ${e.cajas.length} cajas comprobadas por pares, sin superposiciones`);
+  }
+}
+
 titulo('Layout: solapamientos y escala gráfica');
 let fallosLayout = 0;
 for (const { muestra, salida } of resultados) {
@@ -334,7 +368,7 @@ const totalBytes = resultados.reduce((s, r) => s + r.verificacion.bytes, 0);
 console.log(`\n  ${resultados.length} archivos en muestras/ (${peso(totalBytes)})`);
 if (fechaFija) console.log(`  fecha fija ${fechaFija}: la salida es reproducible byte a byte`);
 
-if (fallos || fallosLayout || fallosDatos) {
-  abortar(`${fallos + fallosLayout + fallosDatos} problema(s) en las muestras generadas.`);
+if (fallos || fallosLayout || fallosDatos || fallosRotulos) {
+  abortar(`${fallos + fallosLayout + fallosDatos + fallosRotulos} problema(s) en las muestras generadas.`);
 }
 console.log('\n✓ Muestras generadas y verificadas.\n');

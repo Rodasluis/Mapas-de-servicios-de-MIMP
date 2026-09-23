@@ -146,6 +146,22 @@ export function recolectorDeAnillos() {
   };
 }
 
+/**
+ * ¿Cae el punto dentro de los anillos? Regla par-impar, la de los anillos GeoJSON.
+ * La usan los rótulos para no escribir el nombre de una provincia fuera de ella.
+ */
+export function puntoEnAnillos(x, y, anillos) {
+  let dentro = false;
+  for (const anillo of anillos) {
+    for (let i = 0, j = anillo.length - 1; i < anillo.length; j = i++) {
+      const [xi, yi] = anillo[i];
+      const [xj, yj] = anillo[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dentro = !dentro;
+    }
+  }
+  return dentro;
+}
+
 /** Rectángulos: utilidades que también usará el motor de rótulos. */
 export const rectangulo = {
   seSolapan(a, b, holgura = 0) {
@@ -176,11 +192,22 @@ export const rectangulo = {
  * arriba, y se elige el máximo. El resultado tiene la precisión de la celda, que para
  * colocar un rótulo sobra.
  *
- * @param {Array} anillos  anillos ya proyectados a milímetros
- * @param {object} caja    región donde buscar, en milímetros
  * @returns {{x, y, radioMm}|null}
  */
 export function poloDeInaccesibilidad(anillos, caja, celdaMm = 1.5) {
+  return polosDeInaccesibilidad(anillos, caja, celdaMm, 1)[0] || null;
+}
+
+/**
+ * Los N mejores puntos interiores, de más a menos despejados y separados entre sí.
+ *
+ * Un solo polo no basta para rotular: el grupo de íconos de la provincia ocupa
+ * justamente ese punto, así que el nombre necesita otros sitios interiores donde
+ * probar. Se calcula el campo de distancias una vez y se eligen los máximos locales
+ * exigiendo una separación mínima, para no devolver seis puntos pegados que fallarían
+ * todos por la misma razón.
+ */
+export function polosDeInaccesibilidad(anillos, caja, celdaMm = 1.5, cuantos = 1) {
   const cols = Math.max(1, Math.ceil(caja.ancho / celdaMm));
   const filas = Math.max(1, Math.ceil(caja.alto / celdaMm));
   const dentro = new Uint8Array(cols * filas);
@@ -240,12 +267,32 @@ export function poloDeInaccesibilidad(anillos, caja, celdaMm = 1.5) {
       if (!mejor || dist[i] > mejor.d) mejor = { c, f, d: dist[i] };
     }
   }
-  if (!mejor || mejor.d <= 0) return null;
-  return {
-    x: caja.x + (mejor.c + 0.5) * celdaMm,
-    y: caja.y + (mejor.f + 0.5) * celdaMm,
-    radioMm: mejor.d * celdaMm,
-  };
+  if (!mejor || mejor.d <= 0) return [];
+
+  /* Candidatos ordenados por despeje. Se recorre de mayor a menor y se aceptan los
+     que estén suficientemente lejos de los ya aceptados. */
+  const candidatos = [];
+  for (let f = 0; f < filas; f++) {
+    for (let c = 0; c < cols; c++) {
+      const i = f * cols + c;
+      if (dentro[i] && dist[i] > 0) candidatos.push({ c, f, d: dist[i] });
+    }
+  }
+  candidatos.sort((a, b) => b.d - a.d || a.f - b.f || a.c - b.c);
+
+  const elegidos = [];
+  const separacion = Math.max(2, mejor.d * 0.6);
+  for (const cand of candidatos) {
+    if (elegidos.length >= cuantos) break;
+    if (elegidos.some((e) => Math.hypot(e.c - cand.c, e.f - cand.f) < separacion)) continue;
+    elegidos.push(cand);
+  }
+
+  return elegidos.map((e) => ({
+    x: caja.x + (e.c + 0.5) * celdaMm,
+    y: caja.y + (e.f + 0.5) * celdaMm,
+    radioMm: e.d * celdaMm,
+  }));
 }
 
 /**
