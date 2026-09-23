@@ -136,4 +136,25 @@ window.generarMapa = async function generarMapa(config = {}) {
   };
 };
 
+/**
+ * Genera el mapa que describe una cadena de consulta, por el camino de las MUESTRAS.
+ *
+ * Es la referencia contra la que se compara la descarga de la web: la misma
+ * configuración, traducida con el mismo aLlamadasDelMotor() y generada con el mismo
+ * window.generarMapa(), pero sin pasar por la interfaz. Si los dos archivos no salen
+ * idénticos, la diferencia la introdujo la interfaz.
+ *
+ * @param {string} busqueda  parámetros tal como irían en la URL, sin el «?»
+ */
+window.generarComoLaWeb = async function generarComoLaWeb(busqueda) {
+  const { desdeParametros, aLlamadasDelMotor } = await import('./ui/config.js');
+  const config = desdeParametros(new URLSearchParams(busqueda));
+  const llamadas = aLlamadasDelMotor(config);
+  return window.generarMapa({
+    hoja: config.hoja,
+    ...llamadas.composicion,
+    ...llamadas.pdf,
+  });
+};
+
 document.getElementById('estado').textContent = 'Motor cargado; window.generarMapa disponible.';

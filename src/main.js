@@ -1,57 +1,237 @@
 /**
- * Punto de entrada de la aplicación.
+ * Aplicación: panel de configuración, vista previa y descarga del PDF.
  *
- * En la Fase 0 la página no dibuja ningún mapa todavía: comprueba que lo que el build
- * publicó se sirve bien y enseña de qué versión del directorio proviene. Sirve de
- * prueba de vida del despliegue y evita el caso incómodo de una página que «carga»
- * pero cuyos datos dan 404.
+ * El mismo SVG alimenta la pantalla y el PDF, y la descarga usa exactamente las
+ * mismas funciones que `npm run muestras`. Eso no es una comodidad de implementación:
+ * es lo que permite afirmar que lo revisado en pantalla y lo que sale de la imprenta
+ * son el mismo documento.
+ *
+ * La composición se hace a petición y con freno: cada tecla del título no puede
+ * disparar un mapa nacional entero, que en A0 tarda trece segundos.
  */
 import './estilo/fuentes.css';
-import { aplicarVariablesCss, rampaNaranjas } from './estilo/tokens.js';
+import './estilo/app.css';
+import { aplicarVariablesCss } from './estilo/tokens.js';
+import { crearHoja } from './motor/hoja.js';
+import { crearCargador, lectorNavegador } from './motor/cargador.js';
+import { componerNacional } from './motor/render.js';
+import { aPdf, lectorTtfNavegador } from './motor/pdf.js';
+import { crearPanel } from './ui/panel.js';
+import { crearVista } from './ui/vista.js';
+import {
+  desdeParametros, aParametros, aLlamadasDelMotor, nombreDeArchivo,
+} from './ui/config.js';
 
 const BASE = import.meta.env.BASE_URL;
-const estado = document.getElementById('estado');
-const app = document.getElementById('app');
+const cargador = crearCargador(lectorNavegador(BASE));
+const leerTtf = lectorTtfNavegador(BASE);
 
 aplicarVariablesCss();
 
-async function traerJson(ruta) {
-  const res = await fetch(`${BASE}${ruta}`);
-  if (!res.ok) throw new Error(`${ruta}: HTTP ${res.status}`);
-  return res.json();
+/** Espera a que las ocho variantes estén cargadas antes de medir nada. */
+async function fuentesListas() {
+  const variantes = [
+    '400 10px Poppins', '500 10px Poppins', '600 10px Poppins', '700 10px Poppins',
+    '400 10px SourceSans3', 'italic 400 10px SourceSans3',
+    '600 10px SourceSans3', '700 10px SourceSans3',
+  ];
+  await Promise.all(variantes.map((v) => document.fonts.load(v)));
+  await document.fonts.ready;
 }
 
-const numero = (n) => n.toLocaleString('es-PE');
+const $ = (id) => document.getElementById(id);
 
-try {
-  const [version, indice] = await Promise.all([
-    traerJson('data/version.json'),
-    traerJson('data/geo/indice.json'),
-  ]);
+async function arrancar() {
+  const config = desdeParametros(new URLSearchParams(window.location.search));
 
-  const niveles = Object.entries(indice.niveles)
-    .map(([nombre, n]) => `${nombre} (±${n.toleranciaM} m)`)
-    .join(', ');
+  const [centros] = await Promise.all([cargador.centros(), fuentesListas()]);
+  const conteo = new Map();
+  for (const c of centros.centros) conteo.set(c.tipo, (conteo.get(c.tipo) || 0) + 1);
+  const nombreDepartamento = new Map(centros.catalogo.departamentos.map((d) => [d.id, d.nombre]));
 
-  app.classList.remove('cargando');
-  estado.outerHTML = `
-    <dl class="resumen">
-      <dt>Directorio</dt><dd>${version.fuente}, actualizado el ${version.generado}</dd>
-      <dt>Versión</dt><dd><code>${version.datosTagCorto}</code></dd>
-      <dt>Centros</dt><dd>${numero(version.totalCentros)} de ${numero(version.totalDirectorio)} registros
-        (${numero(version.excluidos)} excluidos en origen)</dd>
-      <dt>Tipos</dt><dd>${version.tipos.length} tipos de servicio</dd>
-      <dt>Cartografía</dt><dd>${niveles}</dd>
-      <dt>Rampa</dt><dd><span class="muestrario">${
-        rampaNaranjas.map((c) => `<span style="background:${c}"></span>`).join('')
-      }</span></dd>
-    </dl>
-    <p class="nota">
-      Fase 0: andamiaje, datos y despliegue. La composición del mapa y la descarga del
-      PDF llegan en las fases siguientes.
-    </p>`;
-} catch (err) {
-  estado.className = 'fallo';
-  estado.textContent = `No se pudieron leer los datos publicados — ${err.message}. `
-    + 'Ejecuta «npm run preparar» antes de construir el sitio.';
+  const catalogo = {
+    tipos: [...conteo.keys()].sort((a, b) => conteo.get(b) - conteo.get(a) || a.localeCompare(b, 'es')),
+    conteo,
+    provincias: centros.catalogo.provincias
+      .map((p) => ({ ...p, departamento: nombreDepartamento.get(p.ccdd) || '' }))
+      .sort((a, b) => a.departamento.localeCompare(b.departamento, 'es')
+        || a.nombre.localeCompare(b.nombre, 'es')),
+  };
+
+  const vista = crearVista({
+    contenedor: $('vista'),
+    alCambiarZoom: (z) => { $('nivel-zoom').textContent = `${Math.round(z * 100)} %`; },
+  });
+
+  let ultimo = null;
+  let pendiente = null;
+  let componiendo = false;
+
+  const panel = crearPanel({
+    contenedor: $('panel'),
+    config,
+    catalogo,
+    alCambiar: () => programarComposicion(),
+    alGenerar: () => generar(),
+  });
+
+  /* ----------------------------- composición --------------------------- */
+
+  async function componer() {
+    componiendo = true;
+    vista.ocupado(true);
+    panel.progreso('Componiendo el mapa…', true);
+    try {
+      const hoja = crearHoja(config.hoja);
+      const llamadas = aLlamadasDelMotor(config);
+      const { svg, meta } = await componerNacional({ hoja, cargador, ...llamadas.composicion });
+      ultimo = { svg, meta, hoja, pdf: llamadas.pdf };
+      vista.mostrar(svg, hoja);
+      mostrarResumen(meta);
+      mostrarAvisos(meta, config);
+      panel.avisoZoom(textoCapacidad(meta));
+      panel.progreso('');
+      sincronizarUrl();
+    } catch (err) {
+      panel.progreso(`No se pudo componer el mapa: ${err.message}`);
+      $('avisos').innerHTML = '';
+    } finally {
+      componiendo = false;
+      vista.ocupado(false);
+      if (pendiente) { const f = pendiente; pendiente = null; f(); }
+    }
+  }
+
+  /**
+   * Freno. Escribir un título dispararía una composición por tecla, y en A0 cada una
+   * tarda trece segundos; además, si ya hay una en marcha se encola UNA sola, porque
+   * lo que importa es el último estado, no los intermedios.
+   */
+  let temporizador = null;
+  function programarComposicion() {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => {
+      if (componiendo) pendiente = componer;
+      else componer();
+    }, 260);
+  }
+
+  /* ------------------------------ descarga ----------------------------- */
+
+  async function generar() {
+    if (!ultimo) return;
+    panel.progreso('Generando el PDF…', true);
+    try {
+      const { bytes } = await aPdf({
+        svg: ultimo.svg, hoja: ultimo.hoja, leerTtf, ...ultimo.pdf,
+      });
+      const nombre = nombreDeArchivo(config);
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const enlace = document.createElement('a');
+      enlace.href = url;
+      enlace.download = nombre;
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      panel.progreso(`Descargado ${nombre}`);
+    } catch (err) {
+      panel.progreso(`No se pudo generar el PDF: ${err.message}`);
+    }
+  }
+
+  /* ------------------------------- informes ---------------------------- */
+
+  function mostrarResumen(meta) {
+    $('resumen').innerHTML = '';
+    const filas = [
+      ['Escala', meta.escala],
+      ['Detalle', `${meta.nivel} (±${{ bajo: 1200, medio: 300, alto: 40 }[meta.nivel]} m)`],
+      ['Centros', `${meta.servicios.totalDibujado} en ${meta.servicios.tipos.length} tipos`],
+      ['Rótulos', Object.entries(meta.etiquetas.porNivel)
+        .map(([n, v]) => `${n}s ${v.colocados}/${v.total}`).join(' · ') || '—'],
+      ['Recuadros', meta.servicios.recuadros.length
+        ? meta.servicios.recuadros.map((z) => z.etiqueta).join(', ') : 'ninguno'],
+    ];
+    for (const [clave, valor] of filas) {
+      const dt = document.createElement('dt'); dt.textContent = clave;
+      const dd = document.createElement('dd'); dd.textContent = valor;
+      $('resumen').append(dt, dd);
+    }
+  }
+
+  /**
+   * Avisos. La regla es señalar lo que el mapa NO está diciendo: un tamaño de hoja
+   * que no da para los tipos activos, rótulos que se quedaron fuera, zonas que
+   * pedían ampliación y no cupieron. Sin esto, un mapa incompleto parece completo.
+   */
+  function mostrarAvisos(meta, cfg) {
+    const avisos = [];
+    const s = meta.servicios;
+
+    if (s.gruposApinados.length > 12) {
+      avisos.push(`En ${meta.hoja} los símbolos se estorban en ${s.gruposApinados.length} provincias.`
+        + ' Usa una hoja mayor o filtra tipos de servicio.');
+    }
+    const omitidos = meta.etiquetas.omitidos.length;
+    if (omitidos) {
+      avisos.push(`${omitidos} rótulo(s) omitidos por falta de sitio: `
+        + `${meta.etiquetas.omitidos.slice(0, 5).join(', ')}${omitidos > 5 ? '…' : ''}.`);
+    }
+    for (const a of meta.servicios.avisosRecuadros || []) avisos.push(a);
+    if (meta.layout.omitidas.length) {
+      avisos.push(`No cupieron estos elementos: ${meta.layout.omitidas.join(', ')}.`);
+    }
+    if (cfg.tipos && cfg.tipos.length === 0) {
+      avisos.push('No hay ningún tipo marcado; se muestran todos.');
+    }
+
+    $('avisos').innerHTML = '';
+    for (const texto of avisos) {
+      const li = document.createElement('li');
+      li.textContent = texto;
+      $('avisos').appendChild(li);
+    }
+    $('bloque-avisos').hidden = avisos.length === 0;
+  }
+
+  const textoCapacidad = (meta) => {
+    const c = meta.servicios.capacidadRecuadros;
+    if (!c) return '';
+    return `En esta hoja caben ${c.tope} recuadro(s); hay ${c.colocados} dibujado(s)`
+      + `${c.cabeOtro ? ' y aún queda hueco para otro.' : '.'}`;
+  };
+
+  function sincronizarUrl() {
+    const p = aParametros(config);
+    const cadena = p.toString();
+    const url = cadena ? `${window.location.pathname}?${cadena}` : window.location.pathname;
+    window.history.replaceState(null, '', url);
+  }
+
+  /* ------------------------------ controles ---------------------------- */
+  $('acercar').addEventListener('click', () => vista.acercar());
+  $('alejar').addEventListener('click', () => vista.alejar());
+  $('ajustar').addEventListener('click', () => vista.ajustar());
+  $('copiar-enlace').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      panel.progreso('Enlace copiado al portapapeles');
+    } catch {
+      panel.progreso('No se pudo copiar; la dirección de la barra ya tiene la configuración');
+    }
+  });
+
+  document.body.classList.remove('cargando');
+  await componer();
 }
+
+arrancar().catch((err) => {
+  document.body.classList.remove('cargando');
+  const aviso = $('arranque');
+  if (aviso) {
+    aviso.hidden = false;
+    aviso.textContent = `No se pudo iniciar la aplicación: ${err.message}. `
+      + 'Ejecuta «npm run preparar» antes de construir el sitio.';
+  }
+});

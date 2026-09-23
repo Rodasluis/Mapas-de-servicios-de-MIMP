@@ -9,10 +9,10 @@ No es una captura de pantalla ampliada: el PDF se construye a partir de la geome
 con las fuentes incrustadas, de modo que se puede imprimir en A0 sin que aparezca un
 solo píxel.
 
-> **Estado: Fase 4 — motor de etiquetado.**
-> A lo anterior se suman los nombres de departamentos y provincias, colocados por
-> prioridad y sin una sola superposición. Falta la interfaz web (Fase 5): la página
-> publicada todavía no compone mapas.
+> **Estado: Fase 5 — interfaz de configuración y vista previa.**
+> La página publicada ya compone mapas: se eligen hoja, textos, tipos de servicio,
+> capas y recuadros, se revisa el resultado en pantalla y se descarga el PDF. Faltan
+> los ámbitos departamental, provincial y distrital (Fases 6 y 7).
 
 ## Puesta en marcha
 
@@ -81,14 +81,14 @@ apareciera uno, incluso dentro de un recuento agregado.
 | `npm run build` | Prepara lo necesario y compila en `dist/` |
 | `npm run logos` | Normaliza los logotipos de `referencias/logos/` |
 | `npm run metricas` | Extrae las métricas de las tipografías |
-| `npm run muestras` | Genera y verifica los PDF de `muestras/` |
+| `npm run muestras` | Genera y verifica los PDF de `muestras/`, y compara la descarga de la web con ellos |
 
 ## Cómo está organizado
 
 ```
 scripts/      build: descarga, verificación y construcción de la cartografía
 src/motor/    composición del mapa y exportación a PDF (Fase 1)
-src/ui/       interfaz de configuración (Fase 5)
+src/ui/       interfaz: configuración, panel y vista previa
 src/estilo/   tokens.js — única definición de colores, tipografías y grosores
 public/       lo que se sirve tal cual (datos y tipografías, generados)
 referencias/  mapa de 2020 y logotipos que sirven de referencia
@@ -298,6 +298,61 @@ que deja de estorbar, y sólo el título lleva fondo blanco.
   navegador no tiene las familias cargadas, mide con una de reserva y todo lo centrado
   sale corrido. Se comprueba contra una familia inexistente para confirmar que la
   diferencia (≈1,8 %, que es el interletraje) no es la de una fuente equivocada (≈20 %).
+
+## La interfaz
+
+El panel construye sus controles a partir de los datos publicados: los veinte tipos de
+servicio salen de `centros.json` con su recuento, no de una lista escrita a mano, así
+que al cambiar `DATOS_TAG` la interfaz se actualiza sola. Todo son controles nativos
+—`select`, `input`, `fieldset`— porque un panel hecho de `div` con `role="button"`
+obliga a reimplementar el foco, las flechas y el anuncio del estado, y casi siempre se
+reimplementa peor.
+
+**La vista previa es el PDF.** No se dibuja una versión de pantalla: se inserta en la
+página la misma cadena SVG que `svg2pdf` convertirá en PDF. El zoom y el desplazamiento
+son una transformación CSS por encima, así que mirar el mapa de cerca no puede cambiar
+lo que se exporta.
+
+**La configuración vive en la URL.** Cada ajuste que se aparta de lo normal se escribe
+en la barra de direcciones con nombres legibles —`?hoja=A2&tipos=CEM&sinCapas=grilla`—,
+nunca con índices que se desplacen al añadir un tipo ni con JSON en base64. Una
+configuración por omisión deja la dirección limpia, de modo que cada parámetro que
+aparece señala una decisión que alguien tomó, y el enlace se puede corregir a mano,
+mandar por correo y volver a abrir meses después.
+
+El parámetro opcional `fecha=AAAA-MM-DD` fija la fecha de generación: con él, repetir
+un enlace produce el **mismo PDF byte a byte**, incluida la línea «Generado el» del pie.
+
+La composición tiene freno: escribir un título dispararía un mapa nacional por cada
+tecla, y en A0 cada uno tarda trece segundos. Se espera a que la escritura se detenga y,
+si ya hay una composición en marcha, se encola **una sola**, porque lo que importa es el
+último estado y no los intermedios.
+
+Debajo del mapa hay un resumen —escala, nivel de detalle, centros dibujados, rótulos
+colocados y recuadros— y una lista de avisos. La regla de los avisos es señalar lo que
+el mapa **no** está diciendo: símbolos que se estorban, rótulos omitidos por falta de
+sitio, zonas que pedían ampliación y no cupieron, piezas del layout que no entraron. Un
+mapa incompleto sin avisos parece completo.
+
+### Lo descargado es lo verificado
+
+El criterio de aceptación de esta fase es que el PDF que descarga un usuario desde la
+web sea **idéntico** al que genera `npm run muestras` con la misma configuración. No se
+comprueba que se parezca: se comparan los bytes.
+
+`tests/web-igual-que-muestras.mjs` conduce el navegador como lo haría una persona —abre
+la página con la configuración en la URL, espera la vista previa, pulsa «Generar PDF» y
+recoge la descarga— y la compara con la que produce el banco de pruebas sin interfaz. La
+traducción de la configuración a los argumentos del motor está en un único sitio
+(`aLlamadasDelMotor`), de modo que la vista, la descarga y las muestras no pueden
+divergir.
+
+La igualdad byte a byte por sí sola no bastaría: los dos lados leen la URL con la misma
+función, así que un parámetro que se ignorara se ignoraría en ambos y la comparación
+seguiría saliendo verde. Por eso cada caso declara además qué tiene que haber pasado
+—tamaño de página medido **en el archivo**, estado de los controles del panel y
+parámetros que sobreviven en la barra de direcciones—, y se comprueba que cambiar un
+control recompone el mapa y actualiza la URL.
 
 ## Despliegue
 

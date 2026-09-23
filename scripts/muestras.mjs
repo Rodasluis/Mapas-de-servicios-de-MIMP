@@ -17,6 +17,7 @@ import { chromium } from 'playwright';
 import { RAIZ, abortar, titulo, peso, asegurarCarpeta } from './lib/comun.mjs';
 import { verificarArchivo, ptAmm } from '../tests/verificar-pdf.mjs';
 import { buscarSolapes } from '../src/motor/colisiones.js';
+import { comprobarWebIgualQueMuestras } from '../tests/web-igual-que-muestras.mjs';
 
 const DESTINO = path.join(RAIZ, 'muestras');
 const PUERTO = 4180;
@@ -170,6 +171,31 @@ process.stdout.write('  · iconos … ');
 const hojaIconos = await pagina.evaluate((cfg) => window.generarHojaIconos(cfg), { fecha: fechaFija });
 fs.writeFileSync(path.join(DESTINO, 'iconos.pdf'), Buffer.from(hojaIconos.pdf, 'base64'));
 console.log(peso(fs.statSync(path.join(DESTINO, 'iconos.pdf')).size));
+
+/* ---------------- criterio de aceptación de la Fase 5 ------------------- */
+
+/* El PDF que descarga un usuario desde la web tiene que ser IDÉNTICO al que sale de
+   aquí con la misma configuración. Se conduce el navegador por la interfaz de verdad
+   —abrir, esperar la vista previa, pulsar «Generar PDF»— y se comparan los bytes. */
+titulo('La web frente a las muestras');
+let fallosWeb = 0;
+const { comparaciones, panel } = await comprobarWebIgualQueMuestras({ navegador, pagina, urlBase });
+for (const c of comparaciones) {
+  console.log(`  ${c.nombre.padEnd(34)} ${c.archivo}`);
+  console.log(`    página ${c.paginaMm[0]}×${c.paginaMm[1]} mm · controles y URL según la configuración pedida`
+    + `${c.problemas.length ? '  ✗' : '  ✓'}`);
+  for (const p of c.problemas) { console.log(`    ✗ ${p}`); fallosWeb++; }
+  if (c.iguales) {
+    console.log(`    ✓ ${peso(c.bytes)} idénticos byte a byte a la muestra`);
+  } else {
+    console.log(`    ✗ difieren: web ${c.bytes} B, muestra ${c.bytesReferencia} B`
+      + `, primera diferencia en el byte ${c.primeraDiferencia}`);
+    fallosWeb++;
+  }
+}
+console.log(`  el panel manda: A2 ${panel.antes} → A4 ${panel.despues}`
+  + ` · la URL queda en hoja=${panel.urlTrasCambio}${panel.problemas.length ? '  ✗' : '  ✓'}`);
+for (const p of panel.problemas) { console.log(`    ✗ ${p}`); fallosWeb++; }
 
 await cerrar();
 
@@ -368,7 +394,7 @@ const totalBytes = resultados.reduce((s, r) => s + r.verificacion.bytes, 0);
 console.log(`\n  ${resultados.length} archivos en muestras/ (${peso(totalBytes)})`);
 if (fechaFija) console.log(`  fecha fija ${fechaFija}: la salida es reproducible byte a byte`);
 
-if (fallos || fallosLayout || fallosDatos || fallosRotulos) {
-  abortar(`${fallos + fallosLayout + fallosDatos + fallosRotulos} problema(s) en las muestras generadas.`);
+if (fallos || fallosLayout || fallosDatos || fallosRotulos || fallosWeb) {
+  abortar(`${fallos + fallosLayout + fallosDatos + fallosRotulos + fallosWeb} problema(s) en las muestras generadas.`);
 }
 console.log('\n✓ Muestras generadas y verificadas.\n');

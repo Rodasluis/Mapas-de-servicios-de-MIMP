@@ -48,6 +48,24 @@ import { el, grupo, texto, textoConHalo, rect, documento, num } from './svg.js';
 export const HOLGURA_MM = 3;
 
 /** Orden de dibujo dentro del marco. Las vacías quedan reservadas a fases posteriores. */
+/** Capas que la interfaz puede apagar, y su estado por omisión. */
+export const CAPAS_POR_DEFECTO = {
+  coropleta: true,
+  simbolos: true,
+  grilla: true,
+  rotulos: true,
+  contexto: true,
+};
+
+/** Piezas del layout que la interfaz puede apagar. */
+export const PIEZAS_POR_DEFECTO = {
+  institucional: true,
+  titulo: true,
+  leyenda: true,
+  escala: true,
+  norte: true,
+};
+
 export const CAPAS = [
   'agua',          // fondo del marco y lagos
   'paises',        // países vecinos
@@ -83,6 +101,11 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
       `Sin ícono para: ${cobertura.sinIcono.join(', ')}. Añádelos a src/iconos/catalogo.js.`,
     );
   }
+
+  /* Capas y piezas que la interfaz puede apagar. Por omisión todas encendidas: el
+     motor no debe comportarse distinto según quién lo llame. */
+  const capasVisibles = { ...CAPAS_POR_DEFECTO, ...(opciones.capas || {}) };
+  const piezasVisibles = { ...PIEZAS_POR_DEFECTO, ...(opciones.piezas || {}) };
 
   const medidor = crearMedidor(metricas);
   const factor = factorFormato(hoja);
@@ -132,9 +155,9 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
      pequeñas. Lo que no cabe se refleja en el apiñamiento, que es lo que decide si
      hace falta un recuadro de zoom. */
   const tamanoIcono = Math.min(6, Math.max(3, 3.4 * Math.sqrt(factor)));
-  const simbolos = dibujarSimbolos({
-    provincias, agregado, anillos, iconos, marco, medidor, factor, tamanoIcono,
-  });
+  const simbolos = capasVisibles.simbolos
+    ? dibujarSimbolos({ provincias, agregado, anillos, iconos, marco, medidor, factor, tamanoIcono })
+    : { svg: '', grupos: [], apinados: [], apinamientoMaximoPct: 0 };
 
   /* Los grupos de íconos se reservan en la rejilla antes de colocar nada del layout.
      Se salen de su provincia —el de Lima se adentra en el mar— así que un bloque
@@ -144,8 +167,12 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     ocupacion.marcarBloque({ x: g.x, y: g.y, ancho: g.ancho, alto: g.alto });
   }
 
-  const grilla = construirGrilla(proyeccion, marco, escala.denominador);
-  const dibujoGrilla = dibujarGrilla({ grilla, marco, medidor, factor, banda });
+  const grilla = capasVisibles.grilla
+    ? construirGrilla(proyeccion, marco, escala.denominador)
+    : { paso: 0, lineas: [], desviacionMaximaMm: 0 };
+  const dibujoGrilla = capasVisibles.grilla
+    ? dibujarGrilla({ grilla, marco, medidor, factor, banda })
+    : { svgLineas: '', svgMarcas: '', rotulos: 0 };
 
   /* ------------------------------ layout ------------------------------- */
 
@@ -233,9 +260,9 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     maximo: opciones.maximoRecuadros,
   });
 
-  const etiquetas = rotulosDeContexto({
-    contexto, anillosPorRasgo: anillos, marco, ocupacion, medidor, factor,
-  });
+  const etiquetas = capasVisibles.contexto
+    ? rotulosDeContexto({ contexto, anillosPorRasgo: anillos, marco, ocupacion, medidor, factor })
+    : { svg: '', colocados: [], omitidos: [], cajas: [] };
 
   const colocacionResto = colocarPiezas(
     PRIORIDAD.filter((n) => piezas[n] && !ANTES_DE_ROTULOS.includes(n)).map(solicitud),
@@ -267,15 +294,17 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
   }
   for (const c of etiquetas.cajas || []) indiceRotulos.agregar(c);
 
-  const rotulos = colocarEtiquetas({
-    solicitudes: solicitudesDeRotulos({
-      departamentos, provincias, anillos, simbolos, factor, marco,
-    }),
-    indice: indiceRotulos,
-    medidor,
-    marco,
-    factor,
-  });
+  const rotulos = capasVisibles.rotulos
+    ? colocarEtiquetas({
+      solicitudes: solicitudesDeRotulos({
+        departamentos, provincias, anillos, simbolos, factor, marco,
+      }),
+      indice: indiceRotulos,
+      medidor,
+      marco,
+      factor,
+    })
+    : { svg: '', colocados: [], omitidos: [], porNivel: {} };
 
   /* La barra de escala se comprueba sobre el dibujo terminado: se invierten sus dos
      extremos por la proyección y se mide la distancia real entre ellos. Si la barra
@@ -293,6 +322,7 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     contexto,
     ruta,
     marco,
+    conColor: capasVisibles.coropleta,
     grilla: dibujoGrilla.svgLineas,
     /* Los rótulos del país van DESPUÉS de los de contexto dentro de la misma capa:
        si un nombre de provincia y el de un país llegaran a rozarse, manda el del
@@ -331,6 +361,8 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
       centro: escala.centro.map((v) => Number(v.toFixed(4))),
       marco,
       factorFormato: Number(factor.toFixed(3)),
+      capas: capasVisibles,
+      piezas: piezasVisibles,
       titulo: {
         reduccion: titulo.reduccion,
         tapadoPct: titulo.tapadoPct,
@@ -702,7 +734,7 @@ function anillosPorRasgo(proyeccion, rasgos) {
 
 function dibujarCapas({
   departamentos, provincias, agregado, clases, rampa, contexto, ruta, marco,
-  grilla, etiquetas, simbolos, recuadros,
+  grilla, etiquetas, simbolos, recuadros, conColor = true,
 }) {
   const porCapa = (nombre) => contexto.features.filter((f) => f.properties.capa === nombre);
   const rasgos = {};
@@ -742,7 +774,7 @@ function dibujarCapas({
     if (indice >= 0) conServicio++;
     return el('path', {
       d: ruta(f.geometry),
-      fill: indice >= 0 ? rampa[indice] : color.sinDato,
+      fill: conColor && indice >= 0 ? rampa[indice] : color.sinDato,
       id: `prov-${f.properties.ubigeo}`,
     });
   });
