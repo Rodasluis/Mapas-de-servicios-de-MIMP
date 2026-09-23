@@ -141,7 +141,10 @@ export const PLANTILLAS = {
   horizontal: {
     institucional: ['arriba-izquierda'],
     titulo: ['arriba-derecha'],
-    norte: ['arriba-centro', 'centro-derecha', 'arriba-derecha'],
+    /* La rosa va al flanco derecho también en apaisado: puesta arriba al centro
+       quedaba sobre el país y, sobre todo, cambiaba de sitio entre una hoja vertical
+       y una apaisada del mismo mapa. */
+    norte: ['centro-derecha', 'arriba-derecha', 'abajo-derecha'],
     /* La barra de escala tira al centro horizontal a propósito: en una Mercator
        transversa la escala crece al alejarse del meridiano central, y en una hoja
        apaisada los extremos quedan a 13° de él. Colocada en un flanco, la barra medía
