@@ -20,15 +20,19 @@
     "prebuild": "node scripts/preparar.mjs",
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "muestras": "node scripts/muestras.mjs"
   },
   "dependencies": {
     "d3-geo": "^3.1.1",
+    "jspdf": "^4.2.1",
     "proj4": "^2.19.10",
+    "svg2pdf.js": "^2.8.1",
     "topojson-client": "^3.1.0"
   },
   "devDependencies": {
     "fflate": "^0.8.2",
+    "playwright": "^1.63.0",
     "polygon-clipping": "^0.15.7",
     "topojson-server": "^3.0.1",
     "topojson-simplify": "^3.0.3",

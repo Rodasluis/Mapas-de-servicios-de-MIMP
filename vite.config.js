@@ -15,6 +15,13 @@ export default defineConfig({
     // La cartografía ya viene cuantizada y minificada; no se toca.
     assetsInlineLimit: 0,
     chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      input: {
+        // La aplicación y el banco de pruebas sin interfaz que usa «npm run muestras».
+        index: 'index.html',
+        muestras: 'muestras.html',
+      },
+    },
   },
   server: { open: true },
 });

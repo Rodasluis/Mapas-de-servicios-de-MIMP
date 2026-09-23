@@ -9,9 +9,10 @@ No es una captura de pantalla ampliada: el PDF se construye a partir de la geome
 con las fuentes incrustadas, de modo que se puede imprimir en A0 sin que aparezca un
 solo píxel.
 
-> **Estado: Fase 0 — andamiaje, datos y despliegue.**
-> La página publicada todavía no dibuja mapas; comprueba que los datos se sirven y de
-> qué versión del directorio proceden. La composición llega en las fases siguientes.
+> **Estado: Fase 1 — motor de composición y PDF vectorial.**
+> `npm run muestras` ya genera mapas nacionales imprimibles en A4, A3 y A0. Faltan los
+> elementos del layout (Fase 2), el contenido temático (Fase 3), los rótulos (Fase 4) y
+> la interfaz web (Fase 5): la página publicada todavía no compone mapas.
 
 ## Puesta en marcha
 
@@ -78,6 +79,7 @@ apareciera uno, incluso dentro de un recuento agregado.
 | `npm run preparar` | Ejecuta los pasos anteriores que falten (`-- --forzar` rehace todo) |
 | `npm run dev` | Servidor de desarrollo |
 | `npm run build` | Prepara lo necesario y compila en `dist/` |
+| `npm run muestras` | Genera y verifica los PDF de `muestras/` |
 
 ## Cómo está organizado
 
@@ -97,13 +99,17 @@ tests/        pruebas de integridad y de regresión visual (Fase 8)
 `scripts/build-geo.mjs` publica cada capa en tres niveles de detalle, elegidos por un
 criterio de imprenta y no a ojo: en papel no se distinguen dos trazos separados por
 menos de unos 0,15 mm, así que un nivel con tolerancia *T* sobre el terreno es
-indistinguible del original hasta la escala 1:(*T* / 0,15 mm).
+indistinguible del original desde la escala 1:(*T* / 0,15 mm) hacia escalas menos
+detalladas.
 
-| Nivel | Tolerancia | Sirve hasta | Para qué |
+Cada nivel indica el denominador de escala **mínimo** al que sigue siendo
+indistinguible del original; el motor escoge el más ligero que cumpla `N >= mínimo`.
+
+| Nivel | Tolerancia | Válido desde | En la práctica |
 |---|---:|---|---|
-| `bajo` | 1 200 m | 1:8 000 000 | mapas de ubicación, nacional en A4 |
-| `medio` | 300 m | 1:2 000 000 | nacional en A1–A0 |
-| `alto` | 40 m | 1:266 000 | departamento, provincia y distrito |
+| `bajo` | 1 200 m | 1:8 000 000 | mapas de ubicación |
+| `medio` | 300 m | 1:2 000 000 | nacional en A4 (1:7,9 M) y A3 (1:5,4 M) |
+| `alto` | 40 m | 1:266 000 | nacional en A0 (1:1,8 M), departamento, provincia y distrito |
 
 Dos detalles que evitan defectos visibles al imprimir:
 
@@ -120,6 +126,31 @@ lo que valida de una vez el sentido de giro de los anillos, la topología y las 
 
 `public/data/geo/indice.json` describe los niveles, los archivos y las cajas
 envolventes; es lo que el motor consulta para elegir qué cargar.
+
+## El motor: del dato al PDF
+
+`src/motor/` compone **un solo SVG** que sirve a la vez de vista previa y de original
+de imprenta, y `svg2pdf` lo traduce trazo por trazo a operadores de dibujo del PDF. No
+hay dos caminos de dibujo, así que la pantalla y el papel no pueden divergir.
+
+- **Todo se mide en milímetros.** El `viewBox` del SVG es la hoja en mm, de modo que un
+  `stroke-width` de 0,3 son 0,3 mm impresos. Los grosores y los cuerpos de texto están
+  en medidas **reales de imprenta** (`src/estilo/tokens.js`): un límite departamental
+  mide lo mismo en A4 que en A0. Lo que cambia con la hoja es cuánto cabe, no el tamaño.
+- **La escala se mide, no se deduce.** Se compara una distancia sobre el terreno con la
+  que ocupa en el papel, en el centro del marco. Como la Mercator transversa estira al
+  alejarse del meridiano central, se comprueban también las esquinas: en el nacional la
+  variación es del 0,7 %, que se absorbe en el redondeo de la escala impresa.
+- **Nada de mapas de bits.** `tests/verificar-pdf.mjs` rechaza cualquier PDF que
+  contenga un `<image>` o que caiga en una tipografía del visor.
+
+`npm run muestras` genera los PDF desde un Chromium sin ventana en lugar de componerlos
+en Node, porque `svg2pdf` mide el texto con el motor de tipografía del navegador: así
+una muestra y una descarga desde la web salen del mismo código y del mismo medidor.
+
+Con `-- --fecha=AAAA-MM-DD` la salida es reproducible **byte a byte**: además de la
+fecha se fija el identificador de archivo del PDF, que jsPDF sortea al azar en cada
+ejecución. Sin ese detalle, dos salidas idénticas no se parecen al compararlas.
 
 ## Despliegue
 

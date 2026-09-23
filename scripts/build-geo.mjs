@@ -41,7 +41,8 @@ if (!fs.existsSync(path.join(ORIGEN, 'distrito.geojson'))) {
  *
  * El criterio es de imprenta, no estético: en papel el ojo no separa dos trazos a
  * menos de unos 0,15 mm, así que a escala 1:N cualquier desviación menor que
- * 0,15 mm × N no se ve. Un nivel con tolerancia T sirve, pues, hasta 1:(T / 0,15 mm).
+ * 0,15 mm × N no se ve. Un nivel con tolerancia T sirve, pues, desde 1:(T / 0,15 mm)
+ * hacia escalas menos detalladas.
  * Así la elección de nivel es auditable y no un número redondo elegido a ojo.
  *
  *  toleranciaM  desviación máxima admitida sobre el terreno, en metros.
@@ -55,15 +56,28 @@ const NIVELES = {
   alto: { toleranciaM: 40, cuantizacion: 1e6 },
 };
 
-/** Escala 1:N hasta la que el nivel es indistinguible del original impreso. */
-const escalaUtil = (toleranciaM) => Math.round(toleranciaM / (TRAZO_VISIBLE_MM / 1000));
+/**
+ * Denominador de escala MÍNIMO al que el nivel sigue siendo indistinguible del
+ * original. Por debajo de él (mapas más detallados) su tolerancia ya se vería.
+ * Es el número que consulta el motor para elegir nivel: sirve si 1:N cumple
+ * N >= denominadorMinimo.
+ */
+const denominadorMinimo = (toleranciaM) => Math.round(toleranciaM / (TRAZO_VISIBLE_MM / 1000));
 
 /** Peso de simplificación (área de triángulo en grados²) para una tolerancia dada. */
 const METROS_POR_GRADO = 111_320;
 const pesoDe = (toleranciaM) => (toleranciaM / METROS_POR_GRADO) ** 2;
 
-/** Marco de contexto alrededor del Perú (lon/lat) para recortar Natural Earth. */
-const MARCO = { lonMin: -86, latMin: -22, lonMax: -64, latMax: 4 };
+/**
+ * Marco de contexto alrededor del Perú (lon/lat) para recortar Natural Earth.
+ *
+ * Tiene que cubrir lo que llegue a verse en CUALQUIER hoja, no sólo lo que rodea al
+ * país. El caso exigente es el nacional apaisado: el Perú es más alto que ancho, así
+ * que en A0 horizontal el encaje lo limita la altura y a los lados queda sitio para
+ * unos 26° de longitud. Si el contexto acabara antes, aparecerían franjas blancas en
+ * los bordes de la hoja. Con este marco sobra holgura para cualquier formato.
+ */
+const MARCO = { lonMin: -92, latMin: -24, lonMax: -58, latMax: 6 };
 
 const leer = (nombre) => JSON.parse(fs.readFileSync(path.join(ORIGEN, nombre), 'utf8'));
 
@@ -232,7 +246,7 @@ function informarNivel(nivel, topo, verticesOriginales, sufijo = '') {
   const pct = ((v / verticesOriginales) * 100).toFixed(0);
   console.log(
     `  ${nivel.padEnd(5)} ±${String(NIVELES[nivel].toleranciaM).padStart(4)} m`
-    + `  hasta 1:${escalaUtil(NIVELES[nivel].toleranciaM).toLocaleString('es')}`.padEnd(22)
+    + `  desde 1:${denominadorMinimo(NIVELES[nivel].toleranciaM).toLocaleString('es')}`.padEnd(22)
     + `${v.toLocaleString('es').padStart(9)} vértices (${pct.padStart(3)} %)  ${sufijo}`,
   );
 }
@@ -252,7 +266,7 @@ const manifiesto = {
   trazoVisibleMm: TRAZO_VISIBLE_MM,
   niveles: Object.fromEntries(Object.entries(NIVELES).map(([k, v]) => [k, {
     toleranciaM: v.toleranciaM,
-    escalaUtil: escalaUtil(v.toleranciaM),
+    denominadorMinimo: denominadorMinimo(v.toleranciaM),
   }])),
   capas: {},
 };
