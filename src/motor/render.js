@@ -406,7 +406,7 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
         omitidas: colocacion.omitidas,
         forzadas: colocacion.forzadas,
       },
-      rotulos: { colocados: etiquetas.colocados, omitidos: etiquetas.omitidos },
+      rotulos: { colocados: etiquetas.colocados, omitidos: etiquetas.omitidos, motivos: etiquetas.motivos },
       etiquetas: {
         porNivel: rotulos.porNivel,
         omitidos: rotulos.omitidos.map((o) => o.texto),
