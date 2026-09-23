@@ -136,7 +136,7 @@ export const PLANTILLAS = {
     titulo: ['arriba-derecha'],
     norte: ['centro-derecha', 'arriba-derecha', 'centro-izquierda'],
     escala: ['abajo-derecha', 'abajo-izquierda', 'abajo-centro'],
-    leyenda: ['abajo-izquierda', 'abajo-derecha', 'centro-izquierda'],
+    leyenda: ['abajo-izquierda'],
   },
   horizontal: {
     institucional: ['arriba-izquierda'],
@@ -151,7 +151,7 @@ export const PLANTILLAS = {
        un 2 % menos de lo que decía; sobre el meridiano central coincide con la escala
        numérica, que se mide en el centro del marco. */
     escala: ['abajo-centro', 'abajo-derecha', 'abajo-izquierda'],
-    leyenda: ['centro-derecha', 'abajo-derecha', 'abajo-izquierda'],
+    leyenda: ['abajo-izquierda'],
   },
 };
 
@@ -160,6 +160,16 @@ export const PRIORIDAD = ['titulo', 'institucional', 'leyenda', 'escala', 'norte
 
 /** Piezas de cabecera: sitio fijo y margen propio. */
 export const CABECERA = ['titulo', 'institucional'];
+
+/**
+ * Piezas de sitio FIJO: no se mudan de esquina aunque les toque apretarse.
+ *
+ * Además de la cabecera está la leyenda, siempre abajo a la izquierda. Que cambiara de
+ * esquina según el formato —abajo a la izquierda en vertical, a media altura a la
+ * derecha en apaisado— obligaba a buscarla de nuevo en cada mapa. Cuando no cabe,
+ * encoge; no se muda.
+ */
+export const SITIO_FIJO = [...CABECERA, 'leyenda'];
 
 /**
  * Piezas que reservan sitio ANTES que los rótulos del mapa.

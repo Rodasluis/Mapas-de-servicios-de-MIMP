@@ -24,15 +24,20 @@ export function bloqueLeyenda({
   if (!tipos.length) return null;
 
   /**
-   * Se busca la composición MENOS agresiva que quepa en la caja disponible, probando
-   * en este orden: una columna con el nombre completo, dos, la sigla, tres, y por
-   * último cuerpos cada vez menores. Sin este ajuste la leyenda de veinte tipos
-   * llegaba a tapar la mitad del país en un A4, o no cabía y se omitía entera, que es
-   * peor: un mapa temático sin leyenda no se puede leer.
+   * Se busca la composición MENOS agresiva que quepa en la caja disponible. Para cada
+   * disposición —una columna con el nombre completo, dos, la sigla, tres— se agotan
+   * los cuerpos de mayor a menor antes de pasar a la siguiente. El orden importa:
+   * así un A0 compone los nombres completos en cuerpo algo menor en vez de poner
+   * «CARPAM» en cuerpo grande, que es más difícil de leer para quien no maneja las
+   * siglas del ministerio a diario.
+   *
+   * Sin este ajuste la leyenda de veinte tipos llegaba a tapar la mitad del país en un
+   * A4, o no cabía y se omitía entera, que es peor: un mapa temático sin leyenda no se
+   * puede leer.
    */
   const intentos = [];
-  for (const escala of [1, 0.9, 0.8, 0.7, 0.62]) {
-    for (const [columnas, abreviar] of [[1, false], [2, false], [2, true], [3, true]]) {
+  for (const [columnas, abreviar] of [[1, false], [2, false], [2, true], [3, true]]) {
+    for (const escala of [1, 0.9, 0.8, 0.7, 0.62, 0.55]) {
       intentos.push({ columnas, abreviar, escala });
     }
   }

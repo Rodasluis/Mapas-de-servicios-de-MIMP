@@ -29,6 +29,7 @@ import {
 } from './piezas.js';
 import {
   colocarPiezas, posicionEnAnclaje, PLANTILLAS, PRIORIDAD, CABECERA, ANTES_DE_ROTULOS,
+  SITIO_FIJO,
 } from './layout.js';
 import {
   agregarPorProvincia, claseDe, clasesUsadas, repartirIconos, medirApinamiento,
@@ -167,7 +168,7 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     titulo: titulo.pieza,
     escala: escalaGrafica({ denominador: escala.denominador, factor, medidor }),
     norte: rosaDeLosVientos({ factor, anguloNorte: norte, medidor }),
-    leyenda: bloqueLeyenda({
+    leyenda: ajustarLeyenda({
       agregado,
       clasesUsadas: clasesVisibles,
       clases,
@@ -176,11 +177,8 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
       factor,
       rampa: opciones.rampa || rampaNaranjas,
       tamanoIconoMm: Math.min(5, tamanoIcono),
-      /* Acotada en las dos dimensiones: sin el límite de ancho, los nombres largos
-         («Centro de Atención Residencial para Personas Adultas Mayores - CARPAM»)
-         estiraban la leyenda hasta media hoja. */
-      altoMaximoMm: marco.alto * 0.45,
-      anchoMaximoMm: marco.ancho * 0.33,
+      marco,
+      ocupacion,
     }),
   };
 
@@ -188,7 +186,7 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     pieza: piezas[n],
     anclajes: plantilla[n] || [],
     // Cabecera de sitio fijo: el logotipo y el título no se mudan de esquina.
-    soloPreferidos: CABECERA.includes(n),
+    soloPreferidos: SITIO_FIJO.includes(n),
     ...(CABECERA.includes(n) ? { margen: margenCabecera } : {}),
   });
 
@@ -377,6 +375,46 @@ function ajustarTitulo({ textos, medidor, factor, marco, ocupacion, margen, anch
     lineas: mejor.lineas,
   };
 }
+
+/**
+ * Busca la composición mayor con la que la leyenda cabe abajo a la izquierda sin
+ * tapar el país.
+ *
+ * Tiene sitio fijo, igual que el título, así que cuando no entra la variable es su
+ * tamaño y no su posición: se prueban cajas cada vez más ceñidas —que la leyenda
+ * traduce en más columnas, siglas en vez de nombres y cuerpos menores— y se elige la
+ * que menos territorio tape. Se compara el área ABSOLUTA tapada y no la fracción,
+ * porque una caja grande reparte el mismo estorbo sobre más superficie y saldría
+ * ganando siempre.
+ */
+function ajustarLeyenda({ marco, ocupacion, ...resto }) {
+  let mejor = null;
+  for (const ceñido of [1, 0.85, 0.72, 0.6, 0.5, 0.42]) {
+    const pieza = bloqueLeyenda({
+      ...resto,
+      /* Acotada en las dos dimensiones: sin el límite de ancho, los nombres largos
+         («Centro de Atención Residencial para Personas Adultas Mayores - CARPAM»)
+         estiraban la leyenda hasta media hoja. */
+      altoMaximoMm: marco.alto * 0.45 * ceñido,
+      anchoMaximoMm: marco.ancho * 0.33 * ceñido,
+    });
+    if (!pieza) return null;
+    const r = posicionEnAnclaje('abajo-izquierda', marco, pieza.ancho, pieza.alto);
+    const tapado = ocupacion.sobreTerritorio(r);
+    const tapadoMm2 = tapado * pieza.ancho * pieza.alto;
+    if (!mejor || tapadoMm2 < mejor.tapadoMm2 - 1e-6) mejor = { pieza, tapado, tapadoMm2 };
+    /* Se acepta que la leyenda pise algo de territorio antes que encogerla hasta
+       hacerla ilegible. En el nacional su esquina cae sobre el Pacífico y no tapa
+       nada, pero en un ámbito departamental puede tocar tierra, y exigir cero dejaría
+       una leyenda diminuta con media hoja libre al lado. Lleva fondo opaco, así que
+       lo que tapa se entiende como bloque y no como un hueco en el mapa. */
+    if (tapado <= TERRITORIO_TOLERADO_LEYENDA) break;
+  }
+  return mejor.pieza;
+}
+
+/** Cuánto territorio puede pisar la leyenda antes de que valga la pena encogerla. */
+const TERRITORIO_TOLERADO_LEYENDA = 0.08;
 
 /**
  * Mide sobre el terreno la distancia que cubre la barra de escala ya colocada.

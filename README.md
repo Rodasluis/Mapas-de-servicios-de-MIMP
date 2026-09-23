@@ -168,6 +168,12 @@ Nada de esto está escrito a mano. El filtro de tipos recorre todo el camino: al
 un tipo activo, el coropletas se recalcula, la leyenda se queda con una línea y las
 clases altas desaparecen porque ninguna provincia llega a ellas.
 
+La leyenda va **siempre abajo a la izquierda**, en todos los formatos: que cambiara de
+esquina según la hoja obligaba a buscarla de nuevo en cada mapa. Cuando no cabe no se
+muda, encoge — más columnas, siglas en lugar de nombres y cuerpos menores, en ese
+orden, porque un nombre completo en cuerpo pequeño se lee mejor que «CARPAM» en cuerpo
+grande.
+
 ### Los íconos
 
 El mapa de 2020 usa insignias con forma de casa, color por tipo y un pictograma

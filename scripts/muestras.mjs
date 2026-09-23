@@ -266,6 +266,11 @@ for (const { muestra, salida } of resultados) {
   const { layout, escalaGrafica, grilla, rotulos } = salida.meta;
   console.log(`  ${muestra.nombre}`);
   console.log(`    piezas: ${layout.colocadas.map((p) => `${p.nombre}@${p.anclaje}`).join(', ') || 'ninguna'}`);
+  const ley = layout.colocadas.find((p) => p.nombre === 'leyenda');
+  if (ley) {
+    console.log(`    leyenda: ${ley.ancho}×${ley.alto} mm en ${ley.anclaje}`
+      + ` · tapa ${ley.territorioTapadoPct} % de su caja`);
+  }
   const t = salida.meta.titulo;
   console.log(`    título: cuerpo al ${Math.round(t.reduccion * 100)} % en ${t.lineas} líneas`
     + `, tapa ${t.tapadoMm2} mm² (${t.tapadoPct} % de su caja)`);
