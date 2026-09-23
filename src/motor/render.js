@@ -35,7 +35,7 @@ import {
   CLASES_POR_DEFECTO,
 } from './servicios.js';
 import { bloqueLeyenda } from './leyenda.js';
-import { construirRecuadros, MAXIMO_RECUADROS } from './zoom.js';
+import { construirRecuadros, maximoPorFormato } from './zoom.js';
 import { dibujarIcono, comprobarCobertura } from '../iconos/index.js';
 import { poloDeInaccesibilidad } from './ocupacion.js';
 import { color, trazoMm, tipografia, layoutMm, rampaNaranjas, ptAmm } from '../estilo/tokens.js';
@@ -133,26 +133,6 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     provincias, agregado, anillos, iconos, marco, medidor, factor, tamanoIcono,
   });
 
-  /* Los recuadros de zoom salen del apiñamiento medido, no de una lista fija: donde
-     los símbolos no caben, se amplía. Con un filtro que deje pocos tipos dejan de
-     hacer falta y no se dibuja ninguno. */
-  const recuadros = opciones.zoom === false ? { piezas: [], referencias: '', regiones: [] }
-    : construirRecuadros({
-      grupos: simbolos.grupos,
-      umbral: UMBRAL_APINAMIENTO,
-      provincias,
-      anillos,
-      agregado,
-      clases,
-      rampa: opciones.rampa || rampaNaranjas,
-      iconos,
-      medidor,
-      factor,
-      tamanoIcono,
-      marco,
-      maximo: opciones.maximoRecuadros ?? MAXIMO_RECUADROS,
-    });
-
   const grilla = construirGrilla(proyeccion, marco, escala.denominador);
   const dibujoGrilla = dibujarGrilla({ grilla, marco, medidor, factor, banda });
 
@@ -204,8 +184,6 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     }),
   };
 
-  recuadros.piezas.forEach((p) => { piezas[p.nombre] = p; });
-
   const solicitud = (n) => ({
     pieza: piezas[n],
     anclajes: plantilla[n] || [],
@@ -222,18 +200,39 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     ANTES_DE_ROTULOS.filter((n) => piezas[n]).map(solicitud), marco, ocupacion,
   );
 
+  /* Los recuadros van justo detrás de la leyenda y ANTES de los rótulos del mapa: se
+     dimensionan por el hueco que quede, así que necesitan la ocupación con la cabecera
+     y la leyenda ya dentro, pero no pueden esperar a los rótulos, que son pequeños y
+     se acomodan en cualquier sitio mientras que un recuadro necesita una superficie
+     grande y con una forma concreta. No pasan por colocarPiezas porque eligen ellos
+     mismos tamaño y ubicación. */
+  const recuadros = construirRecuadros({
+    modo: opciones.zoom === false ? 'ninguno' : (opciones.zoom?.modo || 'auto'),
+    seleccion: opciones.zoom?.seleccion || [],
+    grupos: simbolos.grupos,
+    umbral: UMBRAL_APINAMIENTO,
+    provincias,
+    anillos,
+    agregado,
+    clases,
+    rampa: opciones.rampa || rampaNaranjas,
+    iconos,
+    medidor,
+    factor,
+    tamanoIcono,
+    marco,
+    ocupacion,
+    maximo: opciones.maximoRecuadros,
+  });
+
   const etiquetas = rotulosDeContexto({
     contexto, anillosPorRasgo: anillos, marco, ocupacion, medidor, factor,
   });
 
-  /* Los recuadros van justo detrás de la leyenda: son contenido del mapa y un zoom
-     mal colocado pierde información, mientras que la escala o la rosa se acomodan en
-     cualquier hueco. */
-  const ordenResto = [
-    ...recuadros.piezas.map((p) => p.nombre),
-    ...PRIORIDAD.filter((n) => piezas[n] && !ANTES_DE_ROTULOS.includes(n)),
-  ];
-  const colocacionResto = colocarPiezas(ordenResto.map(solicitud), marco, ocupacion);
+  const colocacionResto = colocarPiezas(
+    PRIORIDAD.filter((n) => piezas[n] && !ANTES_DE_ROTULOS.includes(n)).map(solicitud),
+    marco, ocupacion,
+  );
 
   const colocacion = {
     colocadas: [...colocacionCabecera.colocadas, ...colocacionResto.colocadas],
@@ -271,7 +270,10 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     grupo({ id: 'mapa', 'clip-path': `url(#${idRecorte})` }, capas.svg),
     dibujarMarco(marco),
     dibujoGrilla.svgMarcas,
-    grupo({ id: 'capa-layout' }, colocacion.colocadas.map((c) => c.pieza.dibujar(c.x, c.y))),
+    grupo({ id: 'capa-layout' }, [
+      ...colocacion.colocadas.map((c) => c.pieza.dibujar(c.x, c.y)),
+      ...recuadros.colocados.map((z) => z.svg),
+    ]),
     dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor }),
   ].join('\n');
 
@@ -307,7 +309,8 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
         tamanoIconoMm: Number(tamanoIcono.toFixed(2)),
         gruposApinados: simbolos.apinados,
         recuadros: recuadros.regiones,
-        recuadrosDescartados: recuadros.descartados || 0,
+        capacidadRecuadros: recuadros.capacidad,
+        avisosRecuadros: recuadros.avisos,
         apinamientoMaximoPct: simbolos.apinamientoMaximoPct,
         iconosSinUso: cobertura.sinUso,
       },

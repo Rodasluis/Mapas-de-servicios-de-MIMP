@@ -182,17 +182,31 @@ reconocible. `muestras/iconos.pdf` los imprime a 3, 4,5 y 6 mm junto a su tipo, 
 y color: es a la vez la documentación de la correspondencia y la comprobación de que
 a tamaño real siguen distinguiéndose.
 
-### Los recuadros de zoom salen del apiñamiento medido
+### Los recuadros de zoom
 
-No hay una lista de «amplía Lima y Cusco». El motor mide, provincia a provincia, qué
-fracción de su grupo de íconos pisa la del vecino, agrupa las que pasan del umbral y
-las amplía, dibujando el rectángulo de referencia en el mapa principal. El criterio
-vale para cualquier hoja y cualquier filtro: en A1 salen Paruro y Lima-Callao; con un
-solo tipo activo los símbolos dejan de estorbarse y no se dibuja ninguno.
+**Qué se amplía.** En automático no hay una lista de «amplía Lima y Cusco»: el motor
+mide, provincia a provincia, qué fracción de su grupo de íconos pisa la del vecino,
+agrupa las que pasan del umbral y las amplía. El criterio vale para cualquier hoja y
+cualquier filtro; con un solo tipo activo los símbolos dejan de estorbarse y no se
+dibuja ninguno. También se pueden **elegir a mano** por ubigeo de provincia o de
+departamento, y entonces el motor avisa si la selección abarca demasiado para que
+ampliarla signifique algo.
 
-En A4 nacional el informe avisa de que 72 provincias se estorban y **no** genera
-recuadros: cuando la zona apiñada es medio país, el problema no se arregla con un zoom
-sino con una hoja mayor.
+**Cuánto mide y dónde va.** No se colocan en anclajes con tamaño fijo: cada recuadro
+le pregunta a la rejilla de ocupación por el **mayor hueco libre con su proporción**.
+De ahí salen dos cosas a la vez. El tamaño se adapta al formato —en A0 los recuadros
+llegan a 257 × 247 mm, en A4 apenas a 55 × 51— y **la forma de la zona decide la
+ubicación**: una provincia alargada en vertical encaja en el mar, que es alto y
+estrecho, y una alargada en horizontal sobre Brasil, que es ancho. Cuando se acaba el
+hueco se dejan de dibujar, y eso es el máximo dinámico: A4 admite uno, A0 hasta cuatro.
+
+| Hoja | Recuadros | Tamaño del mayor |
+|---|---:|---|
+| A4 | 1 | 55 × 51 mm |
+| A3 | 2 | 85 × 69 mm |
+| A2 | 2 | 89 × 137 mm |
+| A1 | 3 | 167 × 177 mm |
+| A0 | 4 | 337 × 351 mm |
 
 ## El layout se coloca solo
 

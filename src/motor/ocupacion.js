@@ -118,6 +118,13 @@ export function crearOcupacion(anchoMm, altoMm, celdaMm = CELDA_MM) {
       return otra;
     },
     __cargar(t, b, l) { territorio.set(t); bloques.set(b); tierra.set(l); },
+
+    /** Máscara de lo intocable: territorio del ámbito más bloques ya colocados. */
+    __mascaraOcupada() {
+      const m = new Uint8Array(cols * filas);
+      for (let i = 0; i < m.length; i++) m[i] = territorio[i] || bloques[i] ? 1 : 0;
+      return m;
+    },
   };
 }
 
@@ -239,4 +246,89 @@ export function poloDeInaccesibilidad(anillos, caja, celdaMm = 1.5) {
     y: caja.y + (mejor.f + 0.5) * celdaMm,
     radioMm: mejor.d * celdaMm,
   };
+}
+
+/**
+ * Mayor rectángulo libre de una proporción dada.
+ *
+ * Es lo que permite que un recuadro de zoom se dimensione por el hueco que hay y no
+ * por una constante: en A0 el Pacífico deja una franja enorme y el recuadro puede
+ * crecer, mientras que en A4 apenas cabe uno pequeño. Y como la búsqueda se hace para
+ * una PROPORCIÓN concreta, la forma de la zona ampliada decide dónde acaba: una
+ * provincia alargada en vertical encuentra su mejor encaje en el mar, que es una
+ * franja alta y estrecha, y una alargada en horizontal sobre Brasil, que es ancho.
+ *
+ * «Libre» aquí es lo que no es territorio peruano ni bloque ya colocado. Los países
+ * vecinos sí valen: un recuadro sobre Brasil no tapa nada que el lector necesite.
+ *
+ * Internamente usa una imagen integral, que responde en tiempo constante a «¿está
+ * libre este rectángulo?», y una búsqueda binaria sobre la altura. La búsqueda binaria
+ * es válida porque si cabe un rectángulo de cierto tamaño, cabe cualquiera menor de la
+ * misma proporción: está contenido en él.
+ *
+ * @param {object} opciones
+ * @param {number} opciones.aspecto     ancho/alto buscado
+ * @param {object} opciones.region      dónde buscar, en milímetros
+ * @param {number} opciones.minLadoMm   por debajo de esto no merece la pena
+ * @param {number} opciones.maxLadoMm   tope, para que uno no se coma el hueco entero
+ * @returns {{x, y, ancho, alto}|null}
+ */
+export function mayorRectanguloLibre(ocupacion, {
+  aspecto, region, minLadoMm, maxLadoMm,
+}) {
+  const { celdaMm } = ocupacion;
+  const ocupado = ocupacion.__mascaraOcupada();
+  const { cols, filas } = ocupacion;
+
+  /* Imagen integral: suma acumulada de celdas ocupadas. Con ella, la suma de
+     cualquier rectángulo son cuatro lecturas, y «libre» es que esa suma sea cero. */
+  const ancho = cols + 1;
+  const integral = new Int32Array(ancho * (filas + 1));
+  for (let f = 0; f < filas; f++) {
+    let fila = 0;
+    for (let c = 0; c < cols; c++) {
+      fila += ocupado[f * cols + c];
+      integral[(f + 1) * ancho + c + 1] = integral[f * ancho + c + 1] + fila;
+    }
+  }
+  const suma = (c0, f0, c1, f1) => integral[f1 * ancho + c1] - integral[f0 * ancho + c1]
+    - integral[f1 * ancho + c0] + integral[f0 * ancho + c0];
+
+  const c0 = Math.max(0, Math.ceil(region.x / celdaMm));
+  const f0 = Math.max(0, Math.ceil(region.y / celdaMm));
+  const c1 = Math.min(cols, Math.floor((region.x + region.ancho) / celdaMm));
+  const f1 = Math.min(filas, Math.floor((region.y + region.alto) / celdaMm));
+
+  /** ¿Cabe en algún sitio un rectángulo de estas celdas? Devuelve dónde. */
+  const buscar = (anchoCeldas, altoCeldas) => {
+    if (anchoCeldas < 1 || altoCeldas < 1) return null;
+    for (let f = f0; f + altoCeldas <= f1; f++) {
+      for (let c = c0; c + anchoCeldas <= c1; c++) {
+        if (suma(c, f, c + anchoCeldas, f + altoCeldas) === 0) {
+          return { x: c * celdaMm, y: f * celdaMm, ancho: anchoCeldas * celdaMm, alto: altoCeldas * celdaMm };
+        }
+      }
+    }
+    return null;
+  };
+
+  const altoMax = Math.min(
+    maxLadoMm,
+    aspecto >= 1 ? maxLadoMm / aspecto : maxLadoMm,
+    region.alto,
+    region.ancho / aspecto,
+  );
+  const altoMin = Math.max(minLadoMm / Math.max(1, aspecto), minLadoMm);
+
+  let lo = Math.floor(altoMin / celdaMm);
+  let hi = Math.floor(altoMax / celdaMm);
+  if (hi < lo) return null;
+
+  let mejor = null;
+  while (lo <= hi) {
+    const medio = Math.floor((lo + hi) / 2);
+    const encontrado = buscar(Math.round(medio * aspecto), medio);
+    if (encontrado) { mejor = encontrado; lo = medio + 1; } else hi = medio - 1;
+  }
+  return mejor;
 }

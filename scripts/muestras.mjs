@@ -44,6 +44,15 @@ const MUESTRAS = [
   /* Con un solo tipo activo se comprueba que el filtro llega hasta el final: el
      coropletas se recalcula, la leyenda pierde las diecinueve entradas que sobran y
      las clases altas desaparecen porque ninguna provincia llega a ellas. */
+  /* Zoom elegido a mano: Lima y Callao son vecinas, así que se fusionan en un solo
+     recuadro. Áncash entero (20 provincias) pasa raspando el límite; con él se
+     comprueba de paso el aviso de «zona demasiado grande». */
+  {
+    nombre: 'nacional_A2_zoom_manual',
+    hoja: { tamano: 'A2', orientacion: 'vertical' },
+    opciones: { zoom: { modo: 'manual', seleccion: ['1501', '0701', '02'] } },
+    textos: { subtitulo: 'Recuadros elegidos: Lima, Callao y Áncash' },
+  },
   {
     nombre: 'nacional_A2_solo_CEM',
     hoja: { tamano: 'A2', orientacion: 'vertical' },
@@ -242,9 +251,13 @@ for (const { muestra, salida } of resultados) {
     console.log(`    ${s3.gruposApinados.slice(0, 6).map((g) => `${g.nombre} ${g.apinamientoPct}%`).join(', ')}`
       + `${s3.gruposApinados.length > 6 ? ', …' : ''}`);
   }
+  const cap = s3.capacidadRecuadros;
   console.log(`    recuadros: ${s3.recuadros.length
-    ? s3.recuadros.map((z) => `${z.etiqueta} (${z.provincias} prov., por ${z.motivo.join('/')})`).join(' · ')
+    ? s3.recuadros.map((z) => `${z.etiqueta} ${z.anchoMm}×${z.altoMm} mm (${z.provincias} prov.)`).join(' · ')
     : 'ninguno'}`);
+  console.log(`    capacidad: ${cap.colocados} de ${cap.tope} permitidos en esta hoja`
+    + `${cap.cabeOtro ? ' · aún cabría otro' : ' · sin hueco para más'}`);
+  for (const a of s3.avisosRecuadros || []) console.log(`    ! ${a}`);
 }
 
 titulo('Layout: solapamientos y escala gráfica');
