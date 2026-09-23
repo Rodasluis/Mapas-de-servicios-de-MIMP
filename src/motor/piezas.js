@@ -27,7 +27,10 @@ const DIAGONAL_A4 = Math.hypot(210, 297);
  * Con la raíz queda el doble, que es lo que pide un cartel visto de lejos.
  */
 export function factorFormato(hoja) {
-  return Math.sqrt(hoja.diagonalMm / DIAGONAL_A4);
+  /* De A4 a A0 la diagonal se multiplica por cuatro. Con exponente 0,5 el layout sólo
+     se duplicaba y en A0 quedaba pequeño frente al mapa; con 0,65 crece unas 2,5
+     veces, que es lo que pide un cartel sin comerse la hoja. */
+  return (hoja.diagonalMm / DIAGONAL_A4) ** 0.65;
 }
 
 const estilo = (t, factor) => ({ familia: t.familia, variante: t.peso, pt: t.pt * factor });
@@ -51,7 +54,9 @@ export function bloqueInstitucional({ logos, factor }) {
   const separacion = 2.2 * factor;
   const relleno = layoutMm.relleneBloque * factor;
 
-  const lista = [logos.mimp, logos.gobiernoPeru].filter(Boolean);
+  /* Sólo el logotipo del MIMP: el del Gobierno del Perú duplicaba el escudo y hacía
+     el bloque el doble de alto, que es sitio que en A4 hace falta para el mapa. */
+  const lista = [logos.mimp].filter(Boolean);
   const anchos = lista.map((l) => (l.ancho / l.alto) * alturaLogo);
   const ancho = Math.max(...anchos) + relleno * 2;
   const alto = lista.length * alturaLogo + (lista.length - 1) * separacion + relleno * 2;
@@ -79,61 +84,56 @@ export function bloqueInstitucional({ logos, factor }) {
 /* -------------------------------- título -------------------------------- */
 
 export function bloqueTitulo({ textos, medidor, factor, anchoMaximo }) {
-  const relleno = layoutMm.relleneBloque * factor;
+  /* La caja del título se aprieta a propósito: va arriba, donde el Perú llega casi al
+     borde, y cada milímetro que ocupa de más es territorio tapado. El interlineado
+     baja a lo justo para que los trazos ascendentes y descendentes no se toquen. */
+  const relleno = layoutMm.relleneBloque * factor * 0.55;
   const eTitulo = estilo(tipografia.titular, factor);
   const eSub = estilo(tipografia.subtitulo, factor);
   const ePeriodo = estilo(tipografia.periodo, factor);
 
   const anchoTexto = anchoMaximo - relleno * 2;
-  const lineasTitulo = medidor.partir(textos.titulo || 'Servicios del MIMP', eTitulo, anchoTexto);
-  const lineasSub = textos.subtitulo ? medidor.partir(textos.subtitulo, eSub, anchoTexto) : [];
-  const periodo = textos.periodo ? String(textos.periodo) : '';
 
-  const altoTitulo = medidor.alto(eTitulo) * 1.12;
-  const altoSub = medidor.alto(eSub) * 1.15;
-  const altoPeriodo = periodo ? medidor.alto(ePeriodo) * 1.3 : 0;
+  /* Una sola lista de líneas con su estilo. Apretar el interlineado a ojo, contando
+     alturas aproximadas por bloque, dejaba fuera de la caja la última línea —el
+     periodo salía cortado por el borde—, así que las posiciones de las líneas base se
+     calculan primero y la altura de la caja sale de la última, no al revés. */
+  const lineas = [
+    ...medidor.partir(textos.titulo || 'Servicios del MIMP', eTitulo, anchoTexto)
+      .map((t) => ({ t, e: eTitulo, peso: 700, color: color.tinta })),
+    ...(textos.subtitulo ? medidor.partir(textos.subtitulo, eSub, anchoTexto) : [])
+      .map((t) => ({ t, e: eSub, peso: 600, color: color.tinta })),
+    ...(textos.periodo ? [{ t: String(textos.periodo), e: ePeriodo, peso: 500, color: color.mimpRojo }] : []),
+  ];
 
-  const ancho = relleno * 2 + Math.max(
-    ...lineasTitulo.map((l) => medidor.ancho(l, eTitulo)),
-    ...lineasSub.map((l) => medidor.ancho(l, eSub)),
-    periodo ? medidor.ancho(periodo, ePeriodo) : 0,
-  );
-  const alto = relleno * 2 + lineasTitulo.length * altoTitulo
-    + lineasSub.length * altoSub + altoPeriodo;
+  /** Interlineado: lo justo para que el descendente de una línea no toque la siguiente. */
+  const APRETADO = 0.80;
+  let cursor = 0;
+  for (const l of lineas) {
+    cursor += cursor === 0 ? medidor.ascenso(l.e) : medidor.alto(l.e) * APRETADO;
+    l.base = cursor;
+  }
+  const ultima = lineas[lineas.length - 1];
+  const alto = relleno * 2 + ultima.base
+    + (medidor.alto(ultima.e) - medidor.ascenso(ultima.e));
+
+  const ancho = relleno * 2 + Math.max(...lineas.map((l) => medidor.ancho(l.t, l.e)));
 
   return {
     nombre: 'titulo',
     ancho,
     alto,
     dibujar(x, y) {
-      const hijos = [rect({ x, y, ancho, alto }, {
-        fill: color.fondoHoja, stroke: color.marco, 'stroke-width': trazoMm.marcoInterior,
-      })];
       const cx = x + ancho / 2;
-      let linea = y + relleno + medidor.ascenso(eTitulo);
-      for (const l of lineasTitulo) {
-        hijos.push(texto(l, {
-          x: cx, y: linea, 'text-anchor': 'middle', fill: color.tinta,
-          'font-family': eTitulo.familia, 'font-size': ptAmm(eTitulo.pt), 'font-weight': 700,
-        }));
-        linea += altoTitulo;
-      }
-      linea += medidor.ascenso(eSub) - medidor.ascenso(eTitulo);
-      for (const l of lineasSub) {
-        hijos.push(texto(l, {
-          x: cx, y: linea, 'text-anchor': 'middle', fill: color.tinta,
-          'font-family': eSub.familia, 'font-size': ptAmm(eSub.pt), 'font-weight': 600,
-        }));
-        linea += altoSub;
-      }
-      if (periodo) {
-        hijos.push(texto(periodo, {
-          x: cx, y: linea + medidor.ascenso(ePeriodo) * 0.9, 'text-anchor': 'middle',
-          fill: color.mimpRojo, 'font-family': ePeriodo.familia,
-          'font-size': ptAmm(ePeriodo.pt), 'font-weight': 500,
-        }));
-      }
-      return grupo({ id: 'bloque-titulo' }, hijos);
+      return grupo({ id: 'bloque-titulo' }, [
+        rect({ x, y, ancho, alto }, {
+          fill: color.fondoHoja, stroke: color.marco, 'stroke-width': trazoMm.marcoInterior,
+        }),
+        ...lineas.map((l) => texto(l.t, {
+          x: cx, y: y + relleno + l.base, 'text-anchor': 'middle', fill: l.color,
+          'font-family': l.e.familia, 'font-size': ptAmm(l.e.pt), 'font-weight': l.peso,
+        })),
+      ]);
     },
   };
 }
@@ -217,14 +217,14 @@ export function kilometrosRedondos(denominador, largoObjetivoMm) {
  * proyección y midiendo la distancia sobre el terreno.
  */
 export function escalaGrafica({ denominador, factor, medidor }) {
-  const largoObjetivo = 46 * factor;
+  const largoObjetivo = 30 * factor;
   const km = kilometrosRedondos(denominador, largoObjetivo);
   const largo = (km * 1e6) / denominador;
   const divisiones = 4;
-  const altoBarra = 1.7 * factor;
-  const eCifra = { familia: 'SourceSans3', variante: 'Regular', pt: 6.5 * factor };
-  const eEscala = { familia: 'Poppins', variante: 'SemiBold', pt: 7.5 * factor };
-  const relleno = layoutMm.relleneBloque * factor * 0.8;
+  const altoBarra = 1.3 * factor;
+  const eCifra = { familia: 'SourceSans3', variante: 'Regular', pt: 5.2 * factor };
+  const eEscala = { familia: 'Poppins', variante: 'SemiBold', pt: 6.2 * factor };
+  const relleno = layoutMm.relleneBloque * factor * 0.55;
 
   const etiquetas = [];
   for (let i = 0; i <= divisiones; i++) {

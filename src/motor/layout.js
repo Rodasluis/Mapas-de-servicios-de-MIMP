@@ -66,7 +66,7 @@ export function colocarPiezas(solicitudes, marco, ocupacion) {
   const forzadas = [];
   const deslizamientos = desplazamientos(marco);
 
-  for (const { pieza, anclajes, obligatoria = true } of solicitudes) {
+  for (const { pieza, anclajes, obligatoria = true, soloPreferidos = false } of solicitudes) {
     if (!pieza || !(pieza.ancho > 0) || !(pieza.alto > 0)) continue;
 
     let elegida = null;
@@ -76,10 +76,14 @@ export function colocarPiezas(solicitudes, marco, ocupacion) {
        demás. Sin este barrido final una pieza se resignaba a tapar el país porque sus
        tres anclajes preferidos estaban ocupados, aunque quedara media hoja de océano
        libre: en un A4 nacional la barra de escala acabó sobre el sur del Perú
-       teniendo el Pacífico al lado. Preferir un sitio no es renunciar al resto. */
-    const orden = anclajes.length
-      ? [...anclajes, ...ANCLAJES.filter((a) => !anclajes.includes(a))]
-      : ANCLAJES;
+       teniendo el Pacífico al lado. Preferir un sitio no es renunciar al resto.
+
+       La excepción es `soloPreferidos`: hay sitios que no son negociables por mucho
+       que sobre océano en otra parte. El título va arriba aunque le toque tapar algo
+       de territorio, y por eso su caja se compone lo más apretada posible. */
+    const orden = !anclajes.length ? ANCLAJES
+      : soloPreferidos ? anclajes
+        : [...anclajes, ...ANCLAJES.filter((a) => !anclajes.includes(a))];
 
     for (const anclaje of orden) {
       for (const [dx, dy] of deslizamientos) {
@@ -120,7 +124,7 @@ export function colocarPiezas(solicitudes, marco, ocupacion) {
 export const PLANTILLAS = {
   vertical: {
     institucional: ['arriba-izquierda', 'arriba-derecha', 'abajo-izquierda'],
-    titulo: ['arriba-derecha', 'arriba-izquierda', 'arriba-centro', 'abajo-derecha'],
+    titulo: ['arriba-derecha', 'arriba-centro', 'arriba-izquierda'],
     norte: ['centro-derecha', 'arriba-derecha', 'centro-izquierda'],
     escala: ['abajo-derecha', 'abajo-izquierda', 'abajo-centro'],
     leyenda: ['abajo-izquierda', 'abajo-derecha', 'centro-izquierda'],

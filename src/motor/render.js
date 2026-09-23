@@ -123,7 +123,12 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
 
   const solicitudes = PRIORIDAD
     .filter((n) => piezas[n])
-    .map((n) => ({ pieza: piezas[n], anclajes: plantilla[n] || [] }));
+    .map((n) => ({
+      pieza: piezas[n],
+      anclajes: plantilla[n] || [],
+      // El título es lo único que no se mueve de la banda superior.
+      soloPreferidos: n === 'titulo',
+    }));
   const colocacion = colocarPiezas(solicitudes, marco, ocupacion);
 
   /* La barra de escala se comprueba sobre el dibujo terminado: se invierten sus dos
