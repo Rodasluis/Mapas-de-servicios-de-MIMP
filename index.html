@@ -8,16 +8,71 @@
       name="description"
       content="Generador de mapas de los servicios del MIMP listos para imprenta, en PDF vectorial."
     />
-    <link rel="stylesheet" href="/src/estilo/base.css" />
   </head>
-  <body>
-    <main id="app" class="cargando">
+  <body class="cargando">
+    <a class="saltar" href="#vista">Saltar a la vista previa</a>
+
+    <header class="cabecera">
       <h1>Mapas imprimibles del MIMP</h1>
       <p class="entradilla">
-        Generador de mapas de los servicios del MIMP listos para imprenta, en PDF vectorial.
+        Configura el mapa, revísalo en pantalla y descárgalo en PDF vectorial listo para
+        imprenta.
       </p>
-      <p id="estado" role="status">Comprobando los datos publicados…</p>
+    </header>
+
+    <p id="arranque" class="fallo" hidden></p>
+
+    <main class="disposicion">
+      <form id="panel" class="panel" aria-label="Configuración del mapa"></form>
+
+      <section class="area-vista" aria-label="Vista previa">
+        <div class="barra-vista">
+          <div class="controles-zoom" role="group" aria-label="Zoom de la vista previa">
+            <button type="button" id="alejar" aria-label="Alejar">−</button>
+            <span id="nivel-zoom" aria-live="off">100 %</span>
+            <button type="button" id="acercar" aria-label="Acercar">+</button>
+            <button type="button" id="ajustar">Ajustar</button>
+          </div>
+          <button type="button" id="ver-avisos" class="avisos-boton"
+                  aria-haspopup="dialog" aria-describedby="avisos-cuenta">
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+              <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
+              <circle cx="8" cy="4.6" r=".95" fill="currentColor" />
+              <path d="M8 7.3v4.5" fill="none" stroke="currentColor" stroke-width="1.6"
+                    stroke-linecap="round" />
+            </svg>
+            <span id="avisos-cuenta">Sin avisos</span>
+          </button>
+
+          <button type="button" id="copiar-enlace" class="enlace">
+            <span>Copiar enlace de esta configuración</span>
+          </button>
+        </div>
+
+        <div id="vista" class="vista" role="img"
+             aria-label="Vista previa del mapa. Usa las flechas para desplazar, + y − para el zoom, 0 para ajustar."></div>
+
+        <dl id="resumen" class="resumen"></dl>
+      </section>
     </main>
+
+    <dialog id="dialogo-avisos" class="dialogo" aria-labelledby="titulo-avisos">
+      <div class="dialogo-cabecera">
+        <h2 id="titulo-avisos">Avisos sobre este mapa</h2>
+        <form method="dialog">
+          <button class="cerrar" aria-label="Cerrar los avisos">&times;</button>
+        </form>
+      </div>
+      <p class="dialogo-nota">
+        Señalan lo que el mapa no alcanza a decir. No impiden imprimirlo: casi siempre se
+        resuelven con una hoja mayor o filtrando tipos de servicio.
+      </p>
+      <ul id="avisos" class="avisos"></ul>
+      <p id="sin-avisos" class="dialogo-nota" hidden>
+        Nada que señalar: cabe todo lo que el mapa tiene que decir.
+      </p>
+    </dialog>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
