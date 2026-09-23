@@ -220,35 +220,93 @@ button.generar:disabled { background: var(--tinta-3); cursor: progress; }
   top: 50%;
   left: 50%;
   transform-origin: center center;
-  will-change: transform;
 }
+
+/* will-change promociona el lienzo a su propia capa y la rasteriza UNA vez, a la
+   escala reducida: a un 40 % el texto del mapa se convierte en manchas y los rótulos
+   desaparecen de la vista previa. Como esta vista existe para revisar el original de
+   imprenta, la nitidez manda sobre la suavidad, y la capa sólo se promociona mientras
+   se arrastra, que es cuando el movimiento continuo la justifica. */
+.vista.arrastrando .lienzo { will-change: transform; }
 .lienzo svg { display: block; }
 
-.informes {
-  display: flex;
-  gap: 2rem;
-  align-items: start;
-  flex-wrap: wrap;
-  padding: .6rem .9rem;
-  background: var(--superficie);
-  border-top: 1px solid var(--borde);
-  max-height: 11rem;
-  overflow-y: auto;
-}
+/* ----------------------- resumen y avisos ------------------------------ */
 
+/* El resumen ocupa UNA línea al pie de la vista. Antes era una rejilla de cinco
+   filas que, con el bloque de avisos debajo, se llevaba unos ciento setenta píxeles
+   de alto del mapa. */
 .resumen {
   margin: 0;
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: .05rem .7rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .1rem 1.4rem;
+  padding: .45rem .9rem;
+  background: var(--superficie);
+  border-top: 1px solid var(--borde);
   font-size: .82rem;
 }
-.resumen dt { color: var(--tinta-2); }
+.resumen > div { display: flex; gap: .35rem; align-items: baseline; }
+.resumen dt { color: var(--tinta-3); }
 .resumen dd { margin: 0; }
 
-.informes h2 { margin: 0 0 .2rem; font-size: .82rem; color: var(--tinta-2); }
-.avisos { margin: 0; padding-left: 1.1rem; font-size: .82rem; color: #8a5a00; }
-.avisos li { margin: .1rem 0; }
+/* El botón vive en la barra, siempre visible: se gana sitio ocultando el TEXTO de
+   los avisos, no el hecho de que existan. En cuanto hay alguno se tiñe de ámbar. */
+.avisos-boton {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font: inherit;
+  font-size: .82rem;
+  padding: .22rem .6rem;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  background: var(--superficie);
+  color: var(--tinta-3);
+  cursor: pointer;
+}
+.avisos-boton.hay {
+  border-color: #e7c07a;
+  background: #fdf5e4;
+  color: #8a5a00;
+  font-weight: 600;
+}
+
+.dialogo {
+  width: min(34rem, calc(100vw - 2rem));
+  padding: 1rem 1.25rem 1.25rem;
+  border: 0;
+  border-radius: 12px;
+  background: var(--superficie);
+  color: var(--tinta);
+  box-shadow: 0 10px 40px rgba(16, 18, 24, .3);
+}
+.dialogo::backdrop { background: rgba(16, 18, 24, .45); }
+
+.dialogo-cabecera {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.dialogo-cabecera h2 { margin: 0; font-size: 1rem; font-weight: 600; }
+
+.dialogo .cerrar {
+  font: inherit;
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 0 .25rem;
+  border: 0;
+  background: none;
+  color: var(--tinta-2);
+  cursor: pointer;
+}
+
+.dialogo-nota { margin: .35rem 0 0; font-size: .82rem; color: var(--tinta-2); }
+.dialogo .avisos { margin: .7rem 0 0; }
+
+.avisos { padding-left: 1.1rem; font-size: .85rem; color: #8a5a00; }
+.avisos li { margin: .25rem 0; }
 
 @media (max-width: 860px) {
   .disposicion { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }

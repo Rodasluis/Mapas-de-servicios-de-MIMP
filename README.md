@@ -328,11 +328,24 @@ tecla, y en A0 cada uno tarda trece segundos. Se espera a que la escritura se de
 si ya hay una composición en marcha, se encola **una sola**, porque lo que importa es el
 último estado y no los intermedios.
 
-Debajo del mapa hay un resumen —escala, nivel de detalle, centros dibujados, rótulos
-colocados y recuadros— y una lista de avisos. La regla de los avisos es señalar lo que
-el mapa **no** está diciendo: símbolos que se estorban, rótulos omitidos por falta de
-sitio, zonas que pedían ampliación y no cupieron, piezas del layout que no entraron. Un
-mapa incompleto sin avisos parece completo.
+Al pie de la vista hay un resumen en una línea —escala, nivel de detalle, centros
+dibujados, rótulos colocados y recuadros—, y los avisos viven en un diálogo que se abre
+desde la barra. La regla de los avisos es señalar lo que el mapa **no** está diciendo:
+símbolos que se estorban, rótulos omitidos por falta de sitio, zonas que pedían
+ampliación y no cupieron, piezas del layout que no entraron. Un mapa incompleto sin
+avisos parece completo, así que lo que se oculta es el texto, nunca que exista: el botón
+está siempre a la vista y se tiñe de ámbar con el número en cuanto hay alguno. La lista
+llegaba a comerse unos ciento setenta píxeles de alto del mapa, que es lo que se ha
+venido a mirar.
+
+**El zoom cambia el tamaño del lienzo, no lo escala.** Parece un detalle de
+implementación y decide si la vista sirve para algo: una hoja A3 mide 1122 × 1587 px sin
+escalar y una A0, 3178 × 4494. Al reducir por CSS una capa de ese tamaño, el navegador la
+rasteriza entera y luego la encoge, y en esa reducción **desaparecía el texto pequeño**
+—el título, los nombres de los países y la leyenda completa— justo al nivel de zoom en
+que se revisa el mapa entero. Dándole al SVG su tamaño real de pantalla, el dibujo
+vectorial se hace a esa escala y el texto sale nítido a cualquier zoom; cada paso cuesta
+90 ms en A3 y 128 ms en A0.
 
 ### Lo descargado es lo verificado
 

@@ -33,6 +33,17 @@
             <button type="button" id="acercar" aria-label="Acercar">+</button>
             <button type="button" id="ajustar">Ajustar</button>
           </div>
+          <button type="button" id="ver-avisos" class="avisos-boton"
+                  aria-haspopup="dialog" aria-describedby="avisos-cuenta">
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+              <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
+              <circle cx="8" cy="4.6" r=".95" fill="currentColor" />
+              <path d="M8 7.3v4.5" fill="none" stroke="currentColor" stroke-width="1.6"
+                    stroke-linecap="round" />
+            </svg>
+            <span id="avisos-cuenta">Sin avisos</span>
+          </button>
+
           <button type="button" id="copiar-enlace" class="enlace">
             <span>Copiar enlace de esta configuración</span>
           </button>
@@ -41,15 +52,26 @@
         <div id="vista" class="vista" role="img"
              aria-label="Vista previa del mapa. Usa las flechas para desplazar, + y − para el zoom, 0 para ajustar."></div>
 
-        <div class="informes">
-          <dl id="resumen" class="resumen"></dl>
-          <div id="bloque-avisos" hidden>
-            <h2>Avisos</h2>
-            <ul id="avisos" class="avisos"></ul>
-          </div>
-        </div>
+        <dl id="resumen" class="resumen"></dl>
       </section>
     </main>
+
+    <dialog id="dialogo-avisos" class="dialogo" aria-labelledby="titulo-avisos">
+      <div class="dialogo-cabecera">
+        <h2 id="titulo-avisos">Avisos sobre este mapa</h2>
+        <form method="dialog">
+          <button class="cerrar" aria-label="Cerrar los avisos">&times;</button>
+        </form>
+      </div>
+      <p class="dialogo-nota">
+        Señalan lo que el mapa no alcanza a decir. No impiden imprimirlo: casi siempre se
+        resuelven con una hoja mayor o filtrando tipos de servicio.
+      </p>
+      <ul id="avisos" class="avisos"></ul>
+      <p id="sin-avisos" class="dialogo-nota" hidden>
+        Nada que señalar: cabe todo lo que el mapa tiene que decir.
+      </p>
+    </dialog>
 
     <script type="module" src="/src/main.js"></script>
   </body>

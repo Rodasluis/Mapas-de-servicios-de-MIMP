@@ -25,15 +25,29 @@ export function crearVista({ contenedor, alCambiarZoom }) {
   let desplazamiento = { x: 0, y: 0 };
   let hoja = null;
   let arrastre = null;
+  /* El zoom cambia el TAMAÑO del lienzo; no es una transformación de escala.
+     La diferencia se ve en cuanto se aleja: una hoja A3 mide 1122 x 1587 px sin
+     escalar y una A0, 3178 x 4494. Escalar por CSS una capa de ese tamaño obliga al
+     navegador a rasterizarla entera y reducirla después, y en esa reducción se pierde
+     el texto pequeño: a un 52 % desaparecían el título, los nombres de los países y la
+     leyenda entera, que es justo lo que se viene a revisar. Dándole al SVG su tamaño
+     real de pantalla, el dibujo vectorial se hace directamente a esa escala y el texto
+     sale nítido a cualquier zoom.
 
-  /* El lienzo se ancla por su centro al centro del contenedor con translate(-50%,-50%).
-     Dejarlo al flujo normal parece equivalente y no lo es: cuando la hoja sin escalar
-     es MAYOR que el contenedor —una A0 siempre lo es— el navegador deja de centrar el
-     desbordamiento y alinea al borde, y la hoja se va fuera de la vista. Anclada por el
-     centro, su posición ya no depende de su tamaño. */
+     El desplazamiento sí sigue siendo una transformación: mover no cambia el tamaño,
+     así que no obliga a redibujar.
+
+     El translate(-50%,-50%) ancla el lienzo por su centro. Dejarlo al flujo normal
+     parece equivalente y no lo es: cuando el lienzo es MAYOR que el contenedor, el
+     navegador deja de centrar el desbordamiento y lo alinea al borde, y la hoja se va
+     fuera de la vista. Anclado por el centro, su posición no depende de su tamaño. */
   const aplicar = () => {
+    if (hoja) {
+      lienzo.style.width = `${hoja.anchoPx * escala}px`;
+      lienzo.style.height = `${hoja.altoPx * escala}px`;
+    }
     lienzo.style.transform = 'translate(-50%, -50%)'
-      + ` translate(${desplazamiento.x}px, ${desplazamiento.y}px) scale(${escala})`;
+      + ` translate(${desplazamiento.x}px, ${desplazamiento.y}px)`;
     if (alCambiarZoom) alCambiarZoom(escala);
   };
 
@@ -147,13 +161,14 @@ export function crearVista({ contenedor, alCambiarZoom }) {
     mostrar(svg, { anchoMm, altoMm }) {
       const px = 96 / 25.4; // el navegador dibuja a 96 ppp
       hoja = { anchoPx: anchoMm * px, altoPx: altoMm * px };
-      lienzo.style.width = `${hoja.anchoPx}px`;
-      lienzo.style.height = `${hoja.altoPx}px`;
       lienzo.innerHTML = svg.replace(/^<\?xml[^>]*\?>\s*/, '');
       const elemento = lienzo.querySelector('svg');
       if (elemento) {
-        /* La hoja se declara en milímetros; en pantalla tiene que ocupar la caja
-           entera del lienzo y escalar con la transformación, no con sus atributos. */
+        /* La hoja se declara en milímetros. En pantalla el SVG ocupa la caja entera
+           del lienzo, y es esa caja la que cambia de tamaño con el zoom: así el
+           dibujo se rehace a la escala de la vista en vez de rasterizarse una vez y
+           reducirse. Se quitan los atributos width y height, que lo clavarían a su
+           tamaño en milímetros; el viewBox se conserva y manda sobre las proporciones. */
         elemento.removeAttribute('width');
         elemento.removeAttribute('height');
         elemento.setAttribute('preserveAspectRatio', 'xMidYMid meet');

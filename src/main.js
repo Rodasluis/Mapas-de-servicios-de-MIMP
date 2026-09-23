@@ -63,6 +63,8 @@ async function arrancar() {
     alCambiarZoom: (z) => { $('nivel-zoom').textContent = `${Math.round(z * 100)} %`; },
   });
 
+  const dialogo = $('dialogo-avisos');
+
   let ultimo = null;
   let pendiente = null;
   let componiendo = false;
@@ -153,10 +155,15 @@ async function arrancar() {
       ['Recuadros', meta.servicios.recuadros.length
         ? meta.servicios.recuadros.map((z) => z.etiqueta).join(', ') : 'ninguno'],
     ];
+    /* Cada pareja va envuelta en un div —que la lista de definiciones admite— para
+       que el resumen se pueda disponer en UNA línea con saltos limpios. Sin la
+       envoltura, el término y su valor se separan al repartirse por la fila. */
     for (const [clave, valor] of filas) {
       const dt = document.createElement('dt'); dt.textContent = clave;
       const dd = document.createElement('dd'); dd.textContent = valor;
-      $('resumen').append(dt, dd);
+      const pareja = document.createElement('div');
+      pareja.append(dt, dd);
+      $('resumen').appendChild(pareja);
     }
   }
 
@@ -164,6 +171,11 @@ async function arrancar() {
    * Avisos. La regla es señalar lo que el mapa NO está diciendo: un tamaño de hoja
    * que no da para los tipos activos, rótulos que se quedaron fuera, zonas que
    * pedían ampliación y no cupieron. Sin esto, un mapa incompleto parece completo.
+   *
+   * Viven en un diálogo, no bajo el mapa: la lista crecía hasta comerse cien píxeles
+   * de alto del mapa, que es lo que se ha venido a mirar. El botón de la barra queda
+   * a la vista y cambia de color cuando hay algo que señalar, de modo que se gana
+   * sitio sin esconder el aviso: lo que se oculta es el texto, nunca que exista.
    */
   function mostrarAvisos(meta, cfg) {
     const avisos = [];
@@ -192,7 +204,16 @@ async function arrancar() {
       li.textContent = texto;
       $('avisos').appendChild(li);
     }
-    $('bloque-avisos').hidden = avisos.length === 0;
+    $('sin-avisos').hidden = avisos.length > 0;
+
+    const boton = $('ver-avisos');
+    boton.classList.toggle('hay', avisos.length > 0);
+    $('avisos-cuenta').textContent = avisos.length
+      ? `${avisos.length} aviso${avisos.length === 1 ? '' : 's'}`
+      : 'Sin avisos';
+    /* Si el mapa recién compuesto ya no tiene nada que señalar, no puede quedarse
+       abierto un diálogo vacío de la composición anterior. */
+    if (!avisos.length && dialogo.open) dialogo.close();
   }
 
   const textoCapacidad = (meta) => {
@@ -210,6 +231,10 @@ async function arrancar() {
   }
 
   /* ------------------------------ controles ---------------------------- */
+  $('ver-avisos').addEventListener('click', () => dialogo.showModal());
+  /* Pulsar fuera del recuadro cierra, como se espera de una ventana de este tipo. */
+  dialogo.addEventListener('click', (e) => { if (e.target === dialogo) dialogo.close(); });
+
   $('acercar').addEventListener('click', () => vista.acercar());
   $('alejar').addEventListener('click', () => vista.alejar());
   $('ajustar').addEventListener('click', () => vista.ajustar());
