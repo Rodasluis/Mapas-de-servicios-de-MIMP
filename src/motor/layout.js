@@ -26,6 +26,10 @@ const ANCLAJES = [
 ];
 
 /** Esquina superior izquierda de una caja colocada en un anclaje. */
+export function posicionEnAnclaje(anclaje, marco, ancho, alto, margen = SEPARACION_MM) {
+  return posicion(anclaje, marco, ancho, alto, margen);
+}
+
 function posicion(anclaje, marco, ancho, alto, margen) {
   const [vertical, horizontal] = anclaje.split('-');
   const x = horizontal === 'izquierda' ? marco.x + margen
@@ -116,22 +120,25 @@ export function colocarPiezas(solicitudes, marco, ocupacion) {
 /**
  * Plantillas por orientación.
  *
- * En vertical el Perú ocupa una banda diagonal y deja libres las cuatro esquinas: mar
- * arriba y abajo a la izquierda, países vecinos a la derecha. En apaisado el país se
- * estrecha y sobra sitio a los lados, así que las piezas tiran a los flancos. Son
- * preferencias, no imposiciones: el motor las recorre hasta encontrar sitio.
+ * El logotipo y el título tienen sitio FIJO —arriba a la izquierda y arriba a la
+ * derecha— en todas las hojas: son la cabecera del documento y moverlos de sitio
+ * según el formato desorienta a quien compara dos mapas. Cuando el título no cabe sin
+ * tapar el país no se muda: encoge (ver la reducción de cuerpo en render.js).
+ *
+ * El resto sí son preferencias. En vertical el Perú ocupa una banda diagonal y deja
+ * libres las esquinas; en apaisado se estrecha y sobra sitio a los flancos.
  */
 export const PLANTILLAS = {
   vertical: {
-    institucional: ['arriba-izquierda', 'arriba-derecha', 'abajo-izquierda'],
-    titulo: ['arriba-derecha', 'arriba-centro', 'arriba-izquierda'],
+    institucional: ['arriba-izquierda'],
+    titulo: ['arriba-derecha'],
     norte: ['centro-derecha', 'arriba-derecha', 'centro-izquierda'],
     escala: ['abajo-derecha', 'abajo-izquierda', 'abajo-centro'],
     leyenda: ['abajo-izquierda', 'abajo-derecha', 'centro-izquierda'],
   },
   horizontal: {
-    institucional: ['arriba-izquierda', 'abajo-izquierda', 'arriba-derecha'],
-    titulo: ['arriba-derecha', 'arriba-centro', 'arriba-izquierda'],
+    institucional: ['arriba-izquierda'],
+    titulo: ['arriba-derecha'],
     norte: ['arriba-centro', 'centro-derecha', 'arriba-derecha'],
     /* La barra de escala tira al centro horizontal a propósito: en una Mercator
        transversa la escala crece al alejarse del meridiano central, y en una hoja
@@ -145,3 +152,6 @@ export const PLANTILLAS = {
 
 /** Orden de prioridad: quien va antes elige sitio antes. */
 export const PRIORIDAD = ['titulo', 'institucional', 'leyenda', 'escala', 'norte'];
+
+/** Piezas de cabecera: reservan su esquina antes que los rótulos del mapa. */
+export const CABECERA = ['titulo', 'institucional'];

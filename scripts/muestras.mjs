@@ -174,6 +174,9 @@ for (const { muestra, salida } of resultados) {
   const { layout, escalaGrafica, grilla, rotulos } = salida.meta;
   console.log(`  ${muestra.nombre}`);
   console.log(`    piezas: ${layout.colocadas.map((p) => `${p.nombre}@${p.anclaje}`).join(', ') || 'ninguna'}`);
+  const t = salida.meta.titulo;
+  console.log(`    título: cuerpo al ${Math.round(t.reduccion * 100)} % en ${t.lineas} líneas`
+    + `, tapa ${t.tapadoMm2} mm² (${t.tapadoPct} % de su caja)`);
 
   /* Ningún bloque puede montarse sobre otro: es el criterio de aceptación de la fase.
      Se comprueba con los rectángulos que el propio motor reservó, que son los mismos

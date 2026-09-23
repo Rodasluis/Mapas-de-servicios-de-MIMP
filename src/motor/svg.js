@@ -43,6 +43,32 @@ export const grupo = (atributos, hijos) => el('g', atributos, hijos);
 export const texto = (contenido, atributos) => el('text', atributos, escapar(contenido));
 
 /**
+ * Texto con halo, dibujado en DOS pasadas: primero el contorno grueso del color del
+ * halo y encima el texto relleno.
+ *
+ * No se usa `paint-order: stroke`, que es la forma corta de pedir lo mismo, porque
+ * svg2pdf no lo interpreta: pinta el relleno y luego el trazo encima, de modo que un
+ * halo blanco BORRA la letra en el PDF aunque en pantalla se vea bien. Con dos
+ * elementos el orden es explícito y sale igual en los dos medios.
+ */
+export function textoConHalo(contenido, atributos, { colorHalo = '#ffffff', grosorMm = 0 } = {}) {
+  if (!(grosorMm > 0)) return texto(contenido, atributos);
+  const contorno = { ...atributos };
+  delete contorno.fill;
+  return grupo({}, [
+    texto(contenido, {
+      ...contorno,
+      fill: 'none',
+      stroke: colorHalo,
+      'stroke-width': grosorMm,
+      'stroke-linejoin': 'round',
+      'stroke-linecap': 'round',
+    }),
+    texto(contenido, atributos),
+  ]);
+}
+
+/**
  * Documento SVG de una hoja completa.
  *
  * El viewBox va en milímetros y el ancho y alto se declaran con la unidad «mm», de

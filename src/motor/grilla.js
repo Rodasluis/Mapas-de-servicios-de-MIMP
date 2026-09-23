@@ -21,15 +21,26 @@ const UTM_18S = '+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_defs';
 export const aUtm = (lon, lat) => proj4(proj4.WGS84, UTM_18S, [lon, lat]);
 export const aLonLat = (este, norte) => proj4(UTM_18S, proj4.WGS84, [este, norte]);
 
-/** Separación buscada entre líneas sobre el papel. */
-const SEPARACION_OBJETIVO_MM = 42;
+/**
+ * Divisiones buscadas a lo ancho del marco.
+ *
+ * El paso NO puede ser una distancia fija en papel: con 42 mm, un A4 salía con seis
+ * columnas y un A0 con quince, cuando el mapa es el mismo. El de referencia de 2020
+ * reparte el ancho en seis intervalos, y esa densidad se lee bien en cualquier hoja,
+ * así que lo que se fija es el número de divisiones y de ahí se deduce el paso.
+ */
+const DIVISIONES_A_LO_ANCHO = 6;
+
+/** Límites de cordura por si el marco es muy estrecho o muy ancho. */
+const SEPARACION_MINIMA_MM = 22;
+const SEPARACION_MAXIMA_MM = 210;
 
 /** Pasos «redondos» admitidos, en metros, dentro de cada orden de magnitud. */
 const PASOS = [1, 2, 2.5, 5, 10];
 
 /** Elige el paso redondo cuya separación en papel más se acerca a la buscada. */
-export function pasoRedondo(metrosPorMm) {
-  const bruto = metrosPorMm * SEPARACION_OBJETIVO_MM;
+export function pasoRedondo(metrosPorMm, separacionObjetivoMm) {
+  const bruto = metrosPorMm * separacionObjetivoMm;
   const orden = 10 ** Math.floor(Math.log10(bruto));
   let mejor = PASOS[0] * orden;
   let dif = Infinity;
@@ -55,7 +66,11 @@ export function construirGrilla(proyeccion, marco, denominador) {
   const caja = cajaUtmDelMarco(proyeccion, marco);
   if (!caja) return { paso: 0, lineas: [], desviacionMaximaMm: 0 };
 
-  const paso = pasoRedondo(denominador / 1000);
+  const separacion = Math.min(
+    SEPARACION_MAXIMA_MM,
+    Math.max(SEPARACION_MINIMA_MM, marco.ancho / DIVISIONES_A_LO_ANCHO),
+  );
+  const paso = pasoRedondo(denominador / 1000, separacion);
   const lineas = [];
   let desviacionMaxima = 0;
 

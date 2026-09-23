@@ -185,9 +185,18 @@ forzar el país a un solo huso, el extremo occidental cae por debajo del falso o
 ### Qué crece con la hoja y qué no
 
 El trazo del mapa y sus rótulos se mantienen en medidas reales de imprenta: un límite
-departamental mide 0,3 mm en A4 y en A0. Las piezas del layout sí crecen, con la raíz
-de la proporción de diagonales —el doble de A4 a A0, no el cuádruple—, porque un cartel
-se mira de lejos y con el cuerpo de un A4 el título no se leería.
+departamental mide 0,3 mm en A4 y en A0. Las piezas del layout sí crecen con la hoja
+—A4 1,0 · A3 1,37 · A2 1,87 · A1 2,56 · A0 3,50—, porque un cartel se mira de lejos y
+con el cuerpo de un A4 el título se perdería.
+
+La retícula sigue la misma lógica que el mapa de referencia: en vez de una separación
+fija en papel, que daba seis columnas en A4 y quince en A0 para el mismo mapa, se fija
+el NÚMERO de divisiones a lo ancho (seis) y de ahí sale el paso redondo.
+
+El logotipo va siempre arriba a la izquierda y el título arriba a la derecha, en todas
+las hojas: son la cabecera del documento. Cuando el título no cabe ahí sin tapar el
+país no se muda de sitio, **encoge**: el motor prueba cuerpos cada vez menores hasta
+que deja de estorbar, y sólo el título lleva fondo blanco.
 
 ### Dos comprobaciones que el propio motor hace
 

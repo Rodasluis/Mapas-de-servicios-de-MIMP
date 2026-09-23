@@ -14,23 +14,18 @@
  * no cambie. Ese reparto es deliberado.
  */
 import { color, trazoMm, tipografia, layoutMm, ptAmm } from '../estilo/tokens.js';
-import { el, grupo, texto, rect, num } from './svg.js';
+import { el, grupo, texto, textoConHalo, rect, num } from './svg.js';
 
 /** Diagonal de un A4 en milímetros, referencia del factor de formato. */
 const DIAGONAL_A4 = Math.hypot(210, 297);
 
-/**
- * Cuánto crecen las piezas del layout al crecer la hoja.
- *
- * Se usa la raíz de la proporción de diagonales, no la proporción entera: de A4 a A0
- * el lado se multiplica por 4, y un título cuatro veces mayor se comería la hoja.
- * Con la raíz queda el doble, que es lo que pide un cartel visto de lejos.
- */
+/** Cuánto crecen las piezas del layout al crecer la hoja. */
 export function factorFormato(hoja) {
-  /* De A4 a A0 la diagonal se multiplica por cuatro. Con exponente 0,5 el layout sólo
-     se duplicaba y en A0 quedaba pequeño frente al mapa; con 0,65 crece unas 2,5
-     veces, que es lo que pide un cartel sin comerse la hoja. */
-  return (hoja.diagonalMm / DIAGONAL_A4) ** 0.65;
+  /* De A4 a A0 la diagonal se multiplica por cuatro. El exponente reparte ese
+     crecimiento entre las piezas del layout: con 0,9 un A0 las agranda 3,5 veces,
+     que es lo que hace falta para que no se pierdan frente a un mapa de metro y
+     medio. La progresión queda A4 1,0 · A3 1,37 · A2 1,87 · A1 2,56 · A0 3,50. */
+  return (hoja.diagonalMm / DIAGONAL_A4) ** 0.9;
 }
 
 const estilo = (t, factor) => ({ familia: t.familia, variante: t.peso, pt: t.pt * factor });
@@ -66,31 +61,35 @@ export function bloqueInstitucional({ logos, factor }) {
     ancho,
     alto,
     dibujar(x, y) {
-      const fondo = rect({ x, y, ancho, alto }, {
-        fill: color.fondoHoja, stroke: color.mimpGris,
-        'stroke-width': trazoMm.marcoInterior, rx: 0.8 * factor,
-      });
+      /* Sin recuadro ni fondo: el logotipo ya trae el suyo y una caja más sólo añade
+         un borde que compite con el marco del mapa. */
       const dibujos = lista.map((logo, i) => dibujarLogo(
         logo,
         x + relleno + (ancho - relleno * 2 - anchos[i]) / 2,
         y + relleno + i * (alturaLogo + separacion),
         alturaLogo,
       ));
-      return grupo({ id: 'bloque-institucional' }, [fondo, ...dibujos]);
+      return grupo({ id: 'bloque-institucional' }, dibujos);
     },
   };
 }
 
 /* -------------------------------- título -------------------------------- */
 
-export function bloqueTitulo({ textos, medidor, factor, anchoMaximo }) {
-  /* La caja del título se aprieta a propósito: va arriba, donde el Perú llega casi al
-     borde, y cada milímetro que ocupa de más es territorio tapado. El interlineado
-     baja a lo justo para que los trazos ascendentes y descendentes no se toquen. */
-  const relleno = layoutMm.relleneBloque * factor * 0.55;
-  const eTitulo = estilo(tipografia.titular, factor);
-  const eSub = estilo(tipografia.subtitulo, factor);
-  const ePeriodo = estilo(tipografia.periodo, factor);
+/**
+ * Caja del título.
+ *
+ * Va siempre arriba a la derecha, así que se aprieta a propósito: el interlineado baja
+ * a lo justo para que los trazos ascendentes y descendentes no se toquen, y `reduccion`
+ * permite encoger todos sus cuerpos a la vez. El motor la usa para bajar el cuerpo
+ * hasta que el bloque deja de tapar territorio, que es preferible a moverlo de sitio.
+ */
+export function bloqueTitulo({ textos, medidor, factor, anchoMaximo, reduccion = 1 }) {
+  const escalaCuerpo = factor * reduccion;
+  const relleno = layoutMm.relleneBloque * escalaCuerpo * 0.55;
+  const eTitulo = estilo(tipografia.titular, escalaCuerpo);
+  const eSub = estilo(tipografia.subtitulo, escalaCuerpo);
+  const ePeriodo = estilo(tipografia.periodo, escalaCuerpo);
 
   const anchoTexto = anchoMaximo - relleno * 2;
 
@@ -123,6 +122,7 @@ export function bloqueTitulo({ textos, medidor, factor, anchoMaximo }) {
     nombre: 'titulo',
     ancho,
     alto,
+    lineas: lineas.length,
     dibujar(x, y) {
       const cx = x + ancho / 2;
       return grupo({ id: 'bloque-titulo' }, [
@@ -257,10 +257,10 @@ export function escalaGrafica({ denominador, factor, medidor }) {
       desplazamientoY: relleno + medidor.alto(eCifra) * 1.05 + altoBarra / 2,
     },
     dibujar(x, y) {
-      const hijos = [rect({ x, y, ancho, alto }, {
-        fill: color.fondoHoja, stroke: color.marco,
-        'stroke-width': trazoMm.marcoInterior, 'fill-opacity': 0.9,
-      })];
+      /* Sin caja: la barra se lee sobre el mapa. Como puede caer sobre tierra, los
+         textos llevan halo blanco, que es lo que hace legible un rótulo sin taparlo. */
+      const hijos = [];
+      const halo = { colorHalo: color.halo, grosorMm: trazoMm.haloRotulo * factor * 0.9 };
       const x0 = x + relleno;
       const yCifras = y + relleno + medidor.ascenso(eCifra);
       const yBarra = y + relleno + medidor.alto(eCifra) * 1.05;
@@ -277,19 +277,23 @@ export function escalaGrafica({ denominador, factor, medidor }) {
         ));
       }
       for (let i = 0; i <= divisiones; i++) {
-        hijos.push(texto(etiquetas[i], {
+        hijos.push(textoConHalo(etiquetas[i], {
           x: x0 + paso * i, y: yCifras, 'text-anchor': 'middle', fill: color.tinta,
           'font-family': eCifra.familia, 'font-size': ptAmm(eCifra.pt),
-        }));
+        }, halo));
       }
-      hijos.push(texto(unidad, {
-        x: x0 + largo + medidor.ancho(' ', eCifra), y: yCifras, fill: color.tinta,
+      /* El último número va centrado sobre el extremo de la barra, así que la unidad
+         tiene que arrancar después de su mitad derecha o se montan. */
+      hijos.push(textoConHalo(unidad, {
+        x: x0 + largo + medidor.ancho(etiquetas[divisiones], eCifra) / 2
+          + medidor.ancho('n', eCifra) * 0.6,
+        y: yCifras, fill: color.tinta,
         'font-family': eCifra.familia, 'font-size': ptAmm(eCifra.pt),
-      }));
-      hijos.push(texto(textoEscala, {
-        x: x0, y: yBarra + altoBarra + medidor.ascenso(eEscala) * 1.05, fill: color.tinta,
+      }, halo));
+      hijos.push(textoConHalo(textoEscala, {
+        x: x0, y: yBarra + altoBarra + medidor.ascenso(eEscala) * 1.15, fill: color.tinta,
         'font-family': eEscala.familia, 'font-size': ptAmm(eEscala.pt), 'font-weight': 600,
-      }));
+      }, halo));
       return grupo({ id: 'escala-grafica' }, hijos);
     },
   };

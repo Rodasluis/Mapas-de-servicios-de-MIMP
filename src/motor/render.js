@@ -27,7 +27,9 @@ import { rotulosDeContexto, dibujarGrilla, bandaDeGrilla } from './rotulos.js';
 import {
   factorFormato, bloqueInstitucional, bloqueTitulo, rosaDeLosVientos, escalaGrafica,
 } from './piezas.js';
-import { colocarPiezas, PLANTILLAS, PRIORIDAD } from './layout.js';
+import {
+  colocarPiezas, posicionEnAnclaje, PLANTILLAS, PRIORIDAD, CABECERA,
+} from './layout.js';
 import { color, trazoMm, tipografia, ptAmm } from '../estilo/tokens.js';
 import { el, grupo, texto, rect, documento, num } from './svg.js';
 
@@ -96,40 +98,58 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
   const grilla = construirGrilla(proyeccion, marco, escala.denominador);
   const dibujoGrilla = dibujarGrilla({ grilla, marco, medidor, factor, banda });
 
-  const etiquetas = rotulosDeContexto({
-    contexto, anillosPorRasgo: anillos, marco, ocupacion, medidor, factor,
-  });
-
   /* ------------------------------ layout ------------------------------- */
 
   const plantilla = PLANTILLAS[hoja.orientacion] || PLANTILLAS.vertical;
   const norte = anguloDelNorte(proyeccion, [marco.x + marco.ancho / 2, marco.y + marco.alto / 2]);
 
+  const titulo = ajustarTitulo({
+    textos: {
+      titulo: textos.titulo ?? 'Servicios que brinda el MIMP',
+      subtitulo: textos.subtitulo ?? 'Ubicación a nivel nacional',
+      periodo: textos.periodo ?? '',
+    },
+    medidor,
+    factor,
+    marco,
+    ocupacion,
+  });
+
   const piezas = {
     institucional: bloqueInstitucional({ logos: logos.logos, factor }),
-    titulo: bloqueTitulo({
-      textos: {
-        titulo: textos.titulo ?? 'Servicios que brinda el MIMP',
-        subtitulo: textos.subtitulo ?? 'Ubicación a nivel nacional',
-        periodo: textos.periodo ?? '',
-      },
-      medidor,
-      factor,
-      anchoMaximo: marco.ancho * 0.34,
-    }),
+    titulo: titulo.pieza,
     escala: escalaGrafica({ denominador: escala.denominador, factor, medidor }),
     norte: rosaDeLosVientos({ factor, anguloNorte: norte, medidor }),
   };
 
-  const solicitudes = PRIORIDAD
-    .filter((n) => piezas[n])
-    .map((n) => ({
-      pieza: piezas[n],
-      anclajes: plantilla[n] || [],
-      // El título es lo único que no se mueve de la banda superior.
-      soloPreferidos: n === 'titulo',
-    }));
-  const colocacion = colocarPiezas(solicitudes, marco, ocupacion);
+  const solicitud = (n) => ({
+    pieza: piezas[n],
+    anclajes: plantilla[n] || [],
+    // Cabecera de sitio fijo: el logotipo y el título no se mudan de esquina.
+    soloPreferidos: CABECERA.includes(n),
+  });
+
+  /* La cabecera reserva su sitio ANTES que los rótulos del mapa. Al revés, el rótulo
+     «COLOMBIA» ocupaba la esquina superior derecha y el título, al no poder pisarlo,
+     se deslizaba hacia abajo hasta acabar sobre Loreto: medía cero territorio en la
+     esquina que le tocaba y tapaba un 25 % en la que terminaba. */
+  const colocacionCabecera = colocarPiezas(
+    CABECERA.filter((n) => piezas[n]).map(solicitud), marco, ocupacion,
+  );
+
+  const etiquetas = rotulosDeContexto({
+    contexto, anillosPorRasgo: anillos, marco, ocupacion, medidor, factor,
+  });
+
+  const colocacionResto = colocarPiezas(
+    PRIORIDAD.filter((n) => piezas[n] && !CABECERA.includes(n)).map(solicitud), marco, ocupacion,
+  );
+
+  const colocacion = {
+    colocadas: [...colocacionCabecera.colocadas, ...colocacionResto.colocadas],
+    omitidas: [...colocacionCabecera.omitidas, ...colocacionResto.omitidas],
+    forzadas: [...colocacionCabecera.forzadas, ...colocacionResto.forzadas],
+  };
 
   /* La barra de escala se comprueba sobre el dibujo terminado: se invierten sus dos
      extremos por la proyección y se mide la distancia real entre ellos. Si la barra
@@ -168,6 +188,12 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
       centro: escala.centro.map((v) => Number(v.toFixed(4))),
       marco,
       factorFormato: Number(factor.toFixed(3)),
+      titulo: {
+        reduccion: titulo.reduccion,
+        tapadoPct: titulo.tapadoPct,
+        tapadoMm2: titulo.tapadoMm2,
+        lineas: titulo.lineas,
+      },
       anguloNorteGrados: Number(norte.toFixed(2)),
       rasgos: capas.rasgos,
       grilla: {
@@ -194,6 +220,45 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
       datosTag: version.datosTag,
       msComposicion: Date.now() - inicio,
     },
+  };
+}
+
+/**
+ * Busca el cuerpo más grande con el que el título cabe arriba a la derecha sin tapar
+ * el país.
+ *
+ * El título tiene sitio fijo, así que cuando no cabe la variable que queda es su
+ * tamaño, no su posición. Se prueba a cuerpo completo y se va reduciendo de a poco;
+ * si ni el mínimo legible lo consigue, se queda en el mínimo y el informe dice cuánto
+ * territorio tapa, en vez de encogerlo hasta lo ilegible o mandarlo al océano.
+ */
+const REDUCCION_MINIMA = 0.55;
+const PASO_REDUCCION = 0.05;
+
+function ajustarTitulo({ textos, medidor, factor, marco, ocupacion }) {
+  let mejor = null;
+  for (let reduccion = 1; reduccion >= REDUCCION_MINIMA - 1e-9; reduccion -= PASO_REDUCCION) {
+    const pieza = bloqueTitulo({
+      textos, medidor, factor, reduccion, anchoMaximo: marco.ancho * 0.38,
+    });
+    const r = posicionEnAnclaje('arriba-derecha', marco, pieza.ancho, pieza.alto);
+    const tapado = ocupacion.sobreTerritorio(r);
+    /* Se compara el área ABSOLUTA de territorio tapado, no la fracción de la caja:
+       una caja grande puede tapar más milímetros cuadrados de país y aun así salir
+       con una fracción menor, porque reparte el mismo estorbo sobre más superficie.
+       Con la fracción como criterio, el ajuste elegía el cuerpo más grande. */
+    const tapadoMm2 = tapado * pieza.ancho * pieza.alto;
+    if (!mejor || tapadoMm2 < mejor.tapadoMm2 - 1e-6) {
+      mejor = { pieza, reduccion, tapado, tapadoMm2, lineas: pieza.lineas };
+    }
+    if (tapado <= 0.02) break;
+  }
+  return {
+    pieza: mejor.pieza,
+    reduccion: Number(mejor.reduccion.toFixed(2)),
+    tapadoPct: Number((mejor.tapado * 100).toFixed(2)),
+    tapadoMm2: Number(mejor.tapadoMm2.toFixed(1)),
+    lineas: mejor.lineas,
   };
 }
 

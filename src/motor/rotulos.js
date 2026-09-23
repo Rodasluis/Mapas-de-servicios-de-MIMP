@@ -8,7 +8,7 @@
  * participen después en el mismo reparto de sitio que los del país.
  */
 import { color, trazoMm, tipografia, ptAmm } from '../estilo/tokens.js';
-import { el, grupo, texto, num, escapar } from './svg.js';
+import { el, grupo, texto, textoConHalo, num, escapar } from './svg.js';
 import { poloDeInaccesibilidad, rectangulo } from './ocupacion.js';
 
 /**
@@ -71,6 +71,40 @@ function cajaDeAnillos(anillos, marco) {
   return { x: x0, y: y0, ancho: x1 - x0, alto: y1 - y0 };
 }
 
+/** ¿Cae el punto dentro de los anillos? Regla par-impar, la de los anillos GeoJSON. */
+function dentroDeAnillos(x, y, anillos) {
+  let dentro = false;
+  for (const anillo of anillos) {
+    for (let i = 0, j = anillo.length - 1; i < anillo.length; j = i++) {
+      const [xi, yi] = anillo[i];
+      const [xj, yj] = anillo[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dentro = !dentro;
+    }
+  }
+  return dentro;
+}
+
+/**
+ * Posiciones que se prueban para un rótulo de país, en orden.
+ *
+ * El polo de inaccesibilidad es el mejor sitio, pero no el único: cuando la cabecera
+ * ya ocupa esa esquina —el título se lleva el hueco de COLOMBIA en casi todas las
+ * hojas— el rótulo se quedaba sin poner. Se prueban anillos concéntricos alrededor
+ * del polo, siempre dentro del propio país, antes de darlo por omitido.
+ */
+function* candidatos(polo, anillos) {
+  yield [polo.x, polo.y];
+  const paso = Math.max(polo.radioMm * 0.55, 4);
+  for (let vuelta = 1; vuelta <= 3; vuelta++) {
+    for (let a = 0; a < 8; a++) {
+      const ang = (a / 8) * Math.PI * 2;
+      const x = polo.x + Math.cos(ang) * paso * vuelta;
+      const y = polo.y + Math.sin(ang) * paso * vuelta;
+      if (dentroDeAnillos(x, y, anillos)) yield [x, y];
+    }
+  }
+}
+
 /** Caja de un texto centrado en (x, y), para reservar sitio en la rejilla. */
 function cajaDe(ancho, alto, x, y) {
   return { x: x - ancho / 2, y: y - alto * 0.75, ancho, alto };
@@ -104,23 +138,25 @@ export function rotulosDeContexto({
 
     const ancho = medidor.ancho(nombre, ePais);
     const alto = medidor.alto(ePais);
-    const cajaTexto = cajaDe(ancho, alto, polo.x, polo.y);
     /* Si el nombre no cabe en el trozo de país que se ve, es preferible omitirlo a
        que se derrame sobre el Perú o sobre el mar. */
-    if (polo.radioMm * 2 < Math.min(ancho, alto * 2) * 0.55
-      || !rectangulo.contiene(marco, cajaTexto)
-      || ocupacion.chocaConBloque(cajaTexto)) {
-      omitidos.push(nombre);
-      continue;
-    }
+    if (polo.radioMm * 2 < Math.min(ancho, alto * 2) * 0.55) { omitidos.push(nombre); continue; }
 
-    piezas.push(texto(nombre, {
-      x: polo.x, y: polo.y, 'text-anchor': 'middle', fill: color.tintaSuave,
+    let sitioPais = null;
+    for (const [cx, cy] of candidatos(polo, anillos)) {
+      const c = cajaDe(ancho, alto, cx, cy);
+      if (!rectangulo.contiene(marco, c)) continue;
+      if (ocupacion.chocaConBloque(c)) continue;
+      sitioPais = { x: cx, y: cy, caja: c };
+      break;
+    }
+    if (!sitioPais) { omitidos.push(nombre); continue; }
+
+    piezas.push(textoConHalo(nombre, {
+      x: sitioPais.x, y: sitioPais.y, 'text-anchor': 'middle', fill: color.tintaSuave,
       'font-family': ePais.familia, 'font-size': ptAmm(ePais.pt), 'font-weight': 700,
-      stroke: color.halo, 'stroke-width': trazoMm.haloRotulo * 0.6,
-      'paint-order': 'stroke', 'stroke-linejoin': 'round',
-    }));
-    ocupacion.marcarBloque(cajaTexto);
+    }, { colorHalo: color.halo, grosorMm: trazoMm.haloRotulo * factor * 0.8 }));
+    ocupacion.marcarBloque(sitioPais.caja);
     colocados.push(nombre);
   }
 
