@@ -10,6 +10,20 @@ const repositorio = process.env.GITHUB_REPOSITORY?.split('/')[1];
 
 export default defineConfig({
   base: repositorio ? `/${repositorio}/` : '/',
+  resolve: {
+    alias: {
+      /**
+       * jsPDF trae html2canvas y dompurify para su método html(), que RASTERIZA el
+       * contenido antes de meterlo en el PDF. Este proyecto no lo usa ni puede usarlo:
+       * la salida es vectorial por completo. Se sustituyen por un módulo vacío para
+       * que no viajen 230 KB de código muerto en dist/ y para que, si alguien llamara
+       * a doc.html() por error, fallara en el acto en vez de colar una imagen en un
+       * mapa destinado a imprenta.
+       */
+      html2canvas: '/src/motor/sin-raster.js',
+      dompurify: '/src/motor/sin-raster.js',
+    },
+  },
   build: {
     outDir: 'dist',
     // La cartografía ya viene cuantizada y minificada; no se toca.
