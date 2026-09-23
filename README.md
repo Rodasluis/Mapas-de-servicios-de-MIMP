@@ -9,10 +9,11 @@ No es una captura de pantalla ampliada: el PDF se construye a partir de la geome
 con las fuentes incrustadas, de modo que se puede imprimir en A0 sin que aparezca un
 solo píxel.
 
-> **Estado: Fase 1 — motor de composición y PDF vectorial.**
-> `npm run muestras` ya genera mapas nacionales imprimibles en A4, A3 y A0. Faltan los
-> elementos del layout (Fase 2), el contenido temático (Fase 3), los rótulos (Fase 4) y
-> la interfaz web (Fase 5): la página publicada todavía no compone mapas.
+> **Estado: Fase 2 — elementos cartográficos del layout.**
+> Las muestras ya salen con retícula UTM rotulada, bloque institucional, título,
+> rosa de los vientos, escala gráfica y rótulos de contexto, colocados solos según la
+> hoja y la orientación. Faltan el contenido temático (Fase 3), el motor de rótulos
+> (Fase 4) y la interfaz web (Fase 5): la página publicada todavía no compone mapas.
 
 ## Puesta en marcha
 
@@ -79,6 +80,8 @@ apareciera uno, incluso dentro de un recuento agregado.
 | `npm run preparar` | Ejecuta los pasos anteriores que falten (`-- --forzar` rehace todo) |
 | `npm run dev` | Servidor de desarrollo |
 | `npm run build` | Prepara lo necesario y compila en `dist/` |
+| `npm run logos` | Normaliza los logotipos de `referencias/logos/` |
+| `npm run metricas` | Extrae las métricas de las tipografías |
 | `npm run muestras` | Genera y verifica los PDF de `muestras/` |
 
 ## Cómo está organizado
@@ -151,6 +154,51 @@ una muestra y una descarga desde la web salen del mismo código y del mismo medi
 Con `-- --fecha=AAAA-MM-DD` la salida es reproducible **byte a byte**: además de la
 fecha se fija el identificador de archivo del PDF, que jsPDF sortea al azar en cada
 ejecución. Sin ese detalle, dos salidas idénticas no se parecen al compararlas.
+
+## El layout se coloca solo
+
+El mapa de referencia no manda los bloques a los márgenes: los mete dentro del marco,
+sobre el océano y los países vecinos. Reproducir eso a mano exigiría una plantilla por
+cada combinación de hoja, orientación y ámbito, así que cada pieza declara dónde
+**prefiere** ir y el motor busca el primer sitio que quepa entero, no pise otra pieza y
+no tape territorio peruano. Si sus preferencias fallan, barre el resto de posiciones
+antes de resignarse; y si aun así no hay sitio limpio, elige la que menos tape y lo
+**anota en el informe** en vez de disimularlo.
+
+Para decidirlo dibuja el país en una rejilla de 2 mm y consulta, para cada rectángulo,
+cuánto territorio cubriría. La misma rejilla resuelve dónde poner los nombres de los
+países —en el **polo de inaccesibilidad** de la parte visible, no en el centroide, que
+en una forma cóncava cae fuera— y dónde cabe «OCÉANO PACÍFICO» sin tocar tierra.
+
+### La retícula lleva coordenadas UTM
+
+El mapa se dibuja con la Mercator transversa esférica de d3 pero se rotula en UTM 18S,
+que es el sistema con el que se trabaja en el Perú. Comparten meridiano central, así
+que las líneas salen casi rectas, pero no del todo: UTM va sobre el elipsoide y con
+factor 0,9996. Cada línea se calcula punto a punto con proj4 en vez de trazarse recta,
+y el informe dice cuánto se curva (entre 0,01 y 0,14 mm según el formato).
+
+Los estes negativos no son un error: el Perú desborda el huso 18 por ambos lados y, al
+forzar el país a un solo huso, el extremo occidental cae por debajo del falso origen de
+500 000 m. El mapa de referencia de 2020 rotula igual.
+
+### Qué crece con la hoja y qué no
+
+El trazo del mapa y sus rótulos se mantienen en medidas reales de imprenta: un límite
+departamental mide 0,3 mm en A4 y en A0. Las piezas del layout sí crecen, con la raíz
+de la proporción de diagonales —el doble de A4 a A0, no el cuádruple—, porque un cartel
+se mira de lejos y con el cuerpo de un A4 el título no se leería.
+
+### Dos comprobaciones que el propio motor hace
+
+- **La escala gráfica mide lo que dice.** El motor invierte los dos extremos de la
+  barra por la proyección y mide la distancia real entre ellos: en las cinco muestras
+  el error queda por debajo del 0,43 %.
+- **El navegador mide con las tipografías incrustadas.** svg2pdf coloca el texto con lo
+  que mide el navegador, no con las métricas del TTF que incrusta jsPDF; si el
+  navegador no tiene las familias cargadas, mide con una de reserva y todo lo centrado
+  sale corrido. Se comprueba contra una familia inexistente para confirmar que la
+  diferencia (≈1,8 %, que es el interletraje) no es la de una fuente equivocada (≈20 %).
 
 ## Despliegue
 

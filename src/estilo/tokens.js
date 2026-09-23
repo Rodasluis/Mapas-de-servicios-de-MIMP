@@ -59,9 +59,13 @@ export const rampaNaranjas = ['#fff7e6', '#ffebbe', '#ffa77f', '#ff5500', '#a838
  * en A0. Lo que cambia con la hoja es cuántos rótulos caben, no su tamaño.
  */
 export const tipografia = {
-  titular: { familia: 'Poppins', peso: 'Bold', pt: 20 },
-  subtitulo: { familia: 'Poppins', peso: 'SemiBold', pt: 13 },
-  periodo: { familia: 'Poppins', peso: 'Medium', pt: 11 },
+  /* Estos cuerpos son los de un A4; las piezas del layout los multiplican por el
+     factor de formato, así que en A0 salen al doble. Partir de un cuerpo de cartel
+     dejaba en A4 un título tan grande que no cabía sobre el mar ni sobre los países
+     vecinos y acababa tapando Loreto. */
+  titular: { familia: 'Poppins', peso: 'Bold', pt: 13 },
+  subtitulo: { familia: 'Poppins', peso: 'SemiBold', pt: 9 },
+  periodo: { familia: 'Poppins', peso: 'Medium', pt: 8 },
   leyendaTitulo: { familia: 'Poppins', peso: 'SemiBold', pt: 9 },
   leyendaItem: { familia: 'Poppins', peso: 'Regular', pt: 7.5 },
   pie: { familia: 'Poppins', peso: 'Regular', pt: 6.5 },

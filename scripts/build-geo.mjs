@@ -497,6 +497,17 @@ const contextoFc = { type: 'FeatureCollection', features: [] };
   console.log(`  · océano recortado: ${geom.coordinates.length} polígonos`);
 }
 
+/**
+ * Natural Earth ya nombra algunos lagos «Lago …» o «Laguna …» y otros no.
+ * Anteponer «Lago» sin mirar producía «Lago Laguna Huaytunas».
+ */
+const YA_LLEVA_LAGO = /^(lago|laguna)[\s'’]/i;
+
+function nombreDeLago(p) {
+  const base = String(p.name_es || p.name || 'Lago').trim();
+  return YA_LLEVA_LAGO.test(base) ? base : `Lago ${base}`;
+}
+
 /* Lagos. Sólo los grandes: el mapa de referencia rotula el Titicaca y poco más. */
 {
   const AREA_MINIMA = 0.02; // grados cuadrados, ~250 km²
@@ -510,7 +521,7 @@ const contextoFc = { type: 'FeatureCollection', features: [] };
     if (!geom) continue;
     contextoFc.features.push({
       type: 'Feature',
-      properties: { capa: 'lago', nombre: f.properties.name_es ? `Lago ${f.properties.name_es}` : f.properties.name },
+      properties: { capa: 'lago', nombre: nombreDeLago(f.properties) },
       geometry: geom,
     });
   }

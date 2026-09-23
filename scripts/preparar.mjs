@@ -29,6 +29,16 @@ const PASOS = [
       && fs.readdirSync(path.join(PUBLICO, 'fonts')).filter((f) => f.endsWith('.ttf')).length >= 8,
   },
   {
+    nombre: 'logotipos',
+    script: 'build-logos.mjs',
+    listo: () => existe('data/logos.json'),
+  },
+  {
+    nombre: 'métricas tipográficas',
+    script: 'build-metricas.mjs',
+    listo: () => existe('data/metricas.json'),
+  },
+  {
     nombre: 'cartografía (descarga)',
     script: 'fetch-geo.mjs',
     listo: () => existe('data/geo/indice.json'),

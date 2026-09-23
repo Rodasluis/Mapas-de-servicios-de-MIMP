@@ -13,6 +13,8 @@
   "scripts": {
     "datos": "node scripts/fetch-datos.mjs",
     "fuentes": "node scripts/fetch-fuentes.mjs",
+    "logos": "node scripts/build-logos.mjs",
+    "metricas": "node scripts/build-metricas.mjs",
     "geo:fetch": "node scripts/fetch-geo.mjs",
     "geo:build": "node --max-old-space-size=8192 scripts/build-geo.mjs",
     "geo": "npm run geo:fetch && npm run geo:build",

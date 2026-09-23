@@ -1,0 +1,77 @@
+/**
+ * Declaración de las tipografías del proyecto para el NAVEGADOR.
+ *
+ * No es decoración: es una condición para que el PDF salga bien. svg2pdf coloca el
+ * texto midiéndolo con el motor tipográfico del navegador —canvas measureText o
+ * getBBox—, no con las métricas de la fuente que jsPDF incrusta. Si el navegador no
+ * tiene estas familias, mide con una de reserva y luego el PDF compone con Poppins:
+ * las anchuras no coinciden y todo lo centrado o alineado a la derecha queda corrido,
+ * que es justo donde más se nota (el título, la escala, el pie).
+ *
+ * Se cargan los mismos TTF que se incrustan en el PDF, así que medida y composición
+ * salen del mismo archivo.
+ */
+
+@font-face {
+  font-family: "Poppins";
+  src: url("/fonts/Poppins-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Poppins";
+  src: url("/fonts/Poppins-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Poppins";
+  src: url("/fonts/Poppins-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Poppins";
+  src: url("/fonts/Poppins-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "SourceSans3";
+  src: url("/fonts/SourceSans3-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "SourceSans3";
+  src: url("/fonts/SourceSans3-It.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "SourceSans3";
+  src: url("/fonts/SourceSans3-Semibold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "SourceSans3";
+  src: url("/fonts/SourceSans3-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}

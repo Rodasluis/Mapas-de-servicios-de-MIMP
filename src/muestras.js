@@ -5,6 +5,7 @@
  * prueba: llama a las mismas funciones que llamará el botón «Generar PDF» de la
  * Fase 5, que es lo que garantiza que la muestra y la descarga coincidan.
  */
+import './estilo/fuentes.css';
 import { crearHoja } from './motor/hoja.js';
 import { crearCargador, lectorNavegador } from './motor/cargador.js';
 import { componerNacional } from './motor/render.js';
@@ -27,7 +28,64 @@ function aBase64(buffer) {
  * Compone un mapa y lo devuelve como PDF en base64.
  * @param {object} config {hoja, textos, fecha, propiedades, conSvg}
  */
+/**
+ * Fuerza la carga de las ocho variantes antes de medir nada.
+ *
+ * document.fonts.ready sólo espera a las que ya se están usando; una familia
+ * declarada pero no aplicada todavía no se descarga. Sin este paso, el primer mapa se
+ * compondría midiendo con la tipografía de reserva.
+ */
+async function fuentesListas() {
+  const variantes = [
+    '400 10px Poppins', '500 10px Poppins', '600 10px Poppins', '700 10px Poppins',
+    '400 10px SourceSans3', 'italic 400 10px SourceSans3',
+    '600 10px SourceSans3', '700 10px SourceSans3',
+  ];
+  await Promise.all(variantes.map((v) => document.fonts.load(v)));
+  await document.fonts.ready;
+}
+
+/** Compara las métricas del TTF con lo que mide el navegador, que es quien coloca. */
+window.comprobarMetricas = async function comprobarMetricas() {
+  await fuentesListas();
+  const { crearMedidor } = await import('./motor/texto.js');
+  const metricas = await cargador.metricas();
+  const medidor = crearMedidor(metricas);
+  const lienzo = document.createElement('canvas').getContext('2d');
+  const pruebas = [
+    ['Poppins', 'Regular', 400, 'normal', 'Fuente: Directorio de Servicios del MIMP'],
+    ['Poppins', 'Bold', 700, 'normal', 'Ubicación de los servicios que brinda el MIMP'],
+    ['Poppins', 'SemiBold', 600, 'normal', 'Escala válida al imprimir al 100 %'],
+    ['SourceSans3', 'Bold', 700, 'normal', 'COLOMBIA'],
+    ['SourceSans3', 'It', 400, 'italic', 'OCÉANO PACÍFICO'],
+    ['SourceSans3', 'Regular', 400, 'normal', '10000000'],
+  ];
+  return pruebas.map(([familia, variante, peso, estilo, texto]) => {
+    const pt = 10;
+    const mm = medidor.ancho(texto, { familia, variante, pt });
+    /* svg2pdf mide con el cuerpo en unidades de usuario tratadas como px, así que se
+       compara en esas mismas unidades: lo que importa es la proporción. */
+    const px = (pt * 25.4) / 72;
+    lienzo.font = `${estilo} ${peso} ${px}px ${familia}`;
+    const navegador = lienzo.measureText(texto).width;
+    /* Control: con una familia que no existe el navegador cae en su tipografía de
+       reserva. Si la medida buena se pareciera a ésta, la fuente no se habría cargado
+       y el parecido con el TTF sería casualidad. */
+    lienzo.font = `${estilo} ${peso} ${px}px __no_existe__`;
+    const reserva = lienzo.measureText(texto).width;
+    return {
+      familia: `${familia} ${variante}`,
+      texto: texto.length > 22 ? `${texto.slice(0, 22)}…` : texto,
+      metricasMm: Number(mm.toFixed(3)),
+      navegadorMm: Number(navegador.toFixed(3)),
+      desvioPct: Number((((navegador - mm) / mm) * 100).toFixed(2)),
+      desvioReservaPct: Number((((reserva - mm) / mm) * 100).toFixed(2)),
+    };
+  });
+};
+
 window.generarMapa = async function generarMapa(config = {}) {
+  await fuentesListas();
   const hoja = crearHoja(config.hoja);
 
   const t0 = performance.now();

@@ -27,12 +27,24 @@ const opcion = (nombre) => {
 };
 const fechaFija = opcion('fecha');
 
-/** Las muestras que pide la Fase 1: el país entero en tres formatos verticales. */
+/**
+ * Muestras. La Fase 1 pedía los tres formatos verticales; la Fase 2 añade A4 y A0
+ * apaisados, que es donde se comprueba que el layout se recoloca de verdad y no
+ * está clavado a una plantilla vertical.
+ */
 const MUESTRAS = [
   { nombre: 'nacional_A4_vertical', hoja: { tamano: 'A4', orientacion: 'vertical' } },
+  { nombre: 'nacional_A4_horizontal', hoja: { tamano: 'A4', orientacion: 'horizontal' } },
   { nombre: 'nacional_A3_vertical', hoja: { tamano: 'A3', orientacion: 'vertical' } },
   { nombre: 'nacional_A0_vertical', hoja: { tamano: 'A0', orientacion: 'vertical' } },
+  { nombre: 'nacional_A0_horizontal', hoja: { tamano: 'A0', orientacion: 'horizontal' } },
 ];
+
+const TEXTOS = {
+  titulo: 'Ubicación de los servicios que brinda el MIMP',
+  subtitulo: 'Ámbito nacional',
+  periodo: 'Enero – Diciembre 2026',
+};
 
 /* ---------------------------- sitio y navegador ------------------------- */
 
@@ -62,6 +74,45 @@ await pagina.waitForFunction(() => typeof window.generarMapa === 'function', { t
 
 /* -------------------------------- generación ---------------------------- */
 
+/* svg2pdf coloca el texto con lo que mide el NAVEGADOR, no con las métricas del TTF
+   que incrusta jsPDF. Si las dos no coinciden, todo lo centrado o alineado a la
+   derecha sale corrido en el PDF. Se comprueba antes de generar nada. */
+titulo('Métricas: TTF frente a navegador');
+const metricas = await pagina.evaluate(() => window.comprobarMetricas());
+let desvioMaximo = 0;
+const sinCargar = [];
+for (const m of metricas) {
+  desvioMaximo = Math.max(desvioMaximo, Math.abs(m.desvioPct));
+  console.log(`  ${m.familia.padEnd(22)} ${m.texto.padEnd(24)}`
+    + `TTF ${String(m.metricasMm).padStart(7)} · navegador ${String(m.navegadorMm).padStart(7)} mm`
+    + ` · ${m.desvioPct >= 0 ? '+' : ''}${String(m.desvioPct).padStart(5)} %`
+    + `   (reserva ${m.desvioReservaPct >= 0 ? '+' : ''}${m.desvioReservaPct} %)`);
+  // Si la medida buena coincide con la de reserva, la fuente nunca llegó a cargarse.
+  if (Math.abs(m.desvioPct - m.desvioReservaPct) < 0.5) sinCargar.push(m.familia);
+}
+if (sinCargar.length) {
+  await cerrar();
+  abortar(
+    `El navegador no cargó ${sinCargar.join(', ')}: mide con su tipografía de reserva.`,
+    'Revisa que src/estilo/fuentes.css declare las ocho variantes y que se espere a document.fonts.',
+  );
+}
+/* Queda un desvío pequeño y esperado: al medir, el navegador aplica el interletraje
+   de pares (kerning) y jsPDF no lo aplica al componer. Las métricas del TTF, que
+   tampoco lo aplican, son por tanto las que predicen la anchura REAL del PDF, y por
+   eso las cajas se dimensionan con ellas. Un desvío grande sí delataría otra fuente. */
+const LIMITE_KERNING = 3;
+if (desvioMaximo > LIMITE_KERNING) {
+  await cerrar();
+  abortar(
+    `El navegador mide el texto un ${desvioMaximo.toFixed(2)} % distinto que el TTF incrustado.`,
+    'Más de lo que explica el interletraje: probablemente no es la misma tipografía.',
+  );
+}
+console.log(`  ✓ desvío máximo ${desvioMaximo.toFixed(2)} % (interletraje). Con la tipografía de`
+  + ` reserva el desvío llegaría al ${Math.max(...metricas.map((m) => Math.abs(m.desvioReservaPct))).toFixed(1)} %,`
+  + ' así que las familias correctas están cargadas');
+
 titulo(`Generando ${MUESTRAS.length} muestras`);
 asegurarCarpeta(DESTINO);
 
@@ -73,6 +124,7 @@ for (const muestra of MUESTRAS) {
   try {
     salida = await pagina.evaluate((cfg) => window.generarMapa(cfg), {
       hoja: muestra.hoja,
+      textos: TEXTOS,
       fecha: fechaFija,
     });
   } catch (err) {
@@ -114,6 +166,59 @@ for (const { muestra, salida, verificacion } of resultados) {
   );
 }
 
+/* ----------------------- comprobaciones de la Fase 2 -------------------- */
+
+titulo('Layout: solapamientos y escala gráfica');
+let fallosLayout = 0;
+for (const { muestra, salida } of resultados) {
+  const { layout, escalaGrafica, grilla, rotulos } = salida.meta;
+  console.log(`  ${muestra.nombre}`);
+  console.log(`    piezas: ${layout.colocadas.map((p) => `${p.nombre}@${p.anclaje}`).join(', ') || 'ninguna'}`);
+
+  /* Ningún bloque puede montarse sobre otro: es el criterio de aceptación de la fase.
+     Se comprueba con los rectángulos que el propio motor reservó, que son los mismos
+     con los que dibujó. */
+  const solapes = [];
+  for (let i = 0; i < layout.colocadas.length; i++) {
+    for (let j = i + 1; j < layout.colocadas.length; j++) {
+      const a = layout.colocadas[i]; const b = layout.colocadas[j];
+      if (!(a.x + a.ancho <= b.x || b.x + b.ancho <= a.x
+        || a.y + a.alto <= b.y || b.y + b.alto <= a.y)) {
+        solapes.push(`${a.nombre} × ${b.nombre}`);
+      }
+    }
+  }
+  console.log(`    solapamientos: ${solapes.length ? solapes.join(', ') : '0  ✓'}`);
+  if (solapes.length) fallosLayout++;
+
+  const tapado = layout.colocadas.filter((p) => p.territorioTapadoPct > 2);
+  console.log(`    sobre territorio peruano: ${tapado.length
+    ? tapado.map((p) => `${p.nombre} ${p.territorioTapadoPct}%`).join(', ')
+    : 'ninguna  ✓'}`);
+  if (layout.omitidas.length) console.log(`    omitidas: ${layout.omitidas.join(', ')}`);
+  if (layout.forzadas.length) {
+    console.log(`    forzadas: ${layout.forzadas.map((f) => `${f.nombre} (${f.tapadoPct}%)`).join(', ')}`);
+  }
+
+  /* La barra dice N km: se comprueba invirtiendo sus extremos por la proyección. El
+     margen admite la variación propia de la Mercator transversa entre el centro del
+     marco y el punto donde acabó la barra. */
+  if (escalaGrafica.comprobada) {
+    const ok = Math.abs(escalaGrafica.errorPct) <= 1.5;
+    console.log(`    escala gráfica: declara ${escalaGrafica.km} km, mide ${escalaGrafica.kmMedidos} km`
+      + ` (${escalaGrafica.errorPct >= 0 ? '+' : ''}${escalaGrafica.errorPct} %)${ok ? '  ✓' : '  ✗'}`);
+    if (!ok) fallosLayout++;
+  } else {
+    console.log('    escala gráfica: no se pudo comprobar  ✗');
+    fallosLayout++;
+  }
+
+  console.log(`    retícula: paso ${(grilla.pasoM / 1000).toLocaleString('es-PE')} km,`
+    + ` ${grilla.lineas} líneas, ${grilla.rotulos} números, curvatura máx ${grilla.curvaturaMaximaMm} mm`);
+  console.log(`    rótulos: ${rotulos.colocados.join(', ') || 'ninguno'}`
+    + `${rotulos.omitidos.length ? ` · omitidos: ${rotulos.omitidos.join(', ')}` : ''}`);
+}
+
 titulo('Verificación de los PDF');
 let fallos = 0;
 for (const { muestra, verificacion: v } of resultados) {
@@ -129,5 +234,7 @@ const totalBytes = resultados.reduce((s, r) => s + r.verificacion.bytes, 0);
 console.log(`\n  ${resultados.length} archivos en muestras/ (${peso(totalBytes)})`);
 if (fechaFija) console.log(`  fecha fija ${fechaFija}: la salida es reproducible byte a byte`);
 
-if (fallos) abortar(`${fallos} problema(s) en los PDF generados.`);
+if (fallos || fallosLayout) {
+  abortar(`${fallos + fallosLayout} problema(s) en las muestras generadas.`);
+}
 console.log('\n✓ Muestras generadas y verificadas.\n');

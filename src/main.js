@@ -6,6 +6,7 @@
  * prueba de vida del despliegue y evita el caso incómodo de una página que «carga»
  * pero cuyos datos dan 404.
  */
+import './estilo/fuentes.css';
 import { aplicarVariablesCss, rampaNaranjas } from './estilo/tokens.js';
 
 const BASE = import.meta.env.BASE_URL;
