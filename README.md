@@ -260,6 +260,28 @@ cuánto territorio cubriría. La misma rejilla resuelve dónde poner los nombres
 países —en el **polo de inaccesibilidad** de la parte visible, no en el centroide, que
 en una forma cóncava cae fuera— y dónde cabe «OCÉANO PACÍFICO» sin tocar tierra.
 
+### Ningún nombre de país sobre el Perú
+
+Cuando un recuadro de zoom ocupa el hueco de Brasil, el rótulo «BRASIL» buscaba sitio
+al lado, y al oeste de Brasil está el Perú: el nombre acababa sobre territorio peruano y
+el mapa decía algo **falso**. Comprobar sólo el punto de anclaje no bastaba, porque
+«BRASIL» mide unos treinta milímetros en A1 y un ancla a dos de la frontera deja media
+palabra al otro lado.
+
+Ahora se comprueba la **caja entera** del texto contra la rejilla de territorio, y las
+posiciones candidatas son una retícula sobre la parte visible del país, ordenada
+prefiriendo el desplazamiento vertical: por encima y por debajo de un recuadro se sigue
+estando en Brasil, al lado no. Si aun así no queda sitio, el nombre se **omite** y el
+informe dice por qué; un país sin su nombre se sigue reconociendo por su posición,
+mientras que un país mal nombrado engaña.
+
+### Jerarquía de los límites
+
+El salto entre el límite departamental y el provincial es deliberado y grande, en color
+y en grosor a la vez: 0,5 mm casi negro frente a 0,15 mm de gris claro. Con los dos en
+grises parecidos no se distinguía a qué departamento pertenece cada provincia, que es la
+primera lectura que se le pide a este mapa.
+
 ### La retícula lleva coordenadas UTM
 
 El mapa se dibuja con la Mercator transversa esférica de d3 pero se rotula en UTM 18S,

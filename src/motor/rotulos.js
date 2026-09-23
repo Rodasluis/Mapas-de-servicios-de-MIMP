@@ -72,24 +72,38 @@ function cajaDeAnillos(anillos, marco) {
 }
 
 /**
- * Posiciones que se prueban para un rótulo de país, en orden.
+ * Posiciones que se prueban para un rótulo de país, de la mejor a la peor.
  *
- * El polo de inaccesibilidad es el mejor sitio, pero no el único: cuando la cabecera
- * ya ocupa esa esquina —el título se lleva el hueco de COLOMBIA en casi todas las
- * hojas— el rótulo se quedaba sin poner. Se prueban anillos concéntricos alrededor
- * del polo, siempre dentro del propio país, antes de darlo por omitido.
+ * El polo de inaccesibilidad es el mejor sitio, pero no el único: cuando la cabecera o
+ * un recuadro de zoom ya ocupan ese hueco, el rótulo tiene que buscarse la vida sin
+ * salirse de su país. Todas las posiciones que se ofrecen tienen el punto DENTRO de los
+ * anillos del país; quien llama comprueba además que la caja del texto quepa en el
+ * marco, no pise un bloque y no toque territorio peruano.
  */
-function* candidatos(polo, anillos) {
+function* candidatos(polo, anillos, caja, alto) {
   yield [polo.x, polo.y];
-  const paso = Math.max(polo.radioMm * 0.55, 4);
-  for (let vuelta = 1; vuelta <= 3; vuelta++) {
-    for (let a = 0; a < 8; a++) {
-      const ang = (a / 8) * Math.PI * 2;
-      const x = polo.x + Math.cos(ang) * paso * vuelta;
-      const y = polo.y + Math.sin(ang) * paso * vuelta;
-      if (puntoEnAnillos(x, y, anillos)) yield [x, y];
+
+  /* Rejilla sobre la parte VISIBLE del país. Antes se probaban tres anillos
+     concéntricos alrededor del polo —diecinueve posiciones— y con un recuadro de zoom
+     encima se agotaban sin encontrar sitio, de modo que un país tan grande como Brasil
+     acababa sin nombre teniendo media lámina libre. El paso es el alto del rótulo, que
+     es la distancia mínima con la que moverse cambia algo. */
+  const paso = Math.max(alto, 4);
+  const puntos = [];
+  for (let y = caja.y + paso / 2; y < caja.y + caja.alto; y += paso) {
+    for (let x = caja.x + paso / 2; x < caja.x + caja.ancho; x += paso) {
+      if (!puntoEnAnillos(x, y, anillos)) continue;
+      const dx = x - polo.x;
+      const dy = y - polo.y;
+      /* Se prefiere el desplazamiento VERTICAL. Cuando un recuadro ocupa el hueco de
+         Brasil, moverse al oeste lleva hacia el Perú y moverse arriba o abajo sigue
+         dentro de Brasil; penalizar lo horizontal hace que se prueben antes las
+         posiciones que de verdad sirven. */
+      puntos.push([x, y, Math.hypot(dx * 1.8, dy)]);
     }
   }
+  puntos.sort((a, b) => a[2] - b[2]);
+  for (const [x, y] of puntos) yield [x, y];
 }
 
 /** Caja de un texto centrado en (x, y), para reservar sitio en la rejilla. */
@@ -108,6 +122,10 @@ export function rotulosDeContexto({
   const piezas = [];
   const colocados = [];
   const omitidos = [];
+  /* Por qué se descartó cada rótulo. Sin esto, «BRASIL omitido» no distingue entre
+     «no cabía» y «habría caído sobre el Perú», que piden arreglos distintos. */
+  const motivos = {};
+  const descartar = (nombre, porque) => { omitidos.push(nombre); motivos[nombre] = porque; };
   /* Las cajas se devuelven para sembrar con ellas el índice de colisiones de los
      rótulos del país: la rejilla de ocupación es demasiado gruesa para garantizar
      que no se tocan. */
@@ -121,27 +139,44 @@ export function rotulosDeContexto({
     if (f.properties.capa !== 'pais' || !f.properties.rotular) continue;
     const nombre = f.properties.nombre.toUpperCase();
     const anillos = anillosPorRasgo.get(f);
-    if (!anillos || !anillos.length) { omitidos.push(nombre); continue; }
+    if (!anillos || !anillos.length) { descartar(nombre, 'sin geometría visible'); continue; }
 
     const caja = cajaDeAnillos(anillos, marco);
     const polo = caja && poloDeInaccesibilidad(anillos, caja, 2);
-    if (!polo) { omitidos.push(nombre); continue; }
+    if (!polo) { descartar(nombre, 'sin punto interior'); continue; }
 
     const ancho = medidor.ancho(nombre, ePais);
     const alto = medidor.alto(ePais);
     /* Si el nombre no cabe en el trozo de país que se ve, es preferible omitirlo a
        que se derrame sobre el Perú o sobre el mar. */
-    if (polo.radioMm * 2 < Math.min(ancho, alto * 2) * 0.55) { omitidos.push(nombre); continue; }
+    if (polo.radioMm * 2 < Math.min(ancho, alto * 2) * 0.55) {
+      descartar(nombre, `el trozo visible es menor que el nombre (radio ${polo.radioMm.toFixed(1)} mm, ancho ${ancho.toFixed(1)} mm)`);
+      continue;
+    }
 
     let sitioPais = null;
-    for (const [cx, cy] of candidatos(polo, anillos)) {
+    const fallos = { marco: 0, bloque: 0, territorio: 0, probados: 0 };
+    for (const [cx, cy] of candidatos(polo, anillos, caja, alto)) {
+      fallos.probados++;
       const c = cajaDe(ancho, alto, cx, cy);
-      if (!rectangulo.contiene(marco, c)) continue;
-      if (ocupacion.chocaConBloque(c)) continue;
+      if (!rectangulo.contiene(marco, c)) { fallos.marco++; continue; }
+      if (ocupacion.chocaConBloque(c)) { fallos.bloque++; continue; }
+      /* Ni un milímetro del nombre puede caer sobre el Perú. Comprobar sólo el punto
+         de anclaje no basta: «BRASIL» mide unos treinta milímetros en A1, así que un
+         ancla a dos milímetros de la frontera deja media palabra sobre territorio
+         peruano, y un mapa que rotula el Perú como BRASIL dice algo falso. Es
+         preferible omitir el nombre —el país sigue reconociéndose por su posición—
+         antes que rotular mal. */
+      if (ocupacion.sobreTerritorio(c) > 0) { fallos.territorio++; continue; }
       sitioPais = { x: cx, y: cy, caja: c };
       break;
     }
-    if (!sitioPais) { omitidos.push(nombre); continue; }
+    if (!sitioPais) {
+      descartar(nombre, `${fallos.probados} posiciones probadas:`
+        + ` ${fallos.marco} fuera del marco, ${fallos.bloque} sobre un bloque,`
+        + ` ${fallos.territorio} sobre el Perú`);
+      continue;
+    }
 
     piezas.push(textoConHalo(nombre, {
       x: sitioPais.x, y: sitioPais.y, 'text-anchor': 'middle', fill: color.tintaSuave,
@@ -171,7 +206,7 @@ export function rotulosDeContexto({
     cajas.push({ ...cajaMar, etiqueta: nombreMar, nivel: 'agua' });
     colocados.push(nombreMar);
   } else {
-    omitidos.push(nombreMar);
+    descartar(nombreMar, 'sin agua libre del tamaño del rótulo');
   }
 
   /* ------------------------------- lagos -------------------------------- */
@@ -203,7 +238,7 @@ export function rotulosDeContexto({
     colocados.push(nombre);
   }
 
-  return { svg: piezas.join('\n'), colocados, omitidos };
+  return { svg: piezas.join('\n'), colocados, omitidos, motivos };
 }
 
 /**
