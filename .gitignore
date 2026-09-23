@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.cache/
+
+# Datos y tipografías: los genera el build desde orígenes anclados
+# (npm run preparar). No se versionan para que el repositorio no acabe
+# guardando 16 MB de material derivado que puede quedar desfasado
+# respecto de DATOS_TAG.
+public/data/
+public/fonts/
+
+.DS_Store
+*.local

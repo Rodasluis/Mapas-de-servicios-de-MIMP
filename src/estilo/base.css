@@ -1,0 +1,88 @@
+/* Estilos del armazón de la aplicación. Los colores del MAPA no se definen aquí:
+   viven en src/estilo/tokens.js, que es la única fuente, y llegan como variables
+   CSS (--c-*) desde aplicarVariablesCss(). */
+
+:root {
+  color-scheme: light;
+  --tinta: #16181d;
+  --tinta-2: #565b66;
+  --fondo: #f4f5f7;
+  --superficie: #ffffff;
+  --borde: #e2e4ea;
+  --fuente-ui: "Poppins", ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+@font-face {
+  font-family: "Poppins";
+  src: url("/fonts/Poppins-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Poppins";
+  src: url("/fonts/Poppins-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-display: swap;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 2.5rem 1.5rem;
+  background: var(--fondo);
+  color: var(--tinta);
+  font-family: var(--fuente-ui);
+  line-height: 1.55;
+}
+
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  padding: 2rem clamp(1.25rem, 4vw, 2.5rem);
+}
+
+h1 {
+  margin: 0 0 .35rem;
+  font-size: clamp(1.4rem, 3.4vw, 1.9rem);
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+
+.entradilla { margin: 0 0 1.5rem; color: var(--tinta-2); }
+
+#estado { margin: 0; }
+
+.resumen {
+  margin: 0;
+  display: grid;
+  gap: .1rem .9rem;
+  grid-template-columns: max-content 1fr;
+  font-size: .95rem;
+}
+
+.resumen dt { color: var(--tinta-2); }
+.resumen dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.nota {
+  margin: 1.5rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--borde);
+  color: var(--tinta-2);
+  font-size: .88rem;
+}
+
+.fallo { color: #b3261e; }
+
+.muestrario { display: flex; gap: 0; margin: .45rem 0 0; }
+.muestrario span {
+  width: 2.2rem;
+  height: 1.1rem;
+  border: 1px solid rgba(0, 0, 0, .25);
+  border-right: 0;
+}
+.muestrario span:last-child { border-right: 1px solid rgba(0, 0, 0, .25); }

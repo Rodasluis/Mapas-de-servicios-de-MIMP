@@ -1,0 +1,62 @@
+name: Desplegar en GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un despliegue a la vez; si llegan varios, se publica el último.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  construir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # La cartografía del INEI y Natural Earth suman unos 95 MB. La clave
+      # depende de package.json, donde viven las versiones ancladas: mientras
+      # no cambie un *_TAG se reutiliza lo descargado.
+      - name: Recuperar la caché de orígenes
+        uses: actions/cache@v6
+        with:
+          path: .cache
+          key: origenes-${{ hashFiles('package.json') }}
+          restore-keys: origenes-
+
+      - name: Descargar y verificar datos, tipografías y cartografía
+        run: npm run preparar
+
+      - name: Construir el sitio
+        run: npm run build
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  desplegar:
+    needs: construir
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.despliegue.outputs.page_url }}
+    steps:
+      - id: despliegue
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,43 @@
+{
+  "name": "mapas-mimp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Generador de mapas imprimibles (PDF vectorial) de los servicios del MIMP.",
+  "comentarioDatos": "DATOS_TAG ancla la versión del directorio de servicios. Admite una etiqueta, una rama o un SHA de commit del repositorio del buscador. Se usa tal cual en las URL de descarga y se imprime en el pie de cada PDF.",
+  "DATOS_TAG": "f194bf5d1e7c83e12eca8f2020434ae8a5ee744a",
+  "GEO_TAG": "f2553240055092daa16ace1eb4ba614d09f1ca56",
+  "NATURAL_EARTH_TAG": "v5.1.2",
+  "POPPINS_TAG": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+  "SOURCE_SANS_TAG": "3.052R",
+  "scripts": {
+    "datos": "node scripts/fetch-datos.mjs",
+    "fuentes": "node scripts/fetch-fuentes.mjs",
+    "geo:fetch": "node scripts/fetch-geo.mjs",
+    "geo:build": "node --max-old-space-size=8192 scripts/build-geo.mjs",
+    "geo": "npm run geo:fetch && npm run geo:build",
+    "preparar": "node scripts/preparar.mjs",
+    "prebuild": "node scripts/preparar.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "d3-geo": "^3.1.1",
+    "proj4": "^2.19.10",
+    "topojson-client": "^3.1.0"
+  },
+  "devDependencies": {
+    "fflate": "^0.8.2",
+    "polygon-clipping": "^0.15.7",
+    "topojson-server": "^3.0.1",
+    "topojson-simplify": "^3.0.3",
+    "vite": "^7.1.7"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}
