@@ -18,8 +18,12 @@ import { CLASES_POR_DEFECTO } from './servicios.js';
 
 export function bloqueLeyenda({
   agregado, clasesUsadas, clases = CLASES_POR_DEFECTO, iconos, medidor, factor,
-  rampa, tamanoIconoMm, altoMaximoMm, anchoMaximoMm,
+  rampa, tamanoIconoMm, altoMaximoMm, anchoMaximoMm, unidad = 'provincia',
 }) {
+  /* El coropletas no siempre cuenta por provincia: en un mapa departamental la unidad
+     es el distrito. Anunciar la unidad equivocada convierte la leyenda en una fuente
+     de error, porque es justamente ahí donde se va a mirar qué significa cada tono. */
+  const tituloClases = `Presencia de servicios por ${unidad}`;
   const tipos = agregado.tipos;
   if (!tipos.length) return null;
 
@@ -63,7 +67,7 @@ export function bloqueLeyenda({
     );
     const anchoClases = altoMuestra * 2.4 + Math.max(
       ...clasesUsadas.map((i) => medidor.ancho(clases[i].etiqueta, eItem)),
-      medidor.ancho('Presencia de servicios por provincia', eSub),
+      medidor.ancho(tituloClases, eSub),
     );
 
     return {
@@ -146,7 +150,7 @@ export function bloqueLeyenda({
       });
 
       cursor += filasTipos * altoFila + altoSubBloque * 0.22;
-      piezas.push(texto('Presencia de servicios por provincia', {
+      piezas.push(texto(tituloClases, {
         x: x + relleno, y: cursor + medidor.ascenso(eSub), fill: color.tinta,
         'font-family': eSub.familia, 'font-size': ptAmm(eSub.pt), 'font-weight': 600,
       }));

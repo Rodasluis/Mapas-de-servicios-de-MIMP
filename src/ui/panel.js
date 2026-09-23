@@ -10,7 +10,7 @@
  * `role="button"` obliga a reimplementar el foco, las flechas y el anuncio del estado,
  * y casi siempre se reimplementa peor.
  */
-import { TAMANOS, ORIENTACIONES, siglaDe } from './config.js';
+import { TAMANOS, ORIENTACIONES, siglaDe, subtituloDe } from './config.js';
 
 const el = (etiqueta, atributos = {}, hijos = []) => {
   const nodo = document.createElement(etiqueta);
@@ -59,15 +59,79 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     config.hoja.orientacion = selOrientacion.value; emitir();
   });
 
-  const bloqueHoja = grupo('Hoja', [
+  /* ------------------------------- ámbito ------------------------------- */
+
+  /* Selector encadenado: el de provincia se rellena con las del departamento elegido.
+     Una lista plana de las 196 provincias obligaría a buscar «Lima» entre tres
+     entradas con ese nombre en departamentos distintos. Mientras el departamento sea
+     «Perú», el de provincia se queda deshabilitado en vez de desaparecer: un control
+     que aparece y desaparece mueve todo lo que tiene debajo cada vez que se toca. */
+  const selDepartamento = el('select', { id: 'ambito' });
+  selDepartamento.appendChild(el('option', { value: '', texto: 'Perú (nacional)' }));
+  for (const d of catalogo.departamentos) {
+    selDepartamento.appendChild(el('option', { value: d.id, texto: d.nombre }));
+  }
+
+  const selProvincia = el('select', { id: 'ambito-provincia' });
+
+  const llenarProvincias = (ccdd, elegida) => {
+    selProvincia.innerHTML = '';
+    selProvincia.appendChild(el('option', { value: '', texto: ccdd ? 'Todo el departamento' : '—' }));
+    for (const p of catalogo.provincias.filter((x) => x.ccdd === ccdd)) {
+      selProvincia.appendChild(el('option', { value: p.id, texto: p.nombre }));
+    }
+    selProvincia.value = elegida || '';
+    selProvincia.disabled = !ccdd;
+  };
+
+  const ambitoActual = () => {
+    if (!selDepartamento.value) return { nivel: 'nacional', id: null };
+    if (!selProvincia.value) return { nivel: 'departamento', id: selDepartamento.value };
+    return { nivel: 'provincia', id: selProvincia.value };
+  };
+
+  const departamentoInicial = config.ambito.id ? config.ambito.id.slice(0, 2) : '';
+  selDepartamento.value = departamentoInicial;
+  llenarProvincias(departamentoInicial, config.ambito.nivel === 'provincia' ? config.ambito.id : '');
+
+  /* Nombre del ámbito, para el subtítulo. */
+  const nombreDeAmbito = (a) => {
+    if (a.nivel === 'departamento') return (catalogo.departamentos.find((d) => d.id === a.id) || {}).nombre || '';
+    if (a.nivel === 'provincia') return (catalogo.provincias.find((p) => p.id === a.id) || {}).nombre || '';
+    return '';
+  };
+
+  /* El subtítulo automático se enseña como MARCADOR del campo, no como su valor: el
+     campo vacío significa «pon el del ámbito» y se ve cuál va a ser, mientras que un
+     valor escrito por la aplicación no se distinguiría de uno escrito por una persona
+     y habría que adivinar cuál pisar al cambiar de ámbito. */
+  const sincronizarSubtitulo = () => {
+    const campo = contenedor.querySelector('#subtitulo');
+    if (campo) campo.placeholder = subtituloDe(config.ambito, nombreDeAmbito(config.ambito));
+  };
+
+  const alCambiarAmbito = () => {
+    config.ambito = ambitoActual();
+    sincronizarSubtitulo();
+    llenarZonas();
+    emitir();
+  };
+  selDepartamento.addEventListener('change', () => {
+    llenarProvincias(selDepartamento.value, '');
+    alCambiarAmbito();
+  });
+  selProvincia.addEventListener('change', alCambiarAmbito);
+
+  const bloqueHoja = grupo('Hoja y ámbito', [
     el('p', { clase: 'campo' }, [el('label', { for: 'tamano', texto: 'Tamaño' }), selTamano]),
     el('p', { clase: 'campo' }, [el('label', { for: 'orientacion', texto: 'Orientación' }), selOrientacion]),
     el('p', { clase: 'campo' }, [
-      el('label', { for: 'ambito', texto: 'Ámbito' }),
-      el('select', { id: 'ambito', disabled: 'disabled', title: 'Los ámbitos departamental, provincial y distrital llegan en la Fase 6' }, [
-        el('option', { texto: 'Perú (nacional)' }),
-      ]),
+      el('label', { for: 'ambito', texto: 'Departamento' }), selDepartamento,
     ]),
+    el('p', { clase: 'campo' }, [
+      el('label', { for: 'ambito-provincia', texto: 'Provincia' }), selProvincia,
+    ]),
+    el('p', { clase: 'nota', texto: 'El ámbito distrital llega en la Fase 7.' }),
   ]);
 
   /* ------------------------------ textos ------------------------------- */
@@ -120,7 +184,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
 
   /* ------------------------------- capas ------------------------------- */
   const nombresCapa = {
-    coropleta: 'Coropleta por provincia',
+    coropleta: 'Coropleta por unidad territorial',
     simbolos: 'Símbolos de servicios',
     grilla: 'Retícula UTM',
     rotulos: 'Nombres de departamentos y provincias',
@@ -138,6 +202,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     leyenda: 'Leyenda',
     escala: 'Escala gráfica',
     norte: 'Rosa de los vientos',
+    ubicacion: 'Mapa de ubicación',
   };
   const bloquePiezas = grupo('Elementos del layout', Object.entries(nombresPieza).map(([clave, etiqueta]) => casilla(
     `pieza-${clave}`, etiqueta, config.piezas[clave] !== false,
@@ -154,10 +219,39 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   selZoom.value = config.zoom.modo;
 
   const selProvincias = el('select', { id: 'zoom-provincias', multiple: 'multiple', size: 8 });
-  for (const p of catalogo.provincias) {
-    selProvincias.appendChild(el('option', { value: p.id, texto: `${p.nombre} · ${p.departamento}` }));
-  }
-  for (const o of selProvincias.options) o.selected = config.zoom.seleccion.includes(o.value);
+
+  /**
+   * Las zonas que se ofrecen dependen del ámbito, porque ampliar es ampliar ALGO que
+   * el mapa esté dibujando. En el nacional se eligen provincias; en un departamento,
+   * sus provincias, que agrupan a los distritos dibujados; y en una provincia, sus
+   * distritos. Ofrecer siempre las 196 provincias daría a elegir zonas que no están
+   * en el mapa y el motor las descartaría sin que se entendiera por qué.
+   */
+  const zonasDelAmbito = () => {
+    const a = ambitoActual();
+    if (a.nivel === 'nacional') {
+      return catalogo.provincias.map((p) => ({ id: p.id, texto: `${p.nombre} · ${p.departamento}` }));
+    }
+    if (a.nivel === 'departamento') {
+      return catalogo.provincias.filter((p) => p.ccdd === a.id).map((p) => ({ id: p.id, texto: p.nombre }));
+    }
+    return catalogo.distritos.filter((d) => d.ccpp === a.id).map((d) => ({ id: d.id, texto: d.nombre }));
+  };
+
+  const llenarZonas = () => {
+    const elegidas = new Set(config.zoom.seleccion);
+    selProvincias.innerHTML = '';
+    for (const z of zonasDelAmbito()) {
+      const o = el('option', { value: z.id, texto: z.texto });
+      o.selected = elegidas.has(z.id);
+      selProvincias.appendChild(o);
+    }
+    /* Al cambiar de ámbito, lo seleccionado antes deja de existir en la lista nueva.
+       Se descarta en vez de arrastrarlo: una selección invisible que sigue actuando es
+       peor que perderla. */
+    config.zoom.seleccion = [...selProvincias.selectedOptions].map((o) => o.value);
+  };
+  llenarZonas();
 
   const campoProvincias = el('p', { clase: 'campo' }, [
     el('label', { for: 'zoom-provincias', texto: 'Zonas a ampliar' }),
@@ -196,6 +290,9 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     bloqueHoja, bloqueTextos, bloqueTipos, bloqueZoom, bloqueCapas, bloquePiezas,
     el('div', { clase: 'pie-panel' }, [botonGenerar, progreso]),
   );
+
+  // El marcador del subtítulo necesita el campo ya insertado para poder encontrarlo.
+  sincronizarSubtitulo();
 
   return {
     /** Mensaje de estado del botón de generación. */

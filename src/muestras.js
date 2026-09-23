@@ -8,7 +8,7 @@
 import './estilo/fuentes.css';
 import { crearHoja } from './motor/hoja.js';
 import { crearCargador, lectorNavegador } from './motor/cargador.js';
-import { componerNacional } from './motor/render.js';
+import { componer } from './motor/render.js';
 import { aPdf, lectorTtfNavegador } from './motor/pdf.js';
 import { componerHojaDeIconos } from './iconos/hoja.js';
 import { crearMedidor } from './motor/texto.js';
@@ -107,8 +107,8 @@ window.generarMapa = async function generarMapa(config = {}) {
   const hoja = crearHoja(config.hoja);
 
   const t0 = performance.now();
-  const { svg, meta } = await componerNacional({
-    hoja, cargador, textos: config.textos, opciones: config.opciones,
+  const { svg, meta } = await componer({
+    hoja, cargador, ambito: config.ambito, textos: config.textos, opciones: config.opciones,
   });
   const msComposicion = performance.now() - t0;
 

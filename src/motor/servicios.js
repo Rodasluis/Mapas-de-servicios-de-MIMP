@@ -21,37 +21,58 @@ export const CLASES_POR_DEFECTO = [
 ];
 
 /**
- * Agrupa los centros por provincia.
+ * Agrupa los centros por la unidad territorial que toque.
+ *
+ * La unidad depende del ámbito: el mapa del país cuenta por provincia y el de un
+ * departamento, por distrito. Lo que no cambia es el criterio —contar lo que
+ * centros.json trae, sin reclasificar—, así que la función es una sola y lo que varía
+ * es la clave con la que se agrupa.
+ *
+ * `pertenece` recorta al ámbito: en un mapa de Cusco, los centros de Puno no entran en
+ * los totales ni en la leyenda. Sin ese filtro, el pie diría 704 centros en un mapa que
+ * dibuja treinta.
  *
  * @param {object} centrosJson  el archivo completo del buscador
- * @param {Set<string>|null} tiposActivos  filtro; null es «todos»
- * @returns {{porProvincia: Map, porTipo: Map, total: number, tipos: string[]}}
+ * @param {object} opciones
+ * @param {(centro) => string} opciones.clave  de qué unidad es cada centro
+ * @param {Set<string>|null} [opciones.tiposActivos]  filtro de tipos; null es «todos»
+ * @param {(centro) => boolean} [opciones.pertenece]  si el centro entra en el ámbito
+ * @returns {{porUnidad: Map, porTipo: Map, total: number, tipos: string[], centros: object[]}}
  */
-export function agregarPorProvincia(centrosJson, tiposActivos = null) {
-  const porProvincia = new Map();
+export function agregarCentros(centrosJson, {
+  clave = (c) => c.ccpp, tiposActivos = null, pertenece = () => true,
+} = {}) {
+  const porUnidad = new Map();
   const porTipo = new Map();
+  /* Se guardan los centros que entran porque el ámbito provincial los dibuja uno a
+     uno en su coordenada real, no agregados. */
+  const centros = [];
   let total = 0;
 
   for (const c of centrosJson.centros) {
     if (tiposActivos && !tiposActivos.has(c.tipo)) continue;
+    if (!pertenece(c)) continue;
     total++;
+    centros.push(c);
     porTipo.set(c.tipo, (porTipo.get(c.tipo) || 0) + 1);
 
-    let prov = porProvincia.get(c.ccpp);
-    if (!prov) {
-      prov = { ccpp: c.ccpp, tipos: new Map(), total: 0 };
-      porProvincia.set(c.ccpp, prov);
+    const id = clave(c);
+    let unidad = porUnidad.get(id);
+    if (!unidad) {
+      unidad = { id, tipos: new Map(), total: 0 };
+      porUnidad.set(id, unidad);
     }
-    prov.tipos.set(c.tipo, (prov.tipos.get(c.tipo) || 0) + 1);
-    prov.total++;
+    unidad.tipos.set(c.tipo, (unidad.tipos.get(c.tipo) || 0) + 1);
+    unidad.total++;
   }
 
-  for (const prov of porProvincia.values()) prov.tiposDistintos = prov.tipos.size;
+  for (const unidad of porUnidad.values()) unidad.tiposDistintos = unidad.tipos.size;
 
   return {
-    porProvincia,
+    porUnidad,
     porTipo,
     total,
+    centros,
     // Orden estable: por frecuencia y, a igualdad, alfabético. La leyenda lo hereda.
     tipos: [...porTipo.keys()].sort(
       (a, b) => porTipo.get(b) - porTipo.get(a) || a.localeCompare(b, 'es'),
@@ -79,7 +100,7 @@ export function claseDe(valor, clases = CLASES_POR_DEFECTO) {
  */
 export function clasesUsadas(agregado, clases = CLASES_POR_DEFECTO) {
   const usadas = new Set();
-  for (const prov of agregado.porProvincia.values()) {
+  for (const prov of agregado.porUnidad.values()) {
     const i = claseDe(prov.tiposDistintos, clases);
     if (i >= 0) usadas.add(i);
   }

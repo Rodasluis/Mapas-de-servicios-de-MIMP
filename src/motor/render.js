@@ -32,9 +32,11 @@ import {
   SITIO_FIJO,
 } from './layout.js';
 import {
-  agregarPorProvincia, claseDe, clasesUsadas, repartirIconos, medirApinamiento,
+  agregarCentros, claseDe, clasesUsadas, repartirIconos, medirApinamiento,
   CLASES_POR_DEFECTO,
 } from './servicios.js';
+import { normalizarAmbito, encajeDeTanteo, cargarAmbito } from './ambito.js';
+import { mapaDeUbicacion, resaltePara } from './localizador.js';
 import { bloqueLeyenda } from './leyenda.js';
 import { construirRecuadros, maximoPorFormato } from './zoom.js';
 import { dibujarIcono, comprobarCobertura } from '../iconos/index.js';
@@ -64,11 +66,13 @@ export const PIEZAS_POR_DEFECTO = {
   leyenda: true,
   escala: true,
   norte: true,
+  ubicacion: true,
 };
 
 export const CAPAS = [
   'agua',          // fondo del marco y lagos
   'paises',        // países vecinos
+  'exterior',      // territorio peruano fuera del ámbito, atenuado (Fase 6)
   'coropleta',     // Fase 3
   'territorio',    // relleno del ámbito
   'limites',       // límites administrativos
@@ -78,8 +82,23 @@ export const CAPAS = [
   'etiquetas',     // rótulos de contexto; la Fase 4 añade los del país
 ];
 
-export async function componerNacional({ hoja, cargador, textos = {}, opciones = {} }) {
+/** Compone el mapa nacional. Atajo histórico de `componer` sin ámbito. */
+export function componerNacional(opciones) {
+  return componer({ ...opciones, ambito: 'nacional' });
+}
+
+/**
+ * Compone un mapa de cualquier ámbito: el país, un departamento o una provincia.
+ *
+ * Lo que cambia entre ellos —qué unidad colorea el coropletas, qué representa cada
+ * símbolo y qué nombres se escriben— lo resuelve `cargarAmbito`, y el resto del
+ * proceso es el mismo. Que sea el mismo no es economía de código: es lo que garantiza
+ * que un mapa de Cusco se mida, se rotule y se imprima con el mismo criterio que el
+ * del país, y no con una variante que se le parezca.
+ */
+export async function componer({ hoja, cargador, ambito, textos = {}, opciones = {} }) {
   const inicio = Date.now();
+  const elAmbito = normalizarAmbito(ambito);
   const [indice, version, logos, metricas, centrosJson, iconos] = await Promise.all([
     cargador.indice(), cargador.version(), cargador.logos(), cargador.metricas(),
     cargador.centros(), cargador.iconos(),
@@ -89,18 +108,7 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
      trata como todos y se anota, en vez de devolver un mapa en blanco sin explicación. */
   const tiposActivos = opciones.tipos && opciones.tipos.length
     ? new Set(opciones.tipos) : null;
-  const agregado = agregarPorProvincia(centrosJson, tiposActivos);
   const clases = opciones.clases || CLASES_POR_DEFECTO;
-  const clasesVisibles = clasesUsadas(agregado, clases);
-
-  /* Un tipo en los datos sin ícono en el catálogo se dibujaría como un hueco, así que
-     se detiene aquí con el nombre exacto que falta. */
-  const cobertura = comprobarCobertura(agregado.tipos);
-  if (cobertura.sinIcono.length) {
-    throw new Error(
-      `Sin ícono para: ${cobertura.sinIcono.join(', ')}. Añádelos a src/iconos/catalogo.js.`,
-    );
-  }
 
   /* Capas y piezas que la interfaz puede apagar. Por omisión todas encendidas: el
      motor no debe comportarse distinto según quién lo llame. */
@@ -123,29 +131,53 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
 
   /* Para elegir el nivel de detalle hace falta la escala, y para la escala el encaje.
      Se encaja primero con el nivel más ligero —la diferencia de contorno entre niveles
-     es de metros frente a los cientos de kilómetros del país, así que no cambia la
+     es de metros frente a los cientos de kilómetros del ámbito, así que no cambia la
      elección— y después se rehace con el nivel definitivo, que es el que se dibuja. */
-  const tanteo = await cargador.departamentos('bajo');
+  const tanteo = await encajeDeTanteo(elAmbito, cargador);
   const escalaTanteo = medirEscala(crearProyeccion(tanteo, marco, HOLGURA_MM), marco);
   const nivel = nivelPara(escalaTanteo.denominador, indice.niveles);
 
-  const departamentos = await cargador.departamentos(nivel);
-  const provincias = await cargador.provincias(nivel);
+  const plan = await cargarAmbito({ ambito: elAmbito, cargador, nivel });
   const contexto = await cargador.contexto();
-  const proyeccion = crearProyeccion(departamentos, marco, HOLGURA_MM);
+  const proyeccion = crearProyeccion(plan.encaje, marco, HOLGURA_MM);
   const escala = medirEscala(proyeccion, marco);
   const ruta = crearRuta(proyeccion);
+
+  /* La agregación depende del ámbito: el país cuenta por provincia y un departamento,
+     por distrito. Se recorta además a lo que cae DENTRO del ámbito, o el pie de un
+     mapa de Cusco anunciaría los 704 centros del país. */
+  const agregado = agregarCentros(centrosJson, {
+    clave: plan.claveCentro,
+    tiposActivos,
+    pertenece: plan.perteneceAlAmbito,
+  });
+  const clasesVisibles = clasesUsadas(agregado, clases);
+
+  /* Un tipo en los datos sin ícono en el catálogo se dibujaría como un hueco, así que
+     se detiene aquí con el nombre exacto que falta. */
+  const cobertura = comprobarCobertura(agregado.tipos);
+  if (cobertura.sinIcono.length) {
+    throw new Error(
+      `Sin ícono para: ${cobertura.sinIcono.join(', ')}. Añádelos a src/iconos/catalogo.js.`,
+    );
+  }
 
   /* Geometría proyectada a milímetros, que sirve a la vez para dibujar y para saber
      qué partes de la hoja están ocupadas por tierra. */
   const anillos = anillosPorRasgo(proyeccion, [
-    ...departamentos.features, ...provincias.features, ...contexto.features,
+    ...plan.unidades.features, ...plan.intermedios.features, ...plan.contorno.features,
+    ...plan.exterior.features, ...contexto.features,
   ]);
   const ocupacion = crearOcupacion(hoja.anchoMm, hoja.altoMm);
-  for (const f of departamentos.features) {
+  /* «Territorio» es lo que un bloque del layout no debe tapar, y eso es el ÁMBITO, no
+     todo el Perú: en un mapa de Cusco, poner la leyenda sobre Madre de Dios no estorba
+     a nadie, y prohibirlo dejaría la lámina sin ningún sitio donde colocarla. «Tierra»
+     sí es todo lo que no es mar, que es lo que decide dónde cabe el rótulo del océano. */
+  for (const f of plan.contorno.features) {
     ocupacion.marcarTerritorio(anillos.get(f));
     ocupacion.marcarTierra(anillos.get(f));
   }
+  for (const f of plan.exterior.features) ocupacion.marcarTierra(anillos.get(f));
   for (const f of contexto.features) {
     if (f.properties.capa === 'pais') ocupacion.marcarTierra(anillos.get(f));
   }
@@ -155,9 +187,17 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
      pequeñas. Lo que no cabe se refleja en el apiñamiento, que es lo que decide si
      hace falta un recuadro de zoom. */
   const tamanoIcono = Math.min(6, Math.max(3, 3.4 * Math.sqrt(factor)));
-  const simbolos = capasVisibles.simbolos
-    ? dibujarSimbolos({ provincias, agregado, anillos, iconos, marco, medidor, factor, tamanoIcono })
-    : { svg: '', grupos: [], apinados: [], apinamientoMaximoPct: 0 };
+  const vacioSimbolos = { svg: '', grupos: [], apinados: [], apinamientoMaximoPct: 0 };
+  let simbolos = vacioSimbolos;
+  if (capasVisibles.simbolos) {
+    simbolos = plan.simbolos === 'individual'
+      ? dibujarCentros({
+        centros: agregado.centros, proyeccion, iconos, marco, medidor, factor, tamanoIcono,
+      })
+      : dibujarSimbolos({
+        unidades: plan.unidades, agregado, anillos, iconos, marco, medidor, factor, tamanoIcono,
+      });
+  }
 
   /* Los grupos de íconos se reservan en la rejilla antes de colocar nada del layout.
      Se salen de su provincia —el de Lima se adentra en el mar— así que un bloque
@@ -186,7 +226,9 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
   const titulo = ajustarTitulo({
     textos: {
       titulo: textos.titulo ?? 'Servicios que brinda el MIMP',
-      subtitulo: textos.subtitulo ?? 'Ubicación a nivel nacional',
+      /* El subtítulo dice de qué ámbito es el mapa cuando nadie lo ha escrito. Dejar
+         «Ámbito nacional» en una lámina de Cusco sería peor que no poner nada. */
+      subtitulo: textos.subtitulo ?? plan.descripcion,
       periodo: textos.periodo ?? '',
     },
     medidor,
@@ -207,6 +249,7 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     norte: rosaDeLosVientos({ factor, anguloNorte: norte, medidor }),
     leyenda: ajustarLeyenda({
       agregado,
+      unidad: plan.agregacion,
       clasesUsadas: clasesVisibles,
       clases,
       iconos,
@@ -216,6 +259,14 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
       tamanoIconoMm: Math.min(5, tamanoIcono),
       marco,
       ocupacion,
+    }),
+    /* El localizador sólo existe fuera del nacional: un mapa del Perú con una miniatura
+       del Perú al lado no localiza nada. */
+    ubicacion: elAmbito.nivel === 'nacional' ? null : mapaDeUbicacion({
+      pais: await cargador.departamentos('bajo'),
+      resaltar: resaltePara(elAmbito),
+      ambito: plan.contorno,
+      factor,
     }),
   };
 
@@ -227,12 +278,15 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     ...(CABECERA.includes(n) ? { margen: margenCabecera } : {}),
   });
 
+  /* Una pieza entra si existe para este ámbito Y la interfaz no la ha apagado. */
+  const entra = (n) => Boolean(piezas[n]) && piezasVisibles[n] !== false;
+
   /* La cabecera reserva su sitio ANTES que los rótulos del mapa. Al revés, el rótulo
      «COLOMBIA» ocupaba la esquina superior derecha y el título, al no poder pisarlo,
      se deslizaba hacia abajo hasta acabar sobre Loreto: medía cero territorio en la
      esquina que le tocaba y tapaba un 25 % en la que terminaba. */
   const colocacionCabecera = colocarPiezas(
-    ANTES_DE_ROTULOS.filter((n) => piezas[n]).map(solicitud), marco, ocupacion,
+    ANTES_DE_ROTULOS.filter(entra).map(solicitud), marco, ocupacion,
   );
 
   /* Los recuadros van justo detrás de la leyenda y ANTES de los rótulos del mapa: se
@@ -246,7 +300,11 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     seleccion: opciones.zoom?.seleccion || [],
     grupos: simbolos.grupos,
     umbral: UMBRAL_APINAMIENTO,
-    provincias,
+    unidades: plan.unidades,
+    /* El recuadro dibuja lo mismo que el mapa principal: si éste pinta cada centro en
+       su sitio, el zoom también. */
+    modoSimbolos: plan.simbolos,
+    centros: agregado.centros,
     anillos,
     agregado,
     clases,
@@ -265,7 +323,7 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     : { svg: '', colocados: [], omitidos: [], cajas: [] };
 
   const colocacionResto = colocarPiezas(
-    PRIORIDAD.filter((n) => piezas[n] && !ANTES_DE_ROTULOS.includes(n)).map(solicitud),
+    PRIORIDAD.filter((n) => entra(n) && !ANTES_DE_ROTULOS.includes(n)).map(solicitud),
     marco, ocupacion,
   );
 
@@ -297,7 +355,7 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
   const rotulos = capasVisibles.rotulos
     ? colocarEtiquetas({
       solicitudes: solicitudesDeRotulos({
-        departamentos, provincias, anillos, simbolos, factor, marco,
+        niveles: plan.rotulos, anillos, simbolos, factor, marco,
       }),
       indice: indiceRotulos,
       medidor,
@@ -314,8 +372,7 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
   /* ----------------------------- ensamblado ---------------------------- */
 
   const capas = dibujarCapas({
-    departamentos,
-    provincias,
+    plan,
     agregado,
     clases,
     rampa: opciones.rampa || rampaNaranjas,
@@ -353,7 +410,14 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
       hoja: hoja.nombre,
       anchoMm: hoja.anchoMm,
       altoMm: hoja.altoMm,
-      ambito: 'Perú',
+      ambito: {
+        nivel: elAmbito.nivel,
+        id: elAmbito.id,
+        nombre: plan.nombre,
+        descripcion: plan.descripcion,
+        agregacion: plan.agregacion,
+        simbolos: plan.simbolos,
+      },
       nivel,
       escala: escala.texto,
       denominador: Math.round(escala.denominador),
@@ -375,7 +439,8 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
         totalDibujado: agregado.total,
         totalEnDatos: centrosJson.centros.length,
         tipos: agregado.tipos.map((t) => ({ tipo: t, n: agregado.porTipo.get(t) })),
-        provinciasConServicio: agregado.porProvincia.size,
+        unidadesConServicio: agregado.porUnidad.size,
+        unidadesDibujadas: plan.unidades.features.length,
         clasesUsadas: clasesVisibles.map((i) => clases[i].etiqueta),
         filtro: tiposActivos ? [...tiposActivos] : null,
         tamanoIconoMm: Number(tamanoIcono.toFixed(2)),
@@ -545,60 +610,69 @@ const PUNTOS_POR_ROTULO = 10;
  * íconos ocupa justo ese punto, el motor acabará colocando casi todos los nombres
  * desplazados alrededor; ése es exactamente su trabajo.
  */
-function solicitudesDeRotulos({ departamentos, provincias, anillos, simbolos, factor, marco }) {
+/**
+ * Estilo de cada nivel de rótulo.
+ *
+ * El nivel SUPERIOR de cada mapa va en mayúsculas y con más cuerpo, como en la lámina
+ * de referencia, y el de debajo en minúsculas y más pequeño. Lo que importa es que eso
+ * depende del ámbito y no de la entidad: en el mapa del país el nivel grueso son los
+ * departamentos y en el de un departamento, las provincias. Un rótulo de provincia no
+ * tiene un tamaño propio, tiene el que le toca según lo que el mapa retrate.
+ */
+const ESTILOS_ROTULO = {
+  departamento: { tipo: 'rotuloDepartamento', color: 'tinta' },
+  provincia: { tipo: 'rotuloProvincia', color: 'tintaSuave' },
+  distrito: { tipo: 'rotuloDistrito', color: 'tintaSuave' },
+  // Fuera del ámbito: mismo cuerpo que una provincia, pero en gris de fondo.
+  exterior: { tipo: 'rotuloProvincia', color: 'rotuloExterior' },
+};
+
+/** Finura del campo de distancias según el nivel: más fino, más lento y más preciso. */
+const CELDA_POR_PRIORIDAD = [2, 1.5, 1.2];
+
+function solicitudesDeRotulos({ niveles, anillos, simbolos, factor, marco }) {
   const solicitudes = [];
-  const polosDe = new Map(simbolos.grupos.map((g) => [g.ccpp, g.polos]));
+  const polosDe = new Map(simbolos.grupos.map((g) => [g.unidad, g.polos]));
 
-  const estiloDep = {
-    familia: tipografia.rotuloDepartamento.familia,
-    variante: tipografia.rotuloDepartamento.peso,
-    pt: tipografia.rotuloDepartamento.pt * Math.sqrt(factor),
-  };
-  const estiloProv = {
-    familia: tipografia.rotuloProvincia.familia,
-    variante: tipografia.rotuloProvincia.peso,
-    pt: tipografia.rotuloProvincia.pt * Math.sqrt(factor),
+  const estiloDe = (nivel) => {
+    const def = ESTILOS_ROTULO[nivel] || ESTILOS_ROTULO.provincia;
+    const t = tipografia[def.tipo];
+    return {
+      estilo: { familia: t.familia, variante: t.peso, pt: t.pt * Math.sqrt(factor) },
+      tinta: color[def.color],
+    };
   };
 
-  for (const f of departamentos.features) {
-    const anillosDep = anillos.get(f);
-    if (!anillosDep || !anillosDep.length) continue;
-    const caja = cajaDeAnillos(anillosDep, marco);
-    const polos = caja ? polosDeInaccesibilidad(anillosDep, caja, 2, PUNTOS_POR_ROTULO) : [];
-    if (!polos.length) continue;
-    solicitudes.push(crearSolicitud({
-      id: f.properties.ubigeo,
-      texto: f.properties.nombre.toLocaleUpperCase('es'),
-      nivel: 'departamento',
-      prioridad: 1,
-      peso: polos[0].radioMm,
-      puntos: polos,
-      estilo: estiloDep,
-      color: color.tinta,
-      dentro: (x, y) => puntoEnAnillos(x, y, anillosDep),
-    }));
-  }
+  for (const capa of niveles) {
+    const { estilo, tinta } = estiloDe(capa.nivel);
+    const celda = CELDA_POR_PRIORIDAD[Math.min(capa.prioridad - 1, CELDA_POR_PRIORIDAD.length - 1)];
 
-  for (const f of provincias.features) {
-    const anillosProv = anillos.get(f);
-    if (!anillosProv || !anillosProv.length) continue;
-    let polos = polosDe.get(f.properties.ubigeo);
-    if (!polos || !polos.length) {
-      const caja = cajaDeAnillos(anillosProv, marco);
-      polos = caja ? polosDeInaccesibilidad(anillosProv, caja, 1.5, PUNTOS_POR_ROTULO) : [];
+    for (const f of capa.rasgos) {
+      const anillosRasgo = anillos.get(f);
+      if (!anillosRasgo || !anillosRasgo.length) continue;
+
+      /* Los polos de las unidades ya los calculó la capa de símbolos. Reaprovecharlos
+         ahorra rehacer el campo de distancias y, sobre todo, garantiza que el nombre
+         busque sitio alrededor del MISMO punto donde están los íconos. */
+      let polos = capa.exterior ? null : polosDe.get(f.properties.ubigeo);
+      if (!polos || !polos.length) {
+        const caja = cajaDeAnillos(anillosRasgo, marco);
+        polos = caja ? polosDeInaccesibilidad(anillosRasgo, caja, celda, PUNTOS_POR_ROTULO) : [];
+      }
+      if (!polos.length) continue;
+
+      solicitudes.push(crearSolicitud({
+        id: f.properties.ubigeo,
+        texto: capa.mayusculas ? f.properties.nombre.toLocaleUpperCase('es') : f.properties.nombre,
+        nivel: capa.nivel,
+        prioridad: capa.prioridad,
+        peso: polos[0].radioMm,
+        puntos: polos,
+        estilo,
+        color: tinta,
+        dentro: (x, y) => puntoEnAnillos(x, y, anillosRasgo),
+      }));
     }
-    if (!polos.length) continue;
-    solicitudes.push(crearSolicitud({
-      id: f.properties.ubigeo,
-      texto: f.properties.nombre,
-      nivel: 'provincia',
-      prioridad: 2,
-      peso: polos[0].radioMm,
-      puntos: polos,
-      estilo: estiloProv,
-      color: color.tintaSuave,
-      dentro: (x, y) => puntoEnAnillos(x, y, anillosProv),
-    }));
   }
 
   return solicitudes;
@@ -618,15 +692,15 @@ function solicitudesDeRotulos({ departamentos, provincias, anillos, simbolos, fa
  * dibujaría sobre la vecina.
  */
 function dibujarSimbolos({
-  provincias, agregado, anillos, iconos, marco, medidor, factor, tamanoIcono,
+  unidades, agregado, anillos, iconos, marco, medidor, factor, tamanoIcono,
 }) {
   const eCifra = { familia: 'SourceSans3', variante: 'Semibold', pt: 5.2 * Math.sqrt(factor) };
   const altoCifra = medidor.alto(eCifra) * 0.95;
   const piezas = [];
   const grupos = [];
 
-  for (const f of provincias.features) {
-    const datos = agregado.porProvincia.get(f.properties.ubigeo);
+  for (const f of unidades.features) {
+    const datos = agregado.porUnidad.get(f.properties.ubigeo);
     if (!datos || !datos.tipos.size) continue;
 
     const anillosProv = anillos.get(f);
@@ -667,7 +741,7 @@ function dibujarSimbolos({
     });
 
     grupos.push({
-      ccpp: f.properties.ubigeo,
+      unidad: f.properties.ubigeo,
       nombre: f.properties.nombre,
       x: polo.x - ancho / 2,
       y: polo.y - alto / 2,
@@ -689,11 +763,91 @@ function dibujarSimbolos({
     grupos: medidos,
     apinados: apinados.map((g) => ({
       nombre: g.nombre,
-      ccpp: g.ccpp,
+      unidad: g.unidad,
       apinamientoPct: Number((g.apinamiento * 100).toFixed(0)),
     })).sort((a, b) => b.apinamientoPct - a.apinamientoPct),
     apinamientoMaximoPct: Number((Math.max(0, ...medidos.map((g) => g.apinamiento)) * 100).toFixed(0)),
   };
+}
+
+/**
+ * Cada centro en su coordenada real, con el ícono de su tipo.
+ *
+ * Es lo que se dibuja en ámbito provincial, y la diferencia con el mapa nacional no es
+ * de detalle sino de pregunta. El nacional responde «qué servicios llegan a esta
+ * provincia»; a escala de provincia esa pregunta ya está contestada y la que queda es
+ * «dónde está cada uno», que sólo se responde poniendo cada centro en su sitio.
+ *
+ * El ícono se ancla por su punta, no por su centro: la insignia se dibuja encima del
+ * punto, como un alfiler, de modo que lo que señala es la coordenada y no el dibujo.
+ *
+ * No se rotulan aquí. A esta escala varios centros comparten manzana y el nombre de
+ * cada uno multiplicaría por cuatro la tinta sobre la misma superficie; la
+ * identificación uno a uno es la tabla numerada de la Fase 7.
+ */
+function dibujarCentros({ centros, proyeccion, iconos, marco, tamanoIcono }) {
+  const piezas = [];
+  const grupos = [];
+
+  /* Orden estable por id: dos ejecuciones dibujan los íconos en el mismo orden, que es
+     lo que hace comparables dos PDF con la misma configuración. */
+  const ordenados = [...centros].sort((a, b) => a.id - b.id);
+
+  for (const c of ordenados) {
+    if (!Number.isFinite(c.lat) || !Number.isFinite(c.lon)) continue;
+    const punto = proyeccion([c.lon, c.lat]);
+    if (!punto) continue;
+    const [x, y] = punto;
+    /* Fuera del marco no se dibuja: un centro con la coordenada mal puesta arrastraría
+       el símbolo al pie de la lámina en vez de quedarse sobre el mapa. */
+    if (x < marco.x || x > marco.x + marco.ancho || y < marco.y || y > marco.y + marco.alto) continue;
+
+    piezas.push(dibujarIcono({
+      tipo: c.tipo,
+      x,
+      y,
+      tamanoMm: tamanoIcono,
+      color: iconos.tipos[c.tipo]?.color || color.tintaSuave,
+    }));
+    grupos.push({
+      unidad: c.ubigeo,
+      nombre: c.dist,
+      x: x - tamanoIcono / 2,
+      y: y - tamanoIcono,
+      ancho: tamanoIcono,
+      alto: tamanoIcono,
+      polo: { x, y: y - tamanoIcono / 2, radioMm: tamanoIcono / 2 },
+      polos: [{ x, y: y - tamanoIcono / 2, radioMm: tamanoIcono / 2 }],
+      tipos: 1,
+      centros: 1,
+    });
+  }
+
+  const medidos = medirApinamiento(grupos);
+  const apinados = medidos.filter((g) => g.apinamiento > UMBRAL_APINAMIENTO);
+
+  return {
+    svg: piezas.join('\n'),
+    grupos: medidos,
+    /* El apiñamiento se informa por DISTRITO, no centro a centro: «hay 14 centros que
+       se pisan» no ayuda a decidir nada, y «se pisan en Breña» sí. */
+    apinados: resumirApinadosPorUnidad(apinados),
+    apinamientoMaximoPct: Number((Math.max(0, ...medidos.map((g) => g.apinamiento)) * 100).toFixed(0)),
+  };
+}
+
+function resumirApinadosPorUnidad(apinados) {
+  const porUnidad = new Map();
+  for (const g of apinados) {
+    const previo = porUnidad.get(g.unidad);
+    const pct = Number((g.apinamiento * 100).toFixed(0));
+    if (!previo) porUnidad.set(g.unidad, { nombre: g.nombre, unidad: g.unidad, apinamientoPct: pct, centros: 1 });
+    else {
+      previo.centros++;
+      previo.apinamientoPct = Math.max(previo.apinamientoPct, pct);
+    }
+  }
+  return [...porUnidad.values()].sort((a, b) => b.apinamientoPct - a.apinamientoPct);
 }
 
 /** Por encima de esta fracción pisada, el grupo pide un recuadro de zoom. */
@@ -733,7 +887,7 @@ function anillosPorRasgo(proyeccion, rasgos) {
 /* ------------------------------- capas ---------------------------------- */
 
 function dibujarCapas({
-  departamentos, provincias, agregado, clases, rampa, contexto, ruta, marco,
+  plan, agregado, clases, rampa, contexto, ruta, marco,
   grilla, etiquetas, simbolos, recuadros, conColor = true,
 }) {
   const porCapa = (nombre) => contexto.features.filter((f) => f.properties.capa === nombre);
@@ -761,42 +915,60 @@ function dibujarCapas({
     'stroke-linejoin': 'round',
   }));
 
-  rasgos.departamentos = departamentos.features.length;
-  rasgos.provincias = provincias.features.length;
+  rasgos.unidades = plan.unidades.features.length;
+  rasgos.intermedios = plan.intermedios.features.length;
+  rasgos.exterior = plan.exterior.features.length;
 
-  /* El territorio se rellena por PROVINCIA con el color de su clase. Las provincias
-     sin ningún servicio quedan en blanco, como en el mapa de referencia: «sin
-     servicio» y «con uno» son cosas distintas y no pueden compartir tono. */
+  /* Territorio peruano fuera del ámbito. Se dibuja para que el ámbito no parezca una
+     isla —un mapa de Cusco que acabara en su límite no diría por dónde se llega—, pero
+     sin color de clase: ahí no se está midiendo nada y pintarlo como si sí invitaría a
+     compararlo con lo que el mapa sí mide. */
+  const exterior = plan.exterior.features.map((f) => el('path', {
+    d: ruta(f.geometry),
+    fill: color.territorioExterior,
+    stroke: color.territorioExteriorBorde,
+    'stroke-width': trazoMm.limiteProvincial,
+    'stroke-linejoin': 'round',
+  }));
+
+  /* El ámbito se rellena por UNIDAD con el color de su clase. Las que no tienen ningún
+     servicio quedan en blanco, como en el mapa de referencia: «sin servicio» y «con
+     uno» son cosas distintas y no pueden compartir tono. */
   let conServicio = 0;
-  const coropleta = provincias.features.map((f) => {
-    const datos = agregado.porProvincia.get(f.properties.ubigeo);
+  const coropleta = plan.unidades.features.map((f) => {
+    const datos = agregado.porUnidad.get(f.properties.ubigeo);
     const indice = claseDe(datos ? datos.tiposDistintos : 0, clases);
     if (indice >= 0) conServicio++;
     return el('path', {
       d: ruta(f.geometry),
       fill: conColor && indice >= 0 ? rampa[indice] : color.sinDato,
-      id: `prov-${f.properties.ubigeo}`,
+      id: `u-${f.properties.ubigeo}`,
     });
   });
-  rasgos.provinciasConServicio = conServicio;
+  rasgos.unidadesConServicio = conServicio;
 
   /* Los límites van en capas aparte y por encima de todos los rellenos: si cada
      polígono llevara su propio trazo, el borde compartido se dibujaría dos veces y en
-     papel saldría el doble de grueso que un borde exterior. */
+     papel saldría el doble de grueso que un borde exterior.
+
+     Se dibujan de fino a grueso —unidad, nivel intermedio, contorno del ámbito— para
+     que la jerarquía quede legible: sin el trazo grueso del contorno, cien distritos
+     forman una retícula en la que no se ve dónde empieza y acaba lo que se retrata. */
+  const trazar = (rasgos, token) => (token ? rasgos.map((f) => el('path', {
+    d: ruta(f.geometry), fill: 'none', stroke: color[token],
+    'stroke-width': trazoMm[token], 'stroke-linejoin': 'round',
+  })) : []);
+
   const limites = [
-    ...provincias.features.map((f) => el('path', {
-      d: ruta(f.geometry), fill: 'none', stroke: color.limiteProvincial,
-      'stroke-width': trazoMm.limiteProvincial, 'stroke-linejoin': 'round',
-    })),
-    ...departamentos.features.map((f) => el('path', {
-      d: ruta(f.geometry), fill: 'none', stroke: color.limiteDepartamental,
-      'stroke-width': trazoMm.limiteDepartamental, 'stroke-linejoin': 'round',
-    })),
+    ...trazar(plan.unidades.features, plan.trazos.unidad),
+    ...trazar(plan.intermedios.features, plan.trazos.intermedio),
+    ...trazar(plan.contorno.features, plan.trazos.contorno),
   ];
 
   const contenido = {
     agua,
     paises: capaPaises,
+    exterior,
     coropleta,
     territorio: [],
     limites,

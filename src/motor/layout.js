@@ -137,6 +137,7 @@ export const PLANTILLAS = {
     norte: ['centro-derecha', 'arriba-derecha', 'centro-izquierda'],
     escala: ['abajo-derecha', 'abajo-izquierda', 'abajo-centro'],
     leyenda: ['abajo-izquierda'],
+    ubicacion: ['abajo-derecha', 'arriba-izquierda', 'centro-derecha'],
   },
   horizontal: {
     institucional: ['arriba-izquierda'],
@@ -152,11 +153,12 @@ export const PLANTILLAS = {
        numérica, que se mide en el centro del marco. */
     escala: ['abajo-centro', 'abajo-derecha', 'abajo-izquierda'],
     leyenda: ['abajo-izquierda'],
+    ubicacion: ['abajo-derecha', 'arriba-izquierda', 'centro-derecha'],
   },
 };
 
 /** Orden de prioridad: quien va antes elige sitio antes. */
-export const PRIORIDAD = ['titulo', 'institucional', 'leyenda', 'escala', 'norte'];
+export const PRIORIDAD = ['titulo', 'institucional', 'leyenda', 'ubicacion', 'escala', 'norte'];
 
 /** Piezas de cabecera: sitio fijo y margen propio. */
 export const CABECERA = ['titulo', 'institucional'];
@@ -178,4 +180,6 @@ export const SITIO_FIJO = [...CABECERA, 'leyenda'];
  * que un mapa temático no se puede leer. Si pidiera sitio después de los rótulos, el
  * nombre de un país o del océano podría dejarla sin el único hueco donde cabía.
  */
-export const ANTES_DE_ROTULOS = [...CABECERA, 'leyenda'];
+/* El localizador entra con la leyenda, antes que los rótulos del mapa: necesita una
+   superficie concreta, mientras que un topónimo se acomoda en cualquier hueco. */
+export const ANTES_DE_ROTULOS = [...CABECERA, 'leyenda', 'ubicacion'];

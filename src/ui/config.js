@@ -20,9 +20,15 @@ export const ORIENTACIONES = ['vertical', 'horizontal'];
 
 export const POR_DEFECTO = {
   hoja: { tamano: 'A1', orientacion: 'vertical' },
+  /* Ámbito: nacional, o un ubigeo de departamento (2 dígitos) o provincia (4). */
+  ambito: { nivel: 'nacional', id: null },
   textos: {
     titulo: 'Ubicación de los servicios que brinda el MIMP',
-    subtitulo: 'Ámbito nacional',
+    /* Vacío significa AUTOMÁTICO: lo rellena el motor con la descripción del ámbito.
+       Guardar aquí «Ámbito nacional» obligaba a adivinar, al cambiar de ámbito, si ese
+       texto lo había escrito una persona o lo había dejado la aplicación, y un enlace
+       a «?ambito=08» abría un mapa de Cusco subtitulado «Ámbito nacional». */
+    subtitulo: '',
     periodo: '',
     elaboradoPor: '',
   },
@@ -51,6 +57,10 @@ const FECHA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 /** Configuración → parámetros de la URL, omitiendo todo lo que esté por omisión. */
 export function aParametros(config) {
   const p = new URLSearchParams();
+  /* El ubigeo basta para saber el nivel por su longitud, así que en la URL va solo:
+     «?ambito=1501» se lee y se corrige a mano sin tener que explicar también que es
+     una provincia. */
+  if (config.ambito && config.ambito.id) p.set('ambito', config.ambito.id);
   if (config.hoja.tamano !== POR_DEFECTO.hoja.tamano) p.set('hoja', config.hoja.tamano);
   if (config.hoja.orientacion !== POR_DEFECTO.hoja.orientacion) {
     p.set('orientacion', config.hoja.orientacion === 'horizontal' ? 'h' : 'v');
@@ -80,6 +90,10 @@ export function aParametros(config) {
 /** Parámetros de la URL → configuración, tolerando valores que no reconozca. */
 export function desdeParametros(p) {
   const config = estructuraClonada(POR_DEFECTO);
+
+  const ambito = (p.get('ambito') || '').trim();
+  if (/^[0-9]{2}$/.test(ambito)) config.ambito = { nivel: 'departamento', id: ambito };
+  else if (/^[0-9]{4}$/.test(ambito)) config.ambito = { nivel: 'provincia', id: ambito };
 
   const hoja = p.get('hoja');
   if (hoja && TAMANOS.includes(hoja)) config.hoja.tamano = hoja;
@@ -125,6 +139,27 @@ export function desdeParametros(p) {
   return config;
 }
 
+/**
+ * Subtítulo que le corresponde a un ámbito.
+ *
+ * Tiene que decir lo mismo que `plan.descripcion` del motor, porque es el texto que el
+ * motor pone cuando nadie ha escrito uno. Vive aquí además porque la interfaz lo
+ * necesita ANTES de componer, para mostrarlo en su casilla.
+ */
+export function subtituloDe(ambito, nombre) {
+  if (!ambito || ambito.nivel === 'nacional') return 'Ámbito nacional';
+  if (ambito.nivel === 'departamento') return `Departamento de ${nombre}`;
+  return `Provincia de ${nombre}`;
+}
+
+/** Nombres de los niveles de rótulo, para los informes de la interfaz. */
+export const NOMBRE_NIVEL = {
+  departamento: 'departamentos',
+  provincia: 'provincias',
+  distrito: 'distritos',
+  exterior: 'fuera del ámbito',
+};
+
 /** Texto de una clase, para que la leyenda lo diga igual que las de por omisión. */
 export function etiquetarClase(c) {
   if (!Number.isFinite(c.hasta)) return { ...c, etiqueta: `${c.desde} servicios o más` };
@@ -158,7 +193,14 @@ export function aOpcionesDelMotor(config) {
 export function aLlamadasDelMotor(config) {
   return {
     composicion: {
-      textos: { ...config.textos, ...(config.fecha ? { fecha: config.fecha } : {}) },
+      ambito: config.ambito,
+      /* Un subtítulo vacío se OMITE en vez de enviarse: así el motor aplica su
+         descripción del ámbito en lugar de imprimir una línea en blanco. */
+      textos: {
+        ...config.textos,
+        ...(config.textos.subtitulo ? {} : { subtitulo: undefined }),
+        ...(config.fecha ? { fecha: config.fecha } : {}),
+      },
       opciones: aOpcionesDelMotor(config),
     },
     pdf: {
@@ -171,7 +213,7 @@ export function aLlamadasDelMotor(config) {
 
 /** Nombre de archivo descriptivo: ámbito, tamaño y fecha. */
 export function nombreDeArchivo(config, fecha = config.fecha ? new Date(config.fecha) : new Date()) {
-  const partes = ['peru'];
+  const partes = [config.ambito && config.ambito.id ? `ubigeo${config.ambito.id}` : 'peru'];
   if (config.tipos && config.tipos.length === 1) partes.push(siglaDe(config.tipos[0]).toLowerCase());
   else if (config.tipos && config.tipos.length) partes.push(`${config.tipos.length}tipos`);
   partes.push(`${config.hoja.tamano}-${config.hoja.orientacion === 'horizontal' ? 'h' : 'v'}`);

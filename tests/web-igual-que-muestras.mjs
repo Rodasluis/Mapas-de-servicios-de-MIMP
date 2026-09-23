@@ -65,6 +65,27 @@ export const CASOS = [
       unTipo: 'CEM',
     },
   },
+  /* Fase 6: el ámbito viaja en la URL y tiene que llegar al PDF igual que lo demás. */
+  {
+    nombre: 'departamento de Cusco en A3',
+    parametros: { ambito: '08', hoja: 'A3', fecha: FECHA },
+    esperado: {
+      paginaMm: MEDIDAS.A3,
+      controles: { tamano: 'A3', ambito: '08', 'ambito-provincia': '' },
+      marcadas: ['pieza-ubicacion'],
+      desmarcadas: [],
+    },
+  },
+  {
+    nombre: 'provincia de Maynas en A4',
+    parametros: { ambito: '1601', hoja: 'A4', fecha: FECHA },
+    esperado: {
+      paginaMm: MEDIDAS.A4,
+      controles: { tamano: 'A4', ambito: '16', 'ambito-provincia': '1601' },
+      marcadas: ['pieza-ubicacion'],
+      desmarcadas: [],
+    },
+  },
   {
     nombre: 'A2 con zoom manual y capas apagadas',
     parametros: {
@@ -150,11 +171,15 @@ export async function comprobarWebIgualQueMuestras({ navegador, pagina, urlBase 
       const hay = devueltos.get(clave);
       /* La orientación se abrevia a una letra y el conjunto de capas apagadas puede
          reordenarse; se comparan por contenido, no por texto. */
+      /* Tres claves se comparan por CONTENIDO y no por texto. La orientación se
+         abrevia a una letra; el conjunto de capas apagadas no tiene orden; y las zonas
+         de zoom tampoco, porque el motor las agrupa por su geometría y no por el orden
+         en que se marcaron —los PDF de las dos listas salen byte a byte iguales—. */
+      const mismoConjunto = () => hay !== null
+        && [...hay.split(',')].sort().join() === [...valor.split(',')].sort().join();
       const igual = clave === 'orientacion'
         ? (hay || '').startsWith(valor[0])
-        : (clave.startsWith('sin')
-          ? hay !== null && [...hay.split(',')].sort().join() === [...valor.split(',')].sort().join()
-          : hay === valor);
+        : (clave.startsWith('sin') || clave === 'zoom' ? mismoConjunto() : hay === valor);
       if (!igual) problemas.push(`la URL perdió o cambió «${clave}»: «${hay}» en vez de «${valor}»`);
     }
 

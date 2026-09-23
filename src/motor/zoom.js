@@ -38,8 +38,26 @@ import { tipografia } from '../estilo/tokens.js';
 import { color, trazoMm, ptAmm } from '../estilo/tokens.js';
 import { el, grupo, texto, textoConHalo, rect } from './svg.js';
 
-/** Más provincias que esto dentro de un recuadro y deja de ser una ampliación. */
-export const LIMITE_PROVINCIAS = 22;
+/**
+ * Cuántas unidades pueden caber en un recuadro antes de que deje de ser una ampliación.
+ *
+ * Hay dos topes porque protegen de cosas distintas.
+ *
+ * En MANUAL el tope es bajo: alguien puede seleccionar un departamento entero, y
+ * ampliar veintitantas provincias es volver a dibujar el mismo mapa. El aviso está
+ * dirigido a esa persona y le dice qué hacer.
+ *
+ * En AUTO no hace falta ser tan estricto, porque el agrupamiento ya impone un tope
+ * GEOMÉTRICO —ninguna región puede pasar del 28 % del lado del marco— y ése es el
+ * criterio que de verdad decide si ampliar sirve de algo. Contar unidades es un mal
+ * sustituto: el conglomerado de Lima son 43 distritos en 800 km², y ampliarlo es
+ * justamente para lo que existe un recuadro, mientras que las 36 provincias que
+ * llegaron a agruparse en el mapa nacional ocupaban medio país. Con el tope de 22 para
+ * los dos casos, el mapa del departamento de Lima se quedaba sin un solo recuadro
+ * precisamente donde más falta hacía.
+ */
+export const LIMITE_UNIDADES_MANUAL = 22;
+export const LIMITE_UNIDADES_AUTO = 80;
 
 /** Por debajo de este lado el recuadro no aporta nada legible. */
 export const LADO_MINIMO_MM = 34;
@@ -78,15 +96,15 @@ export function agruparApinadas(grupos, umbral, margenMm, maxLadoMm = Infinity) 
   const regiones = [];
   const usadas = new Set();
   for (const seed of seeds) {
-    if (usadas.has(seed.ccpp)) continue;
+    if (usadas.has(seed.unidad)) continue;
     const region = { ...conMargen(seed), miembros: [seed], apinamiento: seed.apinamiento };
-    usadas.add(seed.ccpp);
+    usadas.add(seed.unidad);
 
     let crecio = true;
     while (crecio) {
       crecio = false;
       for (const otro of seeds) {
-        if (usadas.has(otro.ccpp)) continue;
+        if (usadas.has(otro.unidad)) continue;
         const caja = conMargen(otro);
         if (!rectangulo.seSolapan(region, caja)) continue;
         const nx = Math.min(region.x, caja.x);
@@ -101,7 +119,7 @@ export function agruparApinadas(grupos, umbral, margenMm, maxLadoMm = Infinity) 
         region.ancho = x1 - nx; region.alto = y1 - ny;
         region.miembros.push(otro);
         region.apinamiento = Math.max(region.apinamiento, otro.apinamiento);
-        usadas.add(otro.ccpp);
+        usadas.add(otro.unidad);
         crecio = true;
       }
     }
@@ -122,16 +140,23 @@ export function agruparApinadas(grupos, umbral, margenMm, maxLadoMm = Infinity) 
  * Admite ubigeos de provincia (cuatro dígitos) o de departamento (dos). Las
  * seleccionadas que se tocan se fusionan en un solo recuadro, igual que en automático.
  */
-function regionesManuales(seleccion, provincias, anillos, margenMm) {
+function regionesManuales(seleccion, unidades, anillos, margenMm) {
   const pedidas = new Set(seleccion.map(String));
-  const coincide = (ubigeo) => pedidas.has(ubigeo) || pedidas.has(ubigeo.slice(0, 2));
+  /* Una selección vale para cualquier nivel por encima de la unidad: en un mapa
+     nacional, «15» selecciona las provincias de Lima; en uno departamental, «1501»
+     selecciona los distritos de la provincia de Lima. Se comprueba por prefijo en vez
+     de por longitudes fijas para que la regla no dependa del ámbito. */
+  const coincide = (ubigeo) => {
+    for (const p of pedidas) if (ubigeo === p || ubigeo.startsWith(p)) return true;
+    return false;
+  };
 
-  const cajas = provincias.features
+  const cajas = unidades.features
     .filter((f) => coincide(f.properties.ubigeo))
     .map((f) => {
       const c = cajaDe(anillos.get(f));
       return c && {
-        ccpp: f.properties.ubigeo,
+        unidad: f.properties.ubigeo,
         nombre: f.properties.nombre,
         x: c.x,
         y: c.y,
@@ -151,8 +176,9 @@ function regionesManuales(seleccion, provincias, anillos, margenMm) {
  * @returns {{colocados, referencias, regiones, avisos, capacidad}}
  */
 export function construirRecuadros({
-  modo = 'auto', seleccion = [], grupos, umbral, provincias, anillos, agregado,
+  modo = 'auto', seleccion = [], grupos, umbral, unidades, anillos, agregado,
   clases, rampa, iconos, medidor, factor, tamanoIcono, marco, ocupacion, maximo,
+  modoSimbolos = 'agregado', centros = [],
 }) {
   const tope = maximo ?? maximoPorFormato(factor);
   const vacio = {
@@ -167,7 +193,7 @@ export function construirRecuadros({
   const margen = tamanoIcono * 0.8;
   const maxLadoRegion = Math.min(marco.ancho, marco.alto) * 0.28;
   const candidatas = modo === 'manual'
-    ? regionesManuales(seleccion, provincias, anillos, margen)
+    ? regionesManuales(seleccion, unidades, anillos, margen)
     : agruparApinadas(grupos, umbral, margen, maxLadoRegion);
   if (!candidatas.length) return vacio;
 
@@ -194,7 +220,7 @@ export function construirRecuadros({
 
     /* Los miembros son las provincias que tocan el rectángulo de la región, para que
        el detalle no salga flotando sin contexto. */
-    const porCaja = provincias.features.filter((f) => {
+    const porCaja = unidades.features.filter((f) => {
       const caja = cajaDe(anillos.get(f));
       return caja && rectangulo.seSolapan(region, caja);
     });
@@ -203,14 +229,15 @@ export function construirRecuadros({
        pidió. Seleccionar un departamento entero arrastraba por caja a sus vecinos
        —Áncash acababa en 43 provincias y saltaba el aviso—, cuando lo que se ha
        pedido es, precisamente, ese departamento. */
-    const pedidas = new Set(region.miembros.map((m) => m.ccpp));
-    const miembros = modo === 'manual' && porCaja.length > LIMITE_PROVINCIAS
+    const pedidas = new Set(region.miembros.map((m) => m.unidad));
+    const limite = modo === 'manual' ? LIMITE_UNIDADES_MANUAL : LIMITE_UNIDADES_AUTO;
+    const miembros = modo === 'manual' && porCaja.length > limite
       ? porCaja.filter((f) => pedidas.has(f.properties.ubigeo))
       : porCaja;
 
     if (!miembros.length) continue;
-    if (miembros.length > LIMITE_PROVINCIAS) {
-      avisos.push(`La zona de ${nombresDe(region)} abarca ${miembros.length} provincias:`
+    if (miembros.length > limite) {
+      avisos.push(`La zona de ${nombresDe(region)} abarca ${miembros.length} unidades:`
         + ' es demasiado grande para que ampliarla signifique algo.'
         + ' Usa una hoja mayor o selecciona una zona más pequeña.');
       continue;
@@ -291,6 +318,8 @@ export function construirRecuadros({
         eCifra,
         medidor,
         factor,
+        modoSimbolos,
+        centros,
       }),
     });
     ocupacion.marcarBloque(rectangulo.expandir({ x, y, ancho, alto }, AIRE_MM / 2));
@@ -311,7 +340,7 @@ export function construirRecuadros({
 
     resumen.push({
       etiqueta,
-      provincias: miembros.length,
+      unidades: miembros.length,
       anchoMm: Number(ancho.toFixed(1)),
       altoMm: Number(alto.toFixed(1)),
       apinamientoPct: Number((region.apinamiento * 100).toFixed(0)),
@@ -343,7 +372,7 @@ const nombresDe = (region) => region.miembros.map((m) => m.nombre).slice(0, 3).j
 function dibujarRecuadro({
   x, y, ancho, alto, anchoMapa, altoMapa, cabecera, borde, etiqueta,
   sub, miembros, agregado, clases, rampa, iconos, tamanoIcono, altoCifra,
-  eTitulo, eCifra, medidor, factor,
+  eTitulo, eCifra, medidor, factor, modoSimbolos = 'agregado', centros = [],
 }) {
   const marcoInterno = { x: x + borde, y: y + cabecera, ancho: anchoMapa, alto: altoMapa };
   const proy = crearProyeccion(sub, marcoInterno, 1.2);
@@ -351,7 +380,7 @@ function dibujarRecuadro({
   const idRecorte = `recorte-${etiqueta.replace(/\s+/g, '-').toLowerCase()}`;
 
   const relleno = miembros.map((f) => {
-    const datos = agregado.porProvincia.get(f.properties.ubigeo);
+    const datos = agregado.porUnidad.get(f.properties.ubigeo);
     const clase = claseDe(datos ? datos.tiposDistintos : 0, clases);
     return el('path', { d: ruta(f.geometry), fill: clase >= 0 ? rampa[clase] : color.sinDato });
   });
@@ -383,8 +412,39 @@ function dibujarRecuadro({
 
   const simbolos = [];
   const cajasSimbolos = [];
+
+  /* El recuadro dibuja LO MISMO que el mapa principal, sólo que más grande. Si el mapa
+     pinta cada centro en su sitio y el recuadro los agregara en un grupo con cifras, la
+     misma lámina estaría contando dos cosas distintas del mismo lugar y quien la mira
+     tendría que adivinar cuál vale. */
+  if (modoSimbolos === 'individual') {
+    const dentroDelRecuadro = (x, y) => x >= marcoInterno.x && x <= marcoInterno.x + marcoInterno.ancho
+      && y >= marcoInterno.y && y <= marcoInterno.y + marcoInterno.alto;
+    const enRecuadro = new Set(miembros.map((f) => f.properties.ubigeo));
+
+    for (const c of centros) {
+      if (!enRecuadro.has(c.ubigeo)) continue;
+      if (!Number.isFinite(c.lat) || !Number.isFinite(c.lon)) continue;
+      const punto = proy([c.lon, c.lat]);
+      if (!punto || !dentroDelRecuadro(punto[0], punto[1])) continue;
+      simbolos.push(dibujarIcono({
+        tipo: c.tipo,
+        x: punto[0],
+        y: punto[1],
+        tamanoMm: tamanoIcono,
+        color: iconos.tipos[c.tipo]?.color || color.tintaSuave,
+      }));
+      cajasSimbolos.push({
+        x: punto[0] - tamanoIcono / 2,
+        y: punto[1] - tamanoIcono,
+        ancho: tamanoIcono,
+        alto: tamanoIcono,
+        etiqueta: `símbolos ${c.nombre}`,
+      });
+    }
+  } else {
   for (const f of miembros) {
-    const datos = agregado.porProvincia.get(f.properties.ubigeo);
+    const datos = agregado.porUnidad.get(f.properties.ubigeo);
     const geo = geometria.get(f);
     if (!datos || !geo) continue;
     const centro = [geo.polos[0].x, geo.polos[0].y];
@@ -420,6 +480,7 @@ function dibujarRecuadro({
         'font-weight': 600,
       }, { colorHalo: color.halo, grosorMm: trazoMm.haloRotulo * factor * 0.7 }));
     });
+  }
   }
 
   /* Las provincias se rotulan DENTRO del recuadro. Son justamente las que el mapa

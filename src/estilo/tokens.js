@@ -29,6 +29,20 @@ export const color = {
   paisVecinoBorde: '#b4b4b0',
   sinDato: '#ffffff',
 
+  /* Territorio peruano FUERA del ámbito impreso (Fase 6). Se dibuja porque el mapa de
+     un departamento que acabara en su límite parecería una isla, pero tiene que leerse
+     como fondo: algo más oscuro que un país vecino, para que no se confunda con el
+     extranjero, y claramente por detrás del ámbito, que va en color de clase. */
+  territorioExterior: '#e3e1dd',
+  territorioExteriorBorde: '#c2bfba',
+  rotuloExterior: '#8a8781',
+
+  /* Localizador: el Perú en miniatura con el ámbito resaltado. */
+  localizadorRelleno: '#e8e6e2',
+  localizadorDepartamento: '#f6c9b0',
+  localizadorBorde: '#9a968f',
+  localizadorResalte: '#ec1c24',
+
   /* Límites administrativos. */
   limiteNacional: '#000000',
   limiteDepartamental: '#3a3a3a',

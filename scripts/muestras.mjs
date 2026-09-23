@@ -61,6 +61,41 @@ const MUESTRAS = [
     opciones: { tipos: ['Centro Emergencia Mujer y Familia'] },
     textos: { subtitulo: 'Centros Emergencia Mujer y Familia' },
   },
+
+  /* Fase 6. Las cuatro muestras del criterio de aceptación, elegidas para cubrir los
+     dos ámbitos nuevos en sus extremos: un departamento denso y uno disperso, y una
+     provincia urbana llena de centros frente a una amazónica enorme con trece.
+
+     Ninguna fija el subtítulo, para que se compruebe de paso que el que pone el motor
+     describe el ámbito de verdad y no arrastra el «Ámbito nacional» de los demás. */
+  {
+    nombre: 'departamento_Lima_A1',
+    ambito: '15',
+    hoja: { tamano: 'A1', orientacion: 'vertical' },
+    textos: { subtitulo: undefined },
+  },
+  {
+    nombre: 'departamento_Cusco_A3',
+    ambito: '08',
+    hoja: { tamano: 'A3', orientacion: 'vertical' },
+    textos: { subtitulo: undefined },
+  },
+  /* Lima provincia: 134 centros sobre 43 distritos. Es el caso que pone a prueba el
+     dibujo individual, porque varios comparten manzana. */
+  {
+    nombre: 'provincia_Lima_A2',
+    ambito: '1501',
+    hoja: { tamano: 'A2', orientacion: 'vertical' },
+    textos: { subtitulo: undefined },
+  },
+  /* Maynas: casi 120 000 km² y trece centros. El extremo contrario, y el que comprueba
+     que un ámbito enorme y vacío se sigue leyendo. */
+  {
+    nombre: 'provincia_Maynas_A4',
+    ambito: '1601',
+    hoja: { tamano: 'A4', orientacion: 'vertical' },
+    textos: { subtitulo: undefined },
+  },
 ];
 
 const TEXTOS = {
@@ -147,6 +182,7 @@ for (const muestra of MUESTRAS) {
   try {
     salida = await pagina.evaluate((cfg) => window.generarMapa(cfg), {
       hoja: muestra.hoja,
+      ambito: muestra.ambito,
       textos: { ...TEXTOS, ...(muestra.textos || {}) },
       opciones: muestra.opciones,
       fecha: fechaFija,
@@ -230,22 +266,32 @@ titulo('Servicios: totales dibujados frente a los datos');
 let fallosDatos = 0;
 {
   const centros = JSON.parse(fs.readFileSync(path.join(RAIZ, 'public', 'data', 'centros.json'), 'utf8'));
-  const esperado = new Map();
-  for (const c of centros.centros) esperado.set(c.tipo, (esperado.get(c.tipo) || 0) + 1);
+
+  /* El recuento esperado se calcula AQUÍ, desde centros.json, aplicando el mismo
+     recorte de ámbito y de tipos que declara la muestra. No se le pregunta al motor:
+     si el motor se equivocara al filtrar, preguntarle confirmaría su error. */
+  const recuentoEsperado = (muestra) => {
+    const ambito = muestra.ambito || null;
+    const tipos = muestra.opciones?.tipos ? new Set(muestra.opciones.tipos) : null;
+    const dentro = (c) => {
+      if (!ambito) return true;
+      if (ambito.length === 2) return c.ccdd === ambito;
+      return c.ccpp === ambito;
+    };
+    const cuenta = new Map();
+    let total = 0;
+    for (const c of centros.centros) {
+      if (!dentro(c) || (tipos && !tipos.has(c.tipo))) continue;
+      total++;
+      cuenta.set(c.tipo, (cuenta.get(c.tipo) || 0) + 1);
+    }
+    return { cuenta, total };
+  };
 
   for (const { muestra, salida } of resultados) {
     const s2 = salida.meta.servicios;
-    if (s2.filtro) {
-      /* Con filtro, lo que tiene que cuadrar es el subconjunto: los tipos dibujados
-         son exactamente los pedidos y sus totales son los de centros.json. */
-      const malos = s2.tipos.filter((t) => esperado.get(t.tipo) !== t.n
-        || !s2.filtro.includes(t.tipo));
-      console.log(`  ${muestra.nombre.padEnd(24)} filtro de ${s2.filtro.length} tipo(s)`
-        + ` → ${s2.totalDibujado} centros, ${s2.provinciasConServicio} provincias`
-        + ` · clases: ${s2.clasesUsadas.join(' / ')}${malos.length ? '  ✗' : '  ✓'}`);
-      for (const t of malos) { console.log(`    ✗ ${t.tipo}: ${t.n}`); fallosDatos++; }
-      continue;
-    }
+    const { cuenta: esperado, total: totalEsperado } = recuentoEsperado(muestra);
+
     const desajustes = [];
     for (const { tipo, n } of s2.tipos) {
       if (esperado.get(tipo) !== n) desajustes.push(`${tipo}: ${n} ≠ ${esperado.get(tipo) ?? 0}`);
@@ -253,18 +299,30 @@ let fallosDatos = 0;
     for (const [tipo, n] of esperado) {
       if (!s2.tipos.some((t) => t.tipo === tipo)) desajustes.push(`${tipo}: falta (${n} en los datos)`);
     }
-    const totalOk = s2.totalDibujado === centros.centros.length;
-    console.log(`  ${muestra.nombre.padEnd(24)} ${s2.totalDibujado} centros en ${s2.tipos.length} tipos`
-      + ` · ${s2.provinciasConServicio} provincias con servicio`
+    /* Un mapa con filtro no puede dibujar ningún tipo que no se haya pedido. */
+    if (s2.filtro) {
+      for (const t of s2.tipos) {
+        if (!s2.filtro.includes(t.tipo)) desajustes.push(`${t.tipo}: dibujado sin estar en el filtro`);
+      }
+    }
+    const totalOk = s2.totalDibujado === totalEsperado;
+
+    const donde = salida.meta.ambito.nivel === 'nacional'
+      ? 'Perú' : `${salida.meta.ambito.nombre} (${salida.meta.ambito.nivel})`;
+    console.log(`  ${muestra.nombre.padEnd(24)} ${donde.padEnd(22)}`
+      + ` ${s2.totalDibujado} centros en ${s2.tipos.length} tipos`
+      + ` · ${s2.unidadesConServicio}/${s2.unidadesDibujadas} unidades con servicio`
+      + `${s2.filtro ? ` · filtro de ${s2.filtro.length}` : ''}`
       + `${totalOk && !desajustes.length ? '  ✓' : '  ✗'}`);
     if (!totalOk) {
-      console.log(`    ✗ total ${s2.totalDibujado} ≠ ${centros.centros.length} de centros.json`);
+      console.log(`    ✗ total ${s2.totalDibujado} ≠ ${totalEsperado} esperados en este ámbito`);
       fallosDatos++;
     }
     for (const d of desajustes) { console.log(`    ✗ ${d}`); fallosDatos++; }
   }
   if (!fallosDatos) {
-    console.log(`  ✓ los ${centros.centros.length} centros y los ${esperado.size} tipos cuadran con centros.json`);
+    console.log(`  ✓ cada muestra dibuja exactamente los centros que centros.json pone`
+      + ' en su ámbito y con su filtro');
   }
 }
 
@@ -280,7 +338,7 @@ for (const { muestra, salida } of resultados) {
   }
   const cap = s3.capacidadRecuadros;
   console.log(`    recuadros: ${s3.recuadros.length
-    ? s3.recuadros.map((z) => `${z.etiqueta} ${z.anchoMm}×${z.altoMm} mm (${z.provincias} prov.)`).join(' · ')
+    ? s3.recuadros.map((z) => `${z.etiqueta} ${z.anchoMm}×${z.altoMm} mm (${z.unidades} unid.)`).join(' · ')
     : 'ninguno'}`);
   console.log(`    capacidad: ${cap.colocados} de ${cap.tope} permitidos en esta hoja`
     + `${cap.cabeOtro ? ' · aún cabría otro' : ' · sin hueco para más'}`);
