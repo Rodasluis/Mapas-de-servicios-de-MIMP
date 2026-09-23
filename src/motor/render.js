@@ -28,10 +28,18 @@ import {
   factorFormato, bloqueInstitucional, bloqueTitulo, rosaDeLosVientos, escalaGrafica,
 } from './piezas.js';
 import {
-  colocarPiezas, posicionEnAnclaje, PLANTILLAS, PRIORIDAD, CABECERA,
+  colocarPiezas, posicionEnAnclaje, PLANTILLAS, PRIORIDAD, CABECERA, ANTES_DE_ROTULOS,
 } from './layout.js';
-import { color, trazoMm, tipografia, layoutMm, ptAmm } from '../estilo/tokens.js';
-import { el, grupo, texto, rect, documento, num } from './svg.js';
+import {
+  agregarPorProvincia, claseDe, clasesUsadas, repartirIconos, medirApinamiento,
+  CLASES_POR_DEFECTO,
+} from './servicios.js';
+import { bloqueLeyenda } from './leyenda.js';
+import { construirRecuadros, MAXIMO_RECUADROS } from './zoom.js';
+import { dibujarIcono, comprobarCobertura } from '../iconos/index.js';
+import { poloDeInaccesibilidad } from './ocupacion.js';
+import { color, trazoMm, tipografia, layoutMm, rampaNaranjas, ptAmm } from '../estilo/tokens.js';
+import { el, grupo, texto, textoConHalo, rect, documento, num } from './svg.js';
 
 /** Holgura entre el ámbito y el borde del marco, para que el país no toque el filo. */
 export const HOLGURA_MM = 3;
@@ -49,11 +57,29 @@ export const CAPAS = [
   'etiquetas',     // rótulos de contexto; la Fase 4 añade los del país
 ];
 
-export async function componerNacional({ hoja, cargador, textos = {} }) {
+export async function componerNacional({ hoja, cargador, textos = {}, opciones = {} }) {
   const inicio = Date.now();
-  const [indice, version, logos, metricas] = await Promise.all([
+  const [indice, version, logos, metricas, centrosJson, iconos] = await Promise.all([
     cargador.indice(), cargador.version(), cargador.logos(), cargador.metricas(),
+    cargador.centros(), cargador.iconos(),
   ]);
+
+  /* Filtro de tipos. null es «todos»; un conjunto vacío no dibujaría nada, así que se
+     trata como todos y se anota, en vez de devolver un mapa en blanco sin explicación. */
+  const tiposActivos = opciones.tipos && opciones.tipos.length
+    ? new Set(opciones.tipos) : null;
+  const agregado = agregarPorProvincia(centrosJson, tiposActivos);
+  const clases = opciones.clases || CLASES_POR_DEFECTO;
+  const clasesVisibles = clasesUsadas(agregado, clases);
+
+  /* Un tipo en los datos sin ícono en el catálogo se dibujaría como un hueco, así que
+     se detiene aquí con el nombre exacto que falta. */
+  const cobertura = comprobarCobertura(agregado.tipos);
+  if (cobertura.sinIcono.length) {
+    throw new Error(
+      `Sin ícono para: ${cobertura.sinIcono.join(', ')}. Añádelos a src/iconos/catalogo.js.`,
+    );
+  }
 
   const medidor = crearMedidor(metricas);
   const factor = factorFormato(hoja);
@@ -78,6 +104,7 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
   const nivel = nivelPara(escalaTanteo.denominador, indice.niveles);
 
   const departamentos = await cargador.departamentos(nivel);
+  const provincias = await cargador.provincias(nivel);
   const contexto = await cargador.contexto();
   const proyeccion = crearProyeccion(departamentos, marco, HOLGURA_MM);
   const escala = medirEscala(proyeccion, marco);
@@ -85,7 +112,9 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
 
   /* Geometría proyectada a milímetros, que sirve a la vez para dibujar y para saber
      qué partes de la hoja están ocupadas por tierra. */
-  const anillos = anillosPorRasgo(proyeccion, [...departamentos.features, ...contexto.features]);
+  const anillos = anillosPorRasgo(proyeccion, [
+    ...departamentos.features, ...provincias.features, ...contexto.features,
+  ]);
   const ocupacion = crearOcupacion(hoja.anchoMm, hoja.altoMm);
   for (const f of departamentos.features) {
     ocupacion.marcarTerritorio(anillos.get(f));
@@ -94,6 +123,35 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
   for (const f of contexto.features) {
     if (f.properties.capa === 'pais') ocupacion.marcarTierra(anillos.get(f));
   }
+
+  /* Tamaño del ícono. Crece algo con la hoja pero acotado: por debajo de 3 mm el
+     pictograma deja de leerse y por encima de 6 mm los grupos se comen las provincias
+     pequeñas. Lo que no cabe se refleja en el apiñamiento, que es lo que decide si
+     hace falta un recuadro de zoom. */
+  const tamanoIcono = Math.min(6, Math.max(3, 3.4 * Math.sqrt(factor)));
+  const simbolos = dibujarSimbolos({
+    provincias, agregado, anillos, iconos, marco, medidor, factor, tamanoIcono,
+  });
+
+  /* Los recuadros de zoom salen del apiñamiento medido, no de una lista fija: donde
+     los símbolos no caben, se amplía. Con un filtro que deje pocos tipos dejan de
+     hacer falta y no se dibuja ninguno. */
+  const recuadros = opciones.zoom === false ? { piezas: [], referencias: '', regiones: [] }
+    : construirRecuadros({
+      grupos: simbolos.grupos,
+      umbral: UMBRAL_APINAMIENTO,
+      provincias,
+      anillos,
+      agregado,
+      clases,
+      rampa: opciones.rampa || rampaNaranjas,
+      iconos,
+      medidor,
+      factor,
+      tamanoIcono,
+      marco,
+      maximo: opciones.maximoRecuadros ?? MAXIMO_RECUADROS,
+    });
 
   const grilla = construirGrilla(proyeccion, marco, escala.denominador);
   const dibujoGrilla = dibujarGrilla({ grilla, marco, medidor, factor, banda });
@@ -129,7 +187,24 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
     titulo: titulo.pieza,
     escala: escalaGrafica({ denominador: escala.denominador, factor, medidor }),
     norte: rosaDeLosVientos({ factor, anguloNorte: norte, medidor }),
+    leyenda: bloqueLeyenda({
+      agregado,
+      clasesUsadas: clasesVisibles,
+      clases,
+      iconos,
+      medidor,
+      factor,
+      rampa: opciones.rampa || rampaNaranjas,
+      tamanoIconoMm: Math.min(5, tamanoIcono),
+      /* Acotada en las dos dimensiones: sin el límite de ancho, los nombres largos
+         («Centro de Atención Residencial para Personas Adultas Mayores - CARPAM»)
+         estiraban la leyenda hasta media hoja. */
+      altoMaximoMm: marco.alto * 0.45,
+      anchoMaximoMm: marco.ancho * 0.33,
+    }),
   };
+
+  recuadros.piezas.forEach((p) => { piezas[p.nombre] = p; });
 
   const solicitud = (n) => ({
     pieza: piezas[n],
@@ -144,16 +219,21 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
      se deslizaba hacia abajo hasta acabar sobre Loreto: medía cero territorio en la
      esquina que le tocaba y tapaba un 25 % en la que terminaba. */
   const colocacionCabecera = colocarPiezas(
-    CABECERA.filter((n) => piezas[n]).map(solicitud), marco, ocupacion,
+    ANTES_DE_ROTULOS.filter((n) => piezas[n]).map(solicitud), marco, ocupacion,
   );
 
   const etiquetas = rotulosDeContexto({
     contexto, anillosPorRasgo: anillos, marco, ocupacion, medidor, factor,
   });
 
-  const colocacionResto = colocarPiezas(
-    PRIORIDAD.filter((n) => piezas[n] && !CABECERA.includes(n)).map(solicitud), marco, ocupacion,
-  );
+  /* Los recuadros van justo detrás de la leyenda: son contenido del mapa y un zoom
+     mal colocado pierde información, mientras que la escala o la rosa se acomodan en
+     cualquier hueco. */
+  const ordenResto = [
+    ...recuadros.piezas.map((p) => p.nombre),
+    ...PRIORIDAD.filter((n) => piezas[n] && !ANTES_DE_ROTULOS.includes(n)),
+  ];
+  const colocacionResto = colocarPiezas(ordenResto.map(solicitud), marco, ocupacion);
 
   const colocacion = {
     colocadas: [...colocacionCabecera.colocadas, ...colocacionResto.colocadas],
@@ -169,7 +249,18 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
   /* ----------------------------- ensamblado ---------------------------- */
 
   const capas = dibujarCapas({
-    departamentos, contexto, ruta, marco, grilla: dibujoGrilla.svgLineas, etiquetas: etiquetas.svg,
+    departamentos,
+    provincias,
+    agregado,
+    clases,
+    rampa: opciones.rampa || rampaNaranjas,
+    contexto,
+    ruta,
+    marco,
+    grilla: dibujoGrilla.svgLineas,
+    etiquetas: etiquetas.svg,
+    simbolos: simbolos.svg,
+    recuadros: recuadros.referencias,
   });
 
   const idRecorte = 'recorte-marco';
@@ -206,6 +297,20 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
       },
       anguloNorteGrados: Number(norte.toFixed(2)),
       rasgos: capas.rasgos,
+      servicios: {
+        totalDibujado: agregado.total,
+        totalEnDatos: centrosJson.centros.length,
+        tipos: agregado.tipos.map((t) => ({ tipo: t, n: agregado.porTipo.get(t) })),
+        provinciasConServicio: agregado.porProvincia.size,
+        clasesUsadas: clasesVisibles.map((i) => clases[i].etiqueta),
+        filtro: tiposActivos ? [...tiposActivos] : null,
+        tamanoIconoMm: Number(tamanoIcono.toFixed(2)),
+        gruposApinados: simbolos.apinados,
+        recuadros: recuadros.regiones,
+        recuadrosDescartados: recuadros.descartados || 0,
+        apinamientoMaximoPct: simbolos.apinamientoMaximoPct,
+        iconosSinUso: cobertura.sinUso,
+      },
       grilla: {
         pasoM: grilla.paso,
         lineas: grilla.lineas.length,
@@ -290,6 +395,112 @@ function medirBarraDeEscala(proyeccion, colocacion, pieza) {
   };
 }
 
+/* -------------------------------- símbolos ------------------------------ */
+
+/**
+ * Un ícono por TIPO presente en cada provincia, con el número de centros debajo.
+ *
+ * No se dibuja un ícono por centro: en Lima serían ciento y pico alfileres sobre unos
+ * pocos milímetros. Lo que el mapa de referencia comunica —y lo que se reproduce— es
+ * qué SERVICIOS llegan a cada provincia y cuántas sedes hay de cada uno.
+ *
+ * El grupo se ancla en el polo de inaccesibilidad de la provincia, no en su centroide:
+ * en una provincia cóncava o partida en islas el centroide cae fuera y el grupo se
+ * dibujaría sobre la vecina.
+ */
+function dibujarSimbolos({
+  provincias, agregado, anillos, iconos, marco, medidor, factor, tamanoIcono,
+}) {
+  const eCifra = { familia: 'SourceSans3', variante: 'Semibold', pt: 5.2 * Math.sqrt(factor) };
+  const altoCifra = medidor.alto(eCifra) * 0.95;
+  const piezas = [];
+  const grupos = [];
+
+  for (const f of provincias.features) {
+    const datos = agregado.porProvincia.get(f.properties.ubigeo);
+    if (!datos || !datos.tipos.size) continue;
+
+    const anillosProv = anillos.get(f);
+    if (!anillosProv || !anillosProv.length) continue;
+    const caja = cajaDeAnillos(anillosProv, marco);
+    const polo = caja && poloDeInaccesibilidad(anillosProv, caja, 1.2);
+    if (!polo) continue;
+
+    /* Orden estable: el mismo tipo ocupa siempre el mismo sitio dentro del grupo, de
+       modo que dos ejecuciones dan el mismo dibujo y comparar mapas tiene sentido. */
+    const tipos = [...datos.tipos.keys()].sort(
+      (a, b) => agregado.porTipo.get(b) - agregado.porTipo.get(a) || a.localeCompare(b, 'es'),
+    );
+    const { posiciones, ancho, alto } = repartirIconos(tipos.length, polo, tamanoIcono, altoCifra);
+
+    tipos.forEach((tipo, i) => {
+      const p = posiciones[i];
+      piezas.push(dibujarIcono({
+        tipo,
+        x: p.x,
+        y: p.y,
+        tamanoMm: tamanoIcono,
+        color: iconos.tipos[tipo]?.color || color.tintaSuave,
+      }));
+      piezas.push(textoConHalo(String(datos.tipos.get(tipo)), {
+        x: p.x,
+        y: p.y + altoCifra * 0.82,
+        'text-anchor': 'middle',
+        fill: color.tinta,
+        'font-family': eCifra.familia,
+        'font-size': ptAmm(eCifra.pt),
+        'font-weight': 600,
+      }, { colorHalo: color.halo, grosorMm: trazoMm.haloRotulo * factor * 0.7 }));
+    });
+
+    grupos.push({
+      ccpp: f.properties.ubigeo,
+      nombre: f.properties.nombre,
+      x: polo.x - ancho / 2,
+      y: polo.y - alto / 2,
+      ancho,
+      alto,
+      tipos: tipos.length,
+      centros: datos.total,
+    });
+  }
+
+  const medidos = medirApinamiento(grupos);
+  const apinados = medidos.filter((g) => g.apinamiento > UMBRAL_APINAMIENTO);
+
+  return {
+    svg: piezas.join('\n'),
+    grupos: medidos,
+    apinados: apinados.map((g) => ({
+      nombre: g.nombre,
+      ccpp: g.ccpp,
+      apinamientoPct: Number((g.apinamiento * 100).toFixed(0)),
+    })).sort((a, b) => b.apinamientoPct - a.apinamientoPct),
+    apinamientoMaximoPct: Number((Math.max(0, ...medidos.map((g) => g.apinamiento)) * 100).toFixed(0)),
+  };
+}
+
+/** Por encima de esta fracción pisada, el grupo pide un recuadro de zoom. */
+export const UMBRAL_APINAMIENTO = 0.35;
+
+/** Caja envolvente de unos anillos, recortada al marco. */
+function cajaDeAnillos(anillosRasgo, marco) {
+  let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+  for (const anillo of anillosRasgo) {
+    for (const [x, y] of anillo) {
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+    }
+  }
+  if (!Number.isFinite(minX)) return null;
+  const x0 = Math.max(minX, marco.x);
+  const y0 = Math.max(minY, marco.y);
+  const x1 = Math.min(maxX, marco.x + marco.ancho);
+  const y1 = Math.min(maxY, marco.y + marco.alto);
+  if (x1 <= x0 || y1 <= y0) return null;
+  return { x: x0, y: y0, ancho: x1 - x0, alto: y1 - y0 };
+}
+
 /* --------------------------- geometría auxiliar ------------------------- */
 
 /** Proyecta cada rasgo y guarda sus anillos en milímetros, sin pasar por la cadena `d`. */
@@ -305,7 +516,10 @@ function anillosPorRasgo(proyeccion, rasgos) {
 
 /* ------------------------------- capas ---------------------------------- */
 
-function dibujarCapas({ departamentos, contexto, ruta, marco, grilla, etiquetas }) {
+function dibujarCapas({
+  departamentos, provincias, agregado, clases, rampa, contexto, ruta, marco,
+  grilla, etiquetas, simbolos, recuadros,
+}) {
   const porCapa = (nombre) => contexto.features.filter((f) => f.properties.capa === nombre);
   const rasgos = {};
 
@@ -332,27 +546,47 @@ function dibujarCapas({ departamentos, contexto, ruta, marco, grilla, etiquetas 
   }));
 
   rasgos.departamentos = departamentos.features.length;
-  const territorio = departamentos.features.map((f) => el('path', {
-    d: ruta(f.geometry), fill: color.sinDato, id: `dep-${f.properties.ubigeo}`,
-  }));
+  rasgos.provincias = provincias.features.length;
 
-  /* Los límites van en una capa aparte y por encima de todos los rellenos: si cada
+  /* El territorio se rellena por PROVINCIA con el color de su clase. Las provincias
+     sin ningún servicio quedan en blanco, como en el mapa de referencia: «sin
+     servicio» y «con uno» son cosas distintas y no pueden compartir tono. */
+  let conServicio = 0;
+  const coropleta = provincias.features.map((f) => {
+    const datos = agregado.porProvincia.get(f.properties.ubigeo);
+    const indice = claseDe(datos ? datos.tiposDistintos : 0, clases);
+    if (indice >= 0) conServicio++;
+    return el('path', {
+      d: ruta(f.geometry),
+      fill: indice >= 0 ? rampa[indice] : color.sinDato,
+      id: `prov-${f.properties.ubigeo}`,
+    });
+  });
+  rasgos.provinciasConServicio = conServicio;
+
+  /* Los límites van en capas aparte y por encima de todos los rellenos: si cada
      polígono llevara su propio trazo, el borde compartido se dibujaría dos veces y en
      papel saldría el doble de grueso que un borde exterior. */
-  const limites = departamentos.features.map((f) => el('path', {
-    d: ruta(f.geometry), fill: 'none', stroke: color.limiteDepartamental,
-    'stroke-width': trazoMm.limiteDepartamental, 'stroke-linejoin': 'round',
-  }));
+  const limites = [
+    ...provincias.features.map((f) => el('path', {
+      d: ruta(f.geometry), fill: 'none', stroke: color.limiteProvincial,
+      'stroke-width': trazoMm.limiteProvincial, 'stroke-linejoin': 'round',
+    })),
+    ...departamentos.features.map((f) => el('path', {
+      d: ruta(f.geometry), fill: 'none', stroke: color.limiteDepartamental,
+      'stroke-width': trazoMm.limiteDepartamental, 'stroke-linejoin': 'round',
+    })),
+  ];
 
   const contenido = {
     agua,
     paises: capaPaises,
-    coropleta: [],
-    territorio,
+    coropleta,
+    territorio: [],
     limites,
     grilla: [grilla],
-    simbolos: [],
-    recuadros: [],
+    simbolos: [simbolos],
+    recuadros: [recuadros],
     etiquetas: [etiquetas],
   };
 

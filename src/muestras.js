@@ -10,6 +10,8 @@ import { crearHoja } from './motor/hoja.js';
 import { crearCargador, lectorNavegador } from './motor/cargador.js';
 import { componerNacional } from './motor/render.js';
 import { aPdf, lectorTtfNavegador } from './motor/pdf.js';
+import { componerHojaDeIconos } from './iconos/hoja.js';
+import { crearMedidor } from './motor/texto.js';
 
 const BASE = import.meta.env.BASE_URL;
 const cargador = crearCargador(lectorNavegador(BASE));
@@ -84,12 +86,30 @@ window.comprobarMetricas = async function comprobarMetricas() {
   });
 };
 
+/** Hoja de referencia de los íconos: documenta tipo → pictograma a tamaño real. */
+window.generarHojaIconos = async function generarHojaIconos(config = {}) {
+  await fuentesListas();
+  const [iconos, centros, metricas] = await Promise.all([
+    cargador.iconos(), cargador.centros(), cargador.metricas(),
+  ]);
+  const { hoja, svg } = componerHojaDeIconos({
+    iconos, centros, medidor: crearMedidor(metricas),
+  });
+  const { bytes, fuentes } = await aPdf({
+    svg, hoja, leerTtf, fecha: config.fecha ? new Date(config.fecha) : undefined,
+    propiedades: { titulo: 'Íconos de los servicios del MIMP' },
+  });
+  return { pdf: aBase64(bytes), bytesSvg: svg.length, fuentes, meta: { hoja: hoja.nombre } };
+};
+
 window.generarMapa = async function generarMapa(config = {}) {
   await fuentesListas();
   const hoja = crearHoja(config.hoja);
 
   const t0 = performance.now();
-  const { svg, meta } = await componerNacional({ hoja, cargador, textos: config.textos });
+  const { svg, meta } = await componerNacional({
+    hoja, cargador, textos: config.textos, opciones: config.opciones,
+  });
   const msComposicion = performance.now() - t0;
 
   const t1 = performance.now();

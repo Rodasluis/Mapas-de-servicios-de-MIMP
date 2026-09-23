@@ -34,10 +34,22 @@ const fechaFija = opcion('fecha');
  */
 const MUESTRAS = [
   { nombre: 'nacional_A4_vertical', hoja: { tamano: 'A4', orientacion: 'vertical' } },
+  /* El A1 vertical es el formato del mapa de 2020: es la muestra que se pone al lado
+     de la referencia para comparar. */
+  { nombre: 'nacional_A1_vertical', hoja: { tamano: 'A1', orientacion: 'vertical' } },
   { nombre: 'nacional_A4_horizontal', hoja: { tamano: 'A4', orientacion: 'horizontal' } },
   { nombre: 'nacional_A3_vertical', hoja: { tamano: 'A3', orientacion: 'vertical' } },
   { nombre: 'nacional_A0_vertical', hoja: { tamano: 'A0', orientacion: 'vertical' } },
   { nombre: 'nacional_A0_horizontal', hoja: { tamano: 'A0', orientacion: 'horizontal' } },
+  /* Con un solo tipo activo se comprueba que el filtro llega hasta el final: el
+     coropletas se recalcula, la leyenda pierde las diecinueve entradas que sobran y
+     las clases altas desaparecen porque ninguna provincia llega a ellas. */
+  {
+    nombre: 'nacional_A2_solo_CEM',
+    hoja: { tamano: 'A2', orientacion: 'vertical' },
+    opciones: { tipos: ['Centro Emergencia Mujer y Familia'] },
+    textos: { subtitulo: 'Centros Emergencia Mujer y Familia' },
+  },
 ];
 
 const TEXTOS = {
@@ -124,7 +136,8 @@ for (const muestra of MUESTRAS) {
   try {
     salida = await pagina.evaluate((cfg) => window.generarMapa(cfg), {
       hoja: muestra.hoja,
-      textos: TEXTOS,
+      textos: { ...TEXTOS, ...(muestra.textos || {}) },
+      opciones: muestra.opciones,
       fecha: fechaFija,
     });
   } catch (err) {
@@ -140,6 +153,13 @@ for (const muestra of MUESTRAS) {
   resultados.push({ muestra, salida, verificacion, msTotalNode });
   console.log(`${peso(verificacion.bytes)} en ${(msTotalNode / 1000).toFixed(1)} s`);
 }
+
+/* Hoja de íconos: es a la vez documentación de la correspondencia tipo → pictograma y
+   la comprobación de que a 3 mm siguen distinguiéndose unos de otros. */
+process.stdout.write('  · iconos … ');
+const hojaIconos = await pagina.evaluate((cfg) => window.generarHojaIconos(cfg), { fecha: fechaFija });
+fs.writeFileSync(path.join(DESTINO, 'iconos.pdf'), Buffer.from(hojaIconos.pdf, 'base64'));
+console.log(peso(fs.statSync(path.join(DESTINO, 'iconos.pdf')).size));
 
 await cerrar();
 
@@ -167,6 +187,65 @@ for (const { muestra, salida, verificacion } of resultados) {
 }
 
 /* ----------------------- comprobaciones de la Fase 2 -------------------- */
+
+/* ------------------- integridad de la capa temática --------------------- */
+
+titulo('Servicios: totales dibujados frente a los datos');
+let fallosDatos = 0;
+{
+  const centros = JSON.parse(fs.readFileSync(path.join(RAIZ, 'public', 'data', 'centros.json'), 'utf8'));
+  const esperado = new Map();
+  for (const c of centros.centros) esperado.set(c.tipo, (esperado.get(c.tipo) || 0) + 1);
+
+  for (const { muestra, salida } of resultados) {
+    const s2 = salida.meta.servicios;
+    if (s2.filtro) {
+      /* Con filtro, lo que tiene que cuadrar es el subconjunto: los tipos dibujados
+         son exactamente los pedidos y sus totales son los de centros.json. */
+      const malos = s2.tipos.filter((t) => esperado.get(t.tipo) !== t.n
+        || !s2.filtro.includes(t.tipo));
+      console.log(`  ${muestra.nombre.padEnd(24)} filtro de ${s2.filtro.length} tipo(s)`
+        + ` → ${s2.totalDibujado} centros, ${s2.provinciasConServicio} provincias`
+        + ` · clases: ${s2.clasesUsadas.join(' / ')}${malos.length ? '  ✗' : '  ✓'}`);
+      for (const t of malos) { console.log(`    ✗ ${t.tipo}: ${t.n}`); fallosDatos++; }
+      continue;
+    }
+    const desajustes = [];
+    for (const { tipo, n } of s2.tipos) {
+      if (esperado.get(tipo) !== n) desajustes.push(`${tipo}: ${n} ≠ ${esperado.get(tipo) ?? 0}`);
+    }
+    for (const [tipo, n] of esperado) {
+      if (!s2.tipos.some((t) => t.tipo === tipo)) desajustes.push(`${tipo}: falta (${n} en los datos)`);
+    }
+    const totalOk = s2.totalDibujado === centros.centros.length;
+    console.log(`  ${muestra.nombre.padEnd(24)} ${s2.totalDibujado} centros en ${s2.tipos.length} tipos`
+      + ` · ${s2.provinciasConServicio} provincias con servicio`
+      + `${totalOk && !desajustes.length ? '  ✓' : '  ✗'}`);
+    if (!totalOk) {
+      console.log(`    ✗ total ${s2.totalDibujado} ≠ ${centros.centros.length} de centros.json`);
+      fallosDatos++;
+    }
+    for (const d of desajustes) { console.log(`    ✗ ${d}`); fallosDatos++; }
+  }
+  if (!fallosDatos) {
+    console.log(`  ✓ los ${centros.centros.length} centros y los ${esperado.size} tipos cuadran con centros.json`);
+  }
+}
+
+titulo('Símbolos: apiñamiento por provincia');
+for (const { muestra, salida } of resultados) {
+  const s3 = salida.meta.servicios;
+  console.log(`  ${muestra.nombre.padEnd(24)} ícono ${s3.tamanoIconoMm} mm`
+    + ` · apiñamiento máx ${s3.apinamientoMaximoPct} %`
+    + ` · ${s3.gruposApinados.length} provincia(s) por encima del umbral`);
+  if (s3.gruposApinados.length) {
+    console.log(`    ${s3.gruposApinados.slice(0, 6).map((g) => `${g.nombre} ${g.apinamientoPct}%`).join(', ')}`
+      + `${s3.gruposApinados.length > 6 ? ', …' : ''}`);
+  }
+  console.log(`    recuadros: ${s3.recuadros.length
+    ? s3.recuadros.map((z) => `${z.etiqueta} (${z.provincias} prov., por ${z.motivo.join('/')})`).join(' · ')
+    : 'ninguno'}`);
+}
 
 titulo('Layout: solapamientos y escala gráfica');
 let fallosLayout = 0;
@@ -237,7 +316,7 @@ const totalBytes = resultados.reduce((s, r) => s + r.verificacion.bytes, 0);
 console.log(`\n  ${resultados.length} archivos en muestras/ (${peso(totalBytes)})`);
 if (fechaFija) console.log(`  fecha fija ${fechaFija}: la salida es reproducible byte a byte`);
 
-if (fallos || fallosLayout) {
-  abortar(`${fallos + fallosLayout} problema(s) en las muestras generadas.`);
+if (fallos || fallosLayout || fallosDatos) {
+  abortar(`${fallos + fallosLayout + fallosDatos} problema(s) en las muestras generadas.`);
 }
 console.log('\n✓ Muestras generadas y verificadas.\n');

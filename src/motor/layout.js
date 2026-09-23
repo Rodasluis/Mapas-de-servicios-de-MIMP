@@ -158,5 +158,14 @@ export const PLANTILLAS = {
 /** Orden de prioridad: quien va antes elige sitio antes. */
 export const PRIORIDAD = ['titulo', 'institucional', 'leyenda', 'escala', 'norte'];
 
-/** Piezas de cabecera: reservan su esquina antes que los rótulos del mapa. */
+/** Piezas de cabecera: sitio fijo y margen propio. */
 export const CABECERA = ['titulo', 'institucional'];
+
+/**
+ * Piezas que reservan sitio ANTES que los rótulos del mapa.
+ *
+ * Además de la cabecera entra la leyenda: es el bloque más grande y el único sin el
+ * que un mapa temático no se puede leer. Si pidiera sitio después de los rótulos, el
+ * nombre de un país o del océano podría dejarla sin el único hueco donde cabía.
+ */
+export const ANTES_DE_ROTULOS = [...CABECERA, 'leyenda'];

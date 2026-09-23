@@ -9,11 +9,11 @@ No es una captura de pantalla ampliada: el PDF se construye a partir de la geome
 con las fuentes incrustadas, de modo que se puede imprimir en A0 sin que aparezca un
 solo píxel.
 
-> **Estado: Fase 2 — elementos cartográficos del layout.**
-> Las muestras ya salen con retícula UTM rotulada, bloque institucional, título,
-> rosa de los vientos, escala gráfica y rótulos de contexto, colocados solos según la
-> hoja y la orientación. Faltan el contenido temático (Fase 3), el motor de rótulos
-> (Fase 4) y la interfaz web (Fase 5): la página publicada todavía no compone mapas.
+> **Estado: Fase 3 — capa de servicios y coropletas.**
+> Las muestras reproducen el contenido temático del mapa de 2020: coropleta provincial
+> por número de servicios, un ícono por tipo con su recuento, leyenda generada sola y
+> recuadros de zoom donde los símbolos no caben. Faltan el motor de rótulos (Fase 4) y
+> la interfaz web (Fase 5): la página publicada todavía no compone mapas.
 
 ## Puesta en marcha
 
@@ -154,6 +154,45 @@ una muestra y una descarga desde la web salen del mismo código y del mismo medi
 Con `-- --fecha=AAAA-MM-DD` la salida es reproducible **byte a byte**: además de la
 fecha se fija el identificador de archivo del PDF, que jsPDF sortea al azar en cada
 ejecución. Sin ese detalle, dos salidas idénticas no se parecen al compararlas.
+
+## La capa temática
+
+Cada provincia se rellena según **cuántos tipos de servicio distintos** tiene, con las
+clases del mapa de 2020 (1 · 2-3 · 4-6 · 7-9 · 10+). Las que no tienen ninguno quedan
+en blanco: «sin servicio» y «con uno» no pueden compartir tono. Encima van los
+símbolos: **un ícono por tipo presente, con el número de sedes debajo**, agrupados
+alrededor del polo de inaccesibilidad de la provincia y no de su centroide, que en una
+forma cóncava cae fuera.
+
+Nada de esto está escrito a mano. El filtro de tipos recorre todo el camino: al dejar
+un tipo activo, el coropletas se recalcula, la leyenda se queda con una línea y las
+clases altas desaparecen porque ninguna provincia llega a ellas.
+
+### Los íconos
+
+El mapa de 2020 usa insignias con forma de casa, color por tipo y un pictograma
+dentro. Los PNG que publica el buscador son esa misma familia, pero de 22 × 22 px: a
+ese tamaño sólo distinguen por el color, y el color no basta, porque de los veinte
+tipos **cinco son rojos casi idénticos** (CEM, UA, CAI, CARPAM y SAR). A 3 mm serían el
+mismo punto.
+
+Se conserva la forma y el color de `iconos.json`, y se redibuja el interior: cada tipo
+lleva un pictograma propio trazado con la geometría más simple que lo haga
+reconocible. `muestras/iconos.pdf` los imprime a 3, 4,5 y 6 mm junto a su tipo, sigla
+y color: es a la vez la documentación de la correspondencia y la comprobación de que
+a tamaño real siguen distinguiéndose.
+
+### Los recuadros de zoom salen del apiñamiento medido
+
+No hay una lista de «amplía Lima y Cusco». El motor mide, provincia a provincia, qué
+fracción de su grupo de íconos pisa la del vecino, agrupa las que pasan del umbral y
+las amplía, dibujando el rectángulo de referencia en el mapa principal. El criterio
+vale para cualquier hoja y cualquier filtro: en A1 salen Paruro y Lima-Callao; con un
+solo tipo activo los símbolos dejan de estorbarse y no se dibuja ninguno.
+
+En A4 nacional el informe avisa de que 72 provincias se estorban y **no** genera
+recuadros: cuando la zona apiñada es medio país, el problema no se arregla con un zoom
+sino con una hoja mayor.
 
 ## El layout se coloca solo
 
