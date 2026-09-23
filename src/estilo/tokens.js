@@ -117,6 +117,9 @@ export const layoutMm = {
   margenHoja: 10,
   separacionBloques: 4,
   relleneBloque: 3,
+  /* Distancia de la cabecera al marco. Se multiplica por el factor de formato para
+     que el aire alrededor del logotipo y del título se vea igual en A4 que en A0. */
+  margenCabecera: 2.6,
   iconoMin: 3,
   iconoMax: 6,
 };

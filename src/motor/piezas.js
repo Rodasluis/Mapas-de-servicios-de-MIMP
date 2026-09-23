@@ -47,7 +47,11 @@ export function dibujarLogo(logo, x, y, alturaMm) {
 export function bloqueInstitucional({ logos, factor }) {
   const alturaLogo = 9 * factor;
   const separacion = 2.2 * factor;
-  const relleno = layoutMm.relleneBloque * factor;
+
+  /* Sin relleno interno: al no llevar caja, el borde visible del bloque ES el dibujo
+     del logotipo. Con relleno, el logotipo quedaba a 13 mm del marco en A0 mientras
+     la caja del título se apoyaba a 2,5 mm, y la diferencia saltaba a la vista. */
+  const relleno = 0;
 
   /* Sólo el logotipo del MIMP: el del Gobierno del Perú duplicaba el escudo y hacía
      el bloque el doble de alto, que es sitio que en A4 hace falta para el mapa. */

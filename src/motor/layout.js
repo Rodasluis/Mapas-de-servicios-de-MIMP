@@ -70,7 +70,9 @@ export function colocarPiezas(solicitudes, marco, ocupacion) {
   const forzadas = [];
   const deslizamientos = desplazamientos(marco);
 
-  for (const { pieza, anclajes, obligatoria = true, soloPreferidos = false } of solicitudes) {
+  for (const {
+    pieza, anclajes, obligatoria = true, soloPreferidos = false, margen = SEPARACION_MM,
+  } of solicitudes) {
     if (!pieza || !(pieza.ancho > 0) || !(pieza.alto > 0)) continue;
 
     let elegida = null;
@@ -91,7 +93,7 @@ export function colocarPiezas(solicitudes, marco, ocupacion) {
 
     for (const anclaje of orden) {
       for (const [dx, dy] of deslizamientos) {
-        const base = posicion(anclaje, marco, pieza.ancho, pieza.alto, SEPARACION_MM);
+        const base = posicion(anclaje, marco, pieza.ancho, pieza.alto, margen);
         const r = { ...base, x: base.x + dx, y: base.y + dy };
         if (!rectangulo.contiene(marco, r)) continue;
         if (ocupacion.chocaConBloque(rectangulo.expandir(r, SEPARACION_MM / 2))) continue;

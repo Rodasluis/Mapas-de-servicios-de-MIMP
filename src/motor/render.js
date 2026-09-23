@@ -30,7 +30,7 @@ import {
 import {
   colocarPiezas, posicionEnAnclaje, PLANTILLAS, PRIORIDAD, CABECERA,
 } from './layout.js';
-import { color, trazoMm, tipografia, ptAmm } from '../estilo/tokens.js';
+import { color, trazoMm, tipografia, layoutMm, ptAmm } from '../estilo/tokens.js';
 import { el, grupo, texto, rect, documento, num } from './svg.js';
 
 /** Holgura entre el ámbito y el borde del marco, para que el país no toque el filo. */
@@ -103,6 +103,10 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
   const plantilla = PLANTILLAS[hoja.orientacion] || PLANTILLAS.vertical;
   const norte = anguloDelNorte(proyeccion, [marco.x + marco.ancho / 2, marco.y + marco.alto / 2]);
 
+  /* Logotipo y título comparten margen al marco para que el aire de las dos esquinas
+     superiores se vea igual. */
+  const margenCabecera = layoutMm.margenCabecera * factor;
+
   const titulo = ajustarTitulo({
     textos: {
       titulo: textos.titulo ?? 'Servicios que brinda el MIMP',
@@ -113,6 +117,11 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
     factor,
     marco,
     ocupacion,
+    margen: margenCabecera,
+    /* En apaisado el marco es mucho más ancho y la misma fracción daba un título
+       larguísimo que llegaba a rozar el país. Se estrecha, con lo que gana líneas
+       pero deja de invadir el mapa. */
+    anchoMaximo: marco.ancho * (hoja.orientacion === 'horizontal' ? 0.24 : 0.38),
   });
 
   const piezas = {
@@ -127,6 +136,7 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
     anclajes: plantilla[n] || [],
     // Cabecera de sitio fijo: el logotipo y el título no se mudan de esquina.
     soloPreferidos: CABECERA.includes(n),
+    ...(CABECERA.includes(n) ? { margen: margenCabecera } : {}),
   });
 
   /* La cabecera reserva su sitio ANTES que los rótulos del mapa. Al revés, el rótulo
@@ -235,13 +245,11 @@ export async function componerNacional({ hoja, cargador, textos = {} }) {
 const REDUCCION_MINIMA = 0.55;
 const PASO_REDUCCION = 0.05;
 
-function ajustarTitulo({ textos, medidor, factor, marco, ocupacion }) {
+function ajustarTitulo({ textos, medidor, factor, marco, ocupacion, margen, anchoMaximo }) {
   let mejor = null;
   for (let reduccion = 1; reduccion >= REDUCCION_MINIMA - 1e-9; reduccion -= PASO_REDUCCION) {
-    const pieza = bloqueTitulo({
-      textos, medidor, factor, reduccion, anchoMaximo: marco.ancho * 0.38,
-    });
-    const r = posicionEnAnclaje('arriba-derecha', marco, pieza.ancho, pieza.alto);
+    const pieza = bloqueTitulo({ textos, medidor, factor, reduccion, anchoMaximo });
+    const r = posicionEnAnclaje('arriba-derecha', marco, pieza.ancho, pieza.alto, margen);
     const tapado = ocupacion.sobreTerritorio(r);
     /* Se compara el área ABSOLUTA de territorio tapado, no la fracción de la caja:
        una caja grande puede tapar más milímetros cuadrados de país y aun así salir
