@@ -128,7 +128,7 @@ export function colocarPiezas(solicitudes, marco, ocupacion) {
  * tapar el país no se muda: encoge (ver la reducción de cuerpo en render.js).
  *
  * El resto sí son preferencias. En vertical el Perú ocupa una banda diagonal y deja
- * libres las esquinas; en apaisado se estrecha y sobra sitio a los flancos.
+ * libres las esquinas; en horizontal se estrecha y sobra sitio a los flancos.
  */
 export const PLANTILLAS = {
   vertical: {
@@ -142,13 +142,13 @@ export const PLANTILLAS = {
   horizontal: {
     institucional: ['arriba-izquierda'],
     titulo: ['arriba-derecha'],
-    /* La rosa va al flanco derecho también en apaisado: puesta arriba al centro
+    /* La rosa va al flanco derecho también en horizontal: puesta arriba al centro
        quedaba sobre el país y, sobre todo, cambiaba de sitio entre una hoja vertical
-       y una apaisada del mismo mapa. */
+       y una horizontal del mismo mapa. */
     norte: ['centro-derecha', 'arriba-derecha', 'abajo-derecha'],
-    /* La barra de escala tira al centro horizontal a propósito: en una Mercator
+    /* La barra de escala tira al centro del ANCHO a propósito: en una Mercator
        transversa la escala crece al alejarse del meridiano central, y en una hoja
-       apaisada los extremos quedan a 13° de él. Colocada en un flanco, la barra medía
+       horizontal los extremos quedan a 13° de él. Colocada en un flanco, la barra medía
        un 2 % menos de lo que decía; sobre el meridiano central coincide con la escala
        numérica, que se mide en el centro del marco. */
     escala: ['abajo-centro', 'abajo-derecha', 'abajo-izquierda'],
@@ -168,7 +168,7 @@ export const CABECERA = ['titulo', 'institucional'];
  *
  * Además de la cabecera está la leyenda, siempre abajo a la izquierda. Que cambiara de
  * esquina según el formato —abajo a la izquierda en vertical, a media altura a la
- * derecha en apaisado— obligaba a buscarla de nuevo en cada mapa. Cuando no cabe,
+ * derecha en horizontal— obligaba a buscarla de nuevo en cada mapa. Cuando no cabe,
  * encoge; no se muda.
  */
 export const SITIO_FIJO = [...CABECERA, 'leyenda'];

@@ -215,7 +215,7 @@ Cuando no cabe, su núcleo, y el informe lo dice.
 Es una limitación de superficie, no una decisión: Cusco ocupa 154 × 185 mm en un A1 y el
 mayor hueco libre de la lámina son 131 × 156, porque el Perú está en medio y a los lados
 sólo quedan dos franjas de unos 130 mm. Dibujarlo ahí daría un «zoom» a 0,85 veces el
-tamaño del mapa: una reducción rotulada como ampliación. En A0 apaisado, donde el hueco
+tamaño del mapa: una reducción rotulada como ampliación. En A0 horizontal, donde el hueco
 sí da, Cusco sale completo con sus trece provincias a ×1,9; en A2 sale su núcleo —las
 provincias del entorno de la ciudad— a ×4,3. El rectángulo rojo sobre el mapa principal
 marca exactamente el trozo ampliado, y cuando es parcial el informe avisa de que hace
