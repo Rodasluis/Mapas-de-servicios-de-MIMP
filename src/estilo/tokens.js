@@ -29,6 +29,20 @@ export const color = {
   paisVecinoBorde: '#b4b4b0',
   sinDato: '#ffffff',
 
+  /* Territorio peruano FUERA del ámbito impreso (Fase 6). Se dibuja porque el mapa de
+     un departamento que acabara en su límite parecería una isla, pero tiene que leerse
+     como fondo: algo más oscuro que un país vecino, para que no se confunda con el
+     extranjero, y claramente por detrás del ámbito, que va en color de clase. */
+  territorioExterior: '#e3e1dd',
+  territorioExteriorBorde: '#c2bfba',
+  rotuloExterior: '#8a8781',
+
+  /* Localizador: el Perú en miniatura con el ámbito resaltado. */
+  localizadorRelleno: '#e8e6e2',
+  localizadorDepartamento: '#f6c9b0',
+  localizadorBorde: '#9a968f',
+  localizadorResalte: '#ec1c24',
+
   /* Límites administrativos.
 
      El salto entre el departamental y el provincial es deliberado y grande, en color y
@@ -38,6 +52,11 @@ export const color = {
   limiteNacional: '#000000',
   limiteDepartamental: '#111111',
   limiteProvincial: '#8a8a8a',
+  /* La provincia DENTRO de un mapa departamental hace el papel que el departamento hace
+     en el nacional: es la división que ordena la lectura. Con el gris claro del mapa
+     nacional no se distinguía de los límites de distrito y el departamento se leía como
+     una retícula plana de cien piezas iguales. */
+  limiteProvincialDestacado: '#1f1f1f',
   limiteDistrital: '#9a9a9a',
 
   /* Tinta de los rótulos. */
@@ -107,6 +126,7 @@ export const trazoMm = {
   limiteNacional: 0.5,
   limiteDepartamental: 0.5,
   limiteProvincial: 0.15,
+  limiteProvincialDestacado: 0.4,
   limiteDistrital: 0.1,
   costa: 0.25,
   paisVecino: 0.15,

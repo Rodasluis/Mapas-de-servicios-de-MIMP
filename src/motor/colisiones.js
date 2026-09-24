@@ -70,6 +70,28 @@ export function crearIndice() {
       return null;
     },
 
+    /**
+     * Área total que un rectángulo comparte con los ya guardados que cumplan `filtro`.
+     *
+     * Sirve para elegir el MENOS malo cuando ninguna posición está libre: un rótulo que
+     * pisa cuatro milímetros cuadrados de un ícono se lee, y uno que pisa cuarenta, no.
+     */
+    areaSolapada(rect, filtro = null) {
+      let area = 0;
+      const vistos = new Set();
+      for (const k of cubosDe(rect)) {
+        for (const otro of cubos.get(k) || []) {
+          if (vistos.has(otro)) continue;
+          vistos.add(otro);
+          if (filtro && !filtro(otro)) continue;
+          const dx = Math.min(rect.x + rect.ancho, otro.x + otro.ancho) - Math.max(rect.x, otro.x);
+          const dy = Math.min(rect.y + rect.alto, otro.y + otro.alto) - Math.max(rect.y, otro.y);
+          if (dx > 0 && dy > 0) area += dx * dy;
+        }
+      }
+      return area;
+    },
+
     /** Todos los rectángulos guardados, para el informe y las comprobaciones. */
     lista: () => todos,
     tamano: () => todos.length,

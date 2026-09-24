@@ -16,10 +16,16 @@
  * recuadro que hay que ir a buscar al mapa para saber de dónde sale no es un zoom: es
  * otro mapa suelto. Ahora dice «Cusco» y dentro sólo hay provincias de Cusco.
  *
- * QUÉ TROZO DEL DEPARTAMENTO. El del conglomerado que se estorba, no el departamento
- * entero: Cusco ocupa 154 × 185 mm en un A1 y el mayor hueco libre de la lámina son
- * 151 × 180, así que ampliarlo completo daría el mismo dibujo a la misma escala. El
- * rectángulo de referencia sobre el mapa principal dice qué trozo se ha ampliado.
+ * QUÉ TROZO DE LA ZONA. La zona entera siempre que quepa ampliada. Cuando no cabe, en
+ * automático se repliega a su núcleo —las provincias que concentran los servicios— y lo
+ * dice en el informe; en manual se dibuja entera igual, porque esa decisión ya la ha
+ * tomado una persona. El rectángulo de referencia sobre el mapa principal dice siempre
+ * qué trozo se ha ampliado de verdad.
+ *
+ * Que una zona no quepa es geometría, no una decisión: Cusco ocupa 154 × 185 mm en un A1
+ * y el mayor hueco libre de la lámina son 131 × 156. Y no se arregla con más papel,
+ * porque al agrandar la hoja crecen las dos cosas a la vez; se arregla GIRÁNDOLA, que es
+ * lo que dicen los avisos.
  *
  * CUÁNTO MIDE Y DÓNDE VA. No se coloca en un anclaje con tamaño fijo: cada recuadro le
  * pregunta a la rejilla de ocupación por el MAYOR HUECO LIBRE CON SU PROPORCIÓN. De ahí
@@ -49,6 +55,38 @@ export const UMBRAL_APINAMIENTO = 0.35;
 
 /** Por debajo de esta ampliación el recuadro repite el mapa en vez de ampliarlo. */
 export const AMPLIACION_MINIMA = 1.5;
+
+/**
+ * Listón más bajo para el encuadre que muestra la zona ENTERA.
+ *
+ * Enseñar la unidad completa vale por sí mismo: un recuadro titulado «Calca» que enseña
+ * Calca entera dice algo que uno que enseña dos tercios de Calca no dice, aunque
+ * amplíe algo menos. Por eso el encuadre completo se acepta con ×1,25 mientras que el
+ * recortado tiene que llegar a ×1,5 para justificar el recorte.
+ */
+export const AMPLIACION_ENTERA = 1.25;
+
+/**
+ * Qué hacer cuando una zona no cabe ampliada.
+ *
+ * NO es «usa una hoja mayor», aunque lo parezca. Medido departamento a departamento: al
+ * pasar de A4 a A0 en vertical, la zona y el hueco libre crecen a la vez y la ampliación
+ * se queda clavada en torno a ×1. Lo que abre sitio es girar la hoja: el Perú es alto y
+ * estrecho, así que en horizontal el marco se ensancha y deja un hueco grande a los lados.
+ * Cusco pasa de ×0,95 en A2 vertical a ×1,77 en A2 horizontal, con el mismo papel.
+ */
+function consejoDeEspacio(marco) {
+  if (marco.ancho <= marco.alto) {
+    return ' Prueba con la hoja horizontal: el Perú es alto y estrecho, así que girarla abre'
+      + ' un hueco libre mucho mayor que agrandarla.';
+  }
+  /* Ya está horizontal. Decir «gira la hoja» aquí sería un consejo imposible, y decir «usa
+     una hoja mayor» sería falso: de A2 a A0 la zona y el hueco crecen a la vez. Lo que
+     queda es la verdad, que es accionable de otra manera —imprimir ese departamento como
+     ámbito propio en vez de como recuadro del mapa nacional—. */
+  return ' Es demasiado grande respecto a la lámina para ampliarlo aquí, y cambiar de'
+    + ' tamaño de hoja no lo arregla: la zona y el hueco libre crecen a la vez.';
+}
 
 /** Por debajo de este lado el recuadro no aporta nada legible. */
 export const LADO_MINIMO_MM = 34;
@@ -90,17 +128,32 @@ export const LIMA_METROPOLITANA = '1501';
 export const CALLAO = '07';
 export const LIMA = '15';
 
-/** A qué zona ampliable pertenece una provincia, y cómo se llama esa zona. */
-export function zonaDe(ubigeo, nombreDepartamento) {
-  const ccdd = ubigeo.slice(0, 2);
-  if (ubigeo === LIMA_METROPOLITANA || ccdd === CALLAO) {
-    return { clave: 'lima-callao', nombre: 'Lima Metropolitana y Callao' };
+/**
+ * La zona es SIEMPRE el nivel inmediatamente superior a la unidad que se dibuja.
+ *
+ * En el mapa del país la unidad es la provincia y la zona el departamento; en el de un
+ * departamento la unidad es el distrito y la zona su provincia; en el de una provincia,
+ * la zona es el propio distrito. El ámbito lo declara en `plan.zonas` —cuántos dígitos
+ * del ubigeo forman la clave y cómo se llama cada una—, así que aquí no hay que saber
+ * en qué ámbito se está.
+ *
+ * El corte de Lima sólo se aplica cuando las zonas son departamentos: dentro de un mapa
+ * del departamento de Lima, «Lima Metropolitana» ya es una de sus provincias y partirla
+ * otra vez no significaría nada.
+ */
+export function zonaDe(ubigeo, def) {
+  if (def.limaAparte) {
+    const ccdd = ubigeo.slice(0, 2);
+    if (ubigeo === LIMA_METROPOLITANA || ccdd === CALLAO) {
+      return { clave: 'lima-callao', nombre: 'Lima Metropolitana y Callao' };
+    }
+    if (ccdd === LIMA) return { clave: 'lima-provincias', nombre: 'Lima provincias' };
   }
-  if (ccdd === LIMA) return { clave: 'lima-provincias', nombre: 'Lima provincias' };
-  return { clave: ccdd, nombre: nombreDepartamento || `Departamento ${ccdd}` };
+  const clave = ubigeo.slice(0, def.longitud);
+  return { clave, nombre: def.nombres.get(clave) || clave };
 }
 
-/** ¿Esta provincia pertenece a esa zona? */
+/** ¿Esta unidad pertenece a esa zona? */
 const enZona = (ubigeo, clave) => {
   if (clave === 'lima-callao') return ubigeo === LIMA_METROPOLITANA || ubigeo.startsWith(CALLAO);
   if (clave === 'lima-provincias') return ubigeo.startsWith(LIMA) && ubigeo !== LIMA_METROPOLITANA;
@@ -112,18 +165,18 @@ const enZona = (ubigeo, clave) => {
  *
  * @param {Array} grupos      grupos de íconos ya medidos (con su apiñamiento)
  * @param {number} umbral     por encima de esta fracción pisada, la provincia pide zoom
- * @param {object} provincias colección de rasgos de provincia
+ * @param {object} unidades   colección de rasgos de la unidad que se dibuja
  * @param {Map} anillos       geometría proyectada por rasgo
- * @param {Map} nombresDep    ccdd → nombre del departamento
+ * @param {object} zonas      {longitud, nombres, limaAparte} que declara el ámbito
  * @param {number} margenMm   aire alrededor de la zona en el mapa principal
  */
-export function zonasAmpliables({ agregado, grupos, provincias, anillos, nombresDep, margenMm }) {
-  const apinamientoDe = new Map(grupos.map((g) => [g.ccpp, g.apinamiento]));
+export function zonasAmpliables({ agregado, grupos, unidades, anillos, zonas: def, margenMm }) {
+  const apinamientoDe = new Map(grupos.map((g) => [g.unidad, g.apinamiento]));
   const zonas = new Map();
 
-  for (const f of provincias.features) {
+  for (const f of unidades.features) {
     const ubigeo = f.properties.ubigeo;
-    const z = zonaDe(ubigeo, nombresDep.get(ubigeo.slice(0, 2)));
+    const z = zonaDe(ubigeo, def);
     let zona = zonas.get(z.clave);
     if (!zona) {
       zona = {
@@ -137,7 +190,7 @@ export function zonasAmpliables({ agregado, grupos, provincias, anillos, nombres
       };
       zonas.set(z.clave, zona);
     }
-    const datos = agregado.porProvincia.get(ubigeo);
+    const datos = agregado.porUnidad.get(ubigeo);
     zona.servicios += datos ? datos.total : 0;
     zona.servicioPor.set(ubigeo, datos ? datos.total : 0);
     const apinamiento = apinamientoDe.get(ubigeo) || 0;
@@ -246,10 +299,10 @@ function cajaDelNucleo(zona, anillos, margenMm) {
  * lógica que el que habría salido solo. Admite ubigeos de provincia o de departamento;
  * seleccionar «08» y seleccionar sus catorce provincias dan lo mismo.
  */
-function regionesManuales({ seleccion, agregado, provincias, anillos, nombresDep, margenMm }) {
+function regionesManuales({ seleccion, agregado, unidades, anillos, zonas: def, margenMm }) {
   const pedidas = new Set(seleccion.map(String));
   const coincide = (ubigeo) => pedidas.has(ubigeo) || pedidas.has(ubigeo.slice(0, 2));
-  const elegidas = provincias.features.filter((f) => coincide(f.properties.ubigeo));
+  const elegidas = unidades.features.filter((f) => coincide(f.properties.ubigeo));
   if (!elegidas.length) return [];
 
   /* A mano se amplía LO SELECCIONADO, no el departamento entero al que pertenece:
@@ -258,7 +311,7 @@ function regionesManuales({ seleccion, agregado, provincias, anillos, nombresDep
   const porZona = new Map();
   for (const f of elegidas) {
     const ubigeo = f.properties.ubigeo;
-    const z = zonaDe(ubigeo, nombresDep.get(ubigeo.slice(0, 2)));
+    const z = zonaDe(ubigeo, def);
     let zona = porZona.get(z.clave);
     if (!zona) {
       zona = {
@@ -267,7 +320,7 @@ function regionesManuales({ seleccion, agregado, provincias, anillos, nombresDep
       };
       porZona.set(z.clave, zona);
     }
-    const datos = agregado.porProvincia.get(ubigeo);
+    const datos = agregado.porUnidad.get(ubigeo);
     zona.servicios += datos ? datos.total : 0;
     zona.miembros.push(f);
   }
@@ -299,12 +352,10 @@ function regionesManuales({ seleccion, agregado, provincias, anillos, nombresDep
  * @returns {{colocados, referencias, regiones, avisos, capacidad}}
  */
 export function construirRecuadros({
-  modo = 'auto', seleccion = [], grupos, umbral, provincias, departamentos, anillos, agregado,
+  modo = 'auto', seleccion = [], grupos, umbral, unidades, zonas, anillos, agregado,
   clases, rampa, iconos, medidor, factor, tamanoIcono, marco, ocupacion, maximo,
+  modoSimbolos = 'agregado', centros = [],
 }) {
-  const nombresDep = new Map(
-    (departamentos?.features || []).map((f) => [f.properties.ubigeo, f.properties.nombre]),
-  );
   const tope = maximo ?? maximoPorFormato(factor);
   const vacio = {
     colocados: [],
@@ -315,10 +366,13 @@ export function construirRecuadros({
   };
   if (modo === 'ninguno') return vacio;
 
+  /* Ver el comentario del umbral más abajo: en manual no hay mínimo. */
+  const minimoAmpliacion = modo === 'manual' ? 0 : AMPLIACION_MINIMA;
+
   const margen = tamanoIcono * 0.8;
   const candidatas = modo === 'manual'
-    ? regionesManuales({ seleccion, agregado, provincias, anillos, nombresDep, margenMm: margen })
-    : zonasAmpliables({ agregado, grupos, provincias, anillos, nombresDep, margenMm: margen });
+    ? regionesManuales({ seleccion, agregado, unidades, anillos, zonas, margenMm: margen })
+    : zonasAmpliables({ agregado, grupos, unidades, anillos, zonas, margenMm: margen });
   if (!candidatas.length) return vacio;
 
   const eTitulo = { familia: 'Poppins', variante: 'SemiBold', pt: 7 * Math.sqrt(factor) };
@@ -341,11 +395,20 @@ export function construirRecuadros({
        tomaban todas las que tocaban el rectángulo, y un recuadro de Áncash acababa
        enseñando también provincias de La Libertad y de Huánuco: al mirarlo no se sabía
        dónde empieza y acaba lo que se amplía. */
-    const miembros = zona.miembros.filter((f) => {
+    const tocaElEncuadre = (f) => {
       const c = cajaDe(anillos.get(f));
       return c && rectangulo.seSolapan(caja, c);
-    });
+    };
+    let miembros = zona.miembros.filter(tocaElEncuadre);
     if (!miembros.length) return null;
+
+    /* Una zona de una sola unidad no sitúa nada: el recuadro sale con un distrito
+       flotando sobre el fondo y sólo el rectángulo rojo dice dónde está. En ese caso se
+       añaden las unidades vecinas del MISMO ámbito, que es lo que da el contexto sin
+       cruzar ninguna división que el título prometa: en un mapa de la provincia de Lima
+       todo lo que entre sigue siendo la provincia de Lima. Pasa en el ámbito
+       provincial, donde la zona es el propio distrito. */
+    if (miembros.length === 1) miembros = unidades.features.filter(tocaElEncuadre);
 
     const sub = { type: 'FeatureCollection', features: miembros };
     const [[lon0, lat0], [lon1, lat1]] = geoBounds(sub);
@@ -364,20 +427,57 @@ export function construirRecuadros({
     const aspectoDe = (alturaMapa) => (alturaMapa * proporcionZona + borde * 2)
       / (alturaMapa + cabecera + borde * 2);
 
+    /* El recuadro se busca primero del LADO en el que está la zona, y sólo si ahí no
+       cabe se admite el resto de la lámina.
+
+       Un recuadro de Lima Metropolitana en el flanco derecho y otro de Cusco en el
+       izquierdo obligan a cruzar la lámina entera para ir del rectángulo rojo a su
+       ampliación, y con dos o más recuadros hay que compararlos para saber cuál es
+       cuál. Puestos cada uno de su lado, la línea entre el sitio y su detalle es corta
+       y evidente. Se compara el centro de la zona con el del marco: al oeste del
+       meridiano del marco, mitad izquierda; al este, mitad derecha. */
+    const centroZona = caja.x + caja.ancho / 2;
+    const mitad = centroZona < marco.x + marco.ancho / 2
+      ? { x: marco.x, y: marco.y, ancho: marco.ancho * 0.55, alto: marco.alto }
+      : { x: marco.x + marco.ancho * 0.45, y: marco.y, ancho: marco.ancho * 0.55, alto: marco.alto };
+
+    const buscar = (region, altura) => mayorRectanguloLibre(ocupacion, {
+      aspecto: aspectoDe(altura),
+      region,
+      minLadoMm: LADO_MINIMO_MM,
+      maxLadoMm: ladoMaximo,
+    });
+
     let hueco = null;
     let altura = Math.max(LADO_MINIMO_MM, LADO_MINIMO_MM / Math.max(0.3, proporcionZona));
-    for (let pasada = 0; pasada < 2; pasada++) {
-      const encontrado = mayorRectanguloLibre(ocupacion, {
-        aspecto: aspectoDe(altura),
-        region: marco,
-        minLadoMm: LADO_MINIMO_MM,
-        maxLadoMm: ladoMaximo,
-      });
-      if (!encontrado) return null;
-      hueco = encontrado;
-      altura = encontrado.alto - AIRE_MM - cabecera - borde * 2;
-      if (altura <= 0) return null;
+    for (const region of [mitad, marco]) {
+      let candidato = null;
+      let alturaLocal = altura;
+      for (let pasada = 0; pasada < 2; pasada++) {
+        const encontrado = buscar(region, alturaLocal);
+        if (!encontrado) { candidato = null; break; }
+        candidato = encontrado;
+        alturaLocal = encontrado.alto - AIRE_MM - cabecera - borde * 2;
+        if (alturaLocal <= 0) { candidato = null; break; }
+      }
+      /* La mitad preferida sólo se acepta si el recuadro que sale de ella amplía de
+         verdad; si no, se vuelve a buscar en la lámina entera. Sin esta condición, un
+         hueco pequeño del lado bueno ganaba a uno grande del otro y la ampliación se
+         perdía por respetar una preferencia de colocación. */
+      if (!candidato) continue;
+      const anchoUtil = candidato.ancho - AIRE_MM - borde * 2;
+      const altoUtil = candidato.alto - AIRE_MM - cabecera - borde * 2;
+      const amplia = Math.min(anchoUtil / caja.ancho, altoUtil / caja.alto);
+      hueco = candidato;
+      /* Mismo listón que aplica después la decisión del encuadre: si no, la mitad
+         preferida se descartaba por no llegar a ×1,5 y el encuadre completo acababa
+         colocado al otro lado de la lámina pese a valer con ×1,25. */
+      const minimoAqui = caja === zona
+        ? Math.min(minimoAmpliacion, AMPLIACION_ENTERA) : minimoAmpliacion;
+      if (amplia >= minimoAqui || region === marco) break;
+      hueco = null;
     }
+    if (!hueco) return null;
 
     const ancho = hueco.ancho - AIRE_MM;
     const alto = hueco.alto - AIRE_MM;
@@ -389,7 +489,12 @@ export function construirRecuadros({
        mapa principal no es una ampliación: es el mismo dibujo dos veces, gastando un
        hueco que otra zona sí aprovecharía. */
     const ampliacion = Math.min(anchoMapa / caja.ancho, altoMapa / caja.alto);
-    return { miembros, sub, hueco, ancho, alto, anchoMapa, altoMapa, ampliacion };
+    /* Cuáles de los miembros SON la zona: los demás están de contexto. El recuadro se
+       titula con el nombre de la zona, así que hay que poder ver cuál es dentro. */
+    const protagonistas = new Set(
+      zona.miembros.map((f) => f.properties.ubigeo).filter((u) => miembros.some((m) => m.properties.ubigeo === u)),
+    );
+    return { miembros, protagonistas, sub, hueco, ancho, alto, anchoMapa, altoMapa, ampliacion };
   }
 
   const colocados = [];
@@ -404,12 +509,20 @@ export function construirRecuadros({
       break;
     }
 
-    /* Dos intentos de encuadre: el departamento ENTERO primero y, sólo si no cabe
-       ampliado, su núcleo. Así el recuadro de Cusco enseña Cusco entero siempre que
-       la hoja lo permita, y cuando no lo permite enseña la parte que concentra sus
-       servicios en vez de no enseñar nada. */
+    /* En AUTOMÁTICO se intentan dos encuadres: la zona entera primero y, si no cabe
+       ampliada, su núcleo. En MANUAL sólo el primero, porque ahí la decisión ya está
+       tomada: quien selecciona Cusco quiere Cusco, no la parte de Cusco que mejor le
+       venga al motor. */
     const intentos = [{ caja: region, parcial: false }];
-    if (region.nucleo && region.nucleo.ancho * region.nucleo.alto < region.ancho * region.alto * 0.8) {
+    /* El repliegue al núcleo hace falta en TODOS los niveles, no sólo con los
+       departamentos del mapa nacional. La zona siempre es grande respecto a lo que
+       retrata el mapa: en una lámina del departamento de Lima, la provincia de Lima
+       —que es la que tiene 134 de sus 155 servicios— ocupa 140 × 226 mm y el mayor
+       hueco libre son 147 × 248, o sea ×1,05. Sin repliegue, esa lámina se quedaba con
+       un solo recuadro, el de Barranca, que tiene cuatro servicios. */
+    if (modo !== 'manual'
+      && region.nucleo
+      && region.nucleo.ancho * region.nucleo.alto < region.ancho * region.alto * 0.8) {
       intentos.push({ caja: region.nucleo, parcial: true });
     }
 
@@ -419,23 +532,39 @@ export function construirRecuadros({
       const r = encajarEnHueco(intento.caja, region);
       if (!r) continue;
       mejor = Math.max(mejor, r.ampliacion);
-      if (r.ampliacion >= AMPLIACION_MINIMA) { encaje = { ...r, ...intento }; break; }
+      /* El encuadre completo pasa con un listón más bajo: enseñar la unidad entera
+         vale por sí mismo. Con el mismo listón para los dos, provincias que cabían
+         completas a ×1,3 se recortaban para ganar unas décimas. */
+      const minimo = intento.parcial ? minimoAmpliacion : Math.min(minimoAmpliacion, AMPLIACION_ENTERA);
+      /* El umbral es del modo automático, no del recuadro. Ahí el motor elige y no
+         debe gastar el mayor hueco de la lámina en algo que no amplía; cuando la
+         selección es de una persona, obedece y explica. Antes el umbral se aplicaba a
+         los dos, y seleccionar Cusco en una hoja vertical no dibujaba NADA. */
+      if (r.ampliacion >= minimo) { encaje = { ...r, ...intento }; break; }
     }
 
     if (!encaje) {
       avisos.push(mejor > 0
         ? `${region.nombre} no cabe ampliado en esta hoja: el mayor hueco libre lo`
-          + ` agrandaría ${mejor.toFixed(1)} veces. Usa una hoja mayor.`
+          + ` agrandaría ${mejor.toFixed(1)} veces.${consejoDeEspacio(marco)}`
         : `No queda hueco libre para ampliar ${region.nombre} sin tapar territorio peruano.`);
       continue;
     }
 
     const {
-      miembros, sub, hueco, ancho, alto, anchoMapa, altoMapa, ampliacion, parcial, caja,
+      miembros, protagonistas, sub, hueco, ancho, alto, anchoMapa, altoMapa,
+      ampliacion, parcial, caja,
     } = encaje;
     if (parcial) {
       avisos.push(`${region.nombre} no cabe entero en esta hoja; se amplía la parte que`
-        + ' concentra sus servicios. Usa una hoja mayor para verlo completo.');
+        + ` concentra sus servicios.${consejoDeEspacio(marco)}`);
+    }
+    /* En manual el recuadro se dibuja aunque apenas amplíe, porque se ha pedido. Lo que
+       no puede ocurrir es que se dibuje sin decir lo que es: a esta escala los símbolos
+       se estorban igual que en el mapa principal. */
+    if (modo === 'manual' && ampliacion < AMPLIACION_MINIMA) {
+      avisos.push(`${region.nombre} se amplía sólo ${ampliacion.toFixed(1)} veces en esta`
+        + ` hoja, así que sus símbolos se estorban casi igual que en el mapa.${consejoDeEspacio(marco)}`);
     }
 
     /* El recuadro se llama como la zona que amplía. «Zoom 1» no dice nada: obliga a
@@ -463,6 +592,7 @@ export function construirRecuadros({
         etiqueta,
         sub,
         miembros,
+        protagonistas,
         agregado,
         clases,
         rampa,
@@ -473,6 +603,8 @@ export function construirRecuadros({
         eCifra,
         medidor,
         factor,
+        modoSimbolos,
+        centros,
       }),
     });
     ocupacion.marcarBloque(rectangulo.expandir({ x, y, ancho, alto }, AIRE_MM / 2));
@@ -496,7 +628,7 @@ export function construirRecuadros({
 
     resumen.push({
       etiqueta,
-      provincias: miembros.length,
+      unidades: miembros.length,
       anchoMm: Number(ancho.toFixed(1)),
       altoMm: Number(alto.toFixed(1)),
       ampliacion: Number(ampliacion.toFixed(1)),
@@ -528,8 +660,8 @@ export function construirRecuadros({
 /** Dibuja un recuadro ya dimensionado. */
 function dibujarRecuadro({
   x, y, ancho, alto, anchoMapa, altoMapa, cabecera, borde, etiqueta,
-  sub, miembros, agregado, clases, rampa, iconos, tamanoIcono, altoCifra,
-  eTitulo, eCifra, medidor, factor,
+  sub, miembros, protagonistas, agregado, clases, rampa, iconos, tamanoIcono, altoCifra,
+  eTitulo, eCifra, medidor, factor, modoSimbolos = 'agregado', centros = [],
 }) {
   const marcoInterno = { x: x + borde, y: y + cabecera, ancho: anchoMapa, alto: altoMapa };
   const proy = crearProyeccion(sub, marcoInterno, 1.2);
@@ -537,15 +669,20 @@ function dibujarRecuadro({
   const idRecorte = `recorte-${etiqueta.replace(/\s+/g, '-').toLowerCase()}`;
 
   const relleno = miembros.map((f) => {
-    const datos = agregado.porProvincia.get(f.properties.ubigeo);
+    const datos = agregado.porUnidad.get(f.properties.ubigeo);
     const clase = claseDe(datos ? datos.tiposDistintos : 0, clases);
     return el('path', { d: ruta(f.geometry), fill: clase >= 0 ? rampa[clase] : color.sinDato });
   });
+  /* La unidad que da nombre al recuadro va con el trazo destacado y las que están de
+     contexto con el fino. Sin esa diferencia, un recuadro titulado «San Miguel» que
+     enseña cuatro distritos obliga a leer los nombres para saber cuál es el que se
+     amplía, y a ese tamaño los nombres son lo último que se mira. */
+  const esProtagonista = (f) => !protagonistas || protagonistas.has(f.properties.ubigeo);
   const limites = miembros.map((f) => el('path', {
     d: ruta(f.geometry),
     fill: 'none',
-    stroke: color.limiteProvincial,
-    'stroke-width': trazoMm.limiteProvincial,
+    stroke: esProtagonista(f) ? color.limiteProvincialDestacado : color.limiteProvincial,
+    'stroke-width': esProtagonista(f) ? trazoMm.limiteProvincialDestacado : trazoMm.limiteProvincial,
     'stroke-linejoin': 'round',
   }));
 
@@ -569,8 +706,39 @@ function dibujarRecuadro({
 
   const simbolos = [];
   const cajasSimbolos = [];
+
+  /* El recuadro dibuja LO MISMO que el mapa principal, sólo que más grande. Si el mapa
+     pinta cada centro en su sitio y el recuadro los agregara en un grupo con cifras, la
+     misma lámina estaría contando dos cosas distintas del mismo lugar y quien la mira
+     tendría que adivinar cuál vale. */
+  if (modoSimbolos === 'individual') {
+    const dentroDelRecuadro = (x, y) => x >= marcoInterno.x && x <= marcoInterno.x + marcoInterno.ancho
+      && y >= marcoInterno.y && y <= marcoInterno.y + marcoInterno.alto;
+    const enRecuadro = new Set(miembros.map((f) => f.properties.ubigeo));
+
+    for (const c of centros) {
+      if (!enRecuadro.has(c.ubigeo)) continue;
+      if (!Number.isFinite(c.lat) || !Number.isFinite(c.lon)) continue;
+      const punto = proy([c.lon, c.lat]);
+      if (!punto || !dentroDelRecuadro(punto[0], punto[1])) continue;
+      simbolos.push(dibujarIcono({
+        tipo: c.tipo,
+        x: punto[0],
+        y: punto[1],
+        tamanoMm: tamanoIcono,
+        color: iconos.tipos[c.tipo]?.color || color.tintaSuave,
+      }));
+      cajasSimbolos.push({
+        x: punto[0] - tamanoIcono / 2,
+        y: punto[1] - tamanoIcono,
+        ancho: tamanoIcono,
+        alto: tamanoIcono,
+        etiqueta: `símbolos ${c.nombre}`,
+      });
+    }
+  } else {
   for (const f of miembros) {
-    const datos = agregado.porProvincia.get(f.properties.ubigeo);
+    const datos = agregado.porUnidad.get(f.properties.ubigeo);
     const geo = geometria.get(f);
     if (!datos || !geo) continue;
     const centro = [geo.polos[0].x, geo.polos[0].y];
@@ -606,6 +774,7 @@ function dibujarRecuadro({
         'font-weight': 600,
       }, { colorHalo: color.halo, grosorMm: trazoMm.haloRotulo * factor * 0.7 }));
     });
+  }
   }
 
   /* Las provincias se rotulan DENTRO del recuadro. Son justamente las que el mapa

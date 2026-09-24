@@ -14,12 +14,12 @@ import './estilo/app.css';
 import { aplicarVariablesCss } from './estilo/tokens.js';
 import { crearHoja } from './motor/hoja.js';
 import { crearCargador, lectorNavegador } from './motor/cargador.js';
-import { componerNacional } from './motor/render.js';
+import { componer } from './motor/render.js';
 import { aPdf, lectorTtfNavegador } from './motor/pdf.js';
 import { crearPanel } from './ui/panel.js';
 import { crearVista } from './ui/vista.js';
 import {
-  desdeParametros, aParametros, aLlamadasDelMotor, nombreDeArchivo,
+  desdeParametros, aParametros, aLlamadasDelMotor, nombreDeArchivo, NOMBRE_NIVEL,
 } from './ui/config.js';
 
 const BASE = import.meta.env.BASE_URL;
@@ -49,13 +49,17 @@ async function arrancar() {
   for (const c of centros.centros) conteo.set(c.tipo, (conteo.get(c.tipo) || 0) + 1);
   const nombreDepartamento = new Map(centros.catalogo.departamentos.map((d) => [d.id, d.nombre]));
 
+  const porNombre = (a, b) => a.nombre.localeCompare(b.nombre, 'es');
   const catalogo = {
     tipos: [...conteo.keys()].sort((a, b) => conteo.get(b) - conteo.get(a) || a.localeCompare(b, 'es')),
     conteo,
+    departamentos: [...centros.catalogo.departamentos].sort(porNombre),
     provincias: centros.catalogo.provincias
       .map((p) => ({ ...p, departamento: nombreDepartamento.get(p.ccdd) || '' }))
-      .sort((a, b) => a.departamento.localeCompare(b.departamento, 'es')
-        || a.nombre.localeCompare(b.nombre, 'es')),
+      .sort((a, b) => a.departamento.localeCompare(b.departamento, 'es') || porNombre(a, b)),
+    /* Sólo los distritos CON algún centro: son los únicos que centros.json cataloga, y
+       también los únicos que tiene sentido ofrecer para ampliar. */
+    distritos: [...centros.catalogo.distritos].sort(porNombre),
   };
 
   const vista = crearVista({
@@ -79,14 +83,16 @@ async function arrancar() {
 
   /* ----------------------------- composición --------------------------- */
 
-  async function componer() {
+  /* Compone y muestra. Se llama «recomponer» y no «componer» porque el motor exporta
+     una función con ese nombre: llamarlas igual hacía que ésta se invocara a sí misma. */
+  async function recomponer() {
     componiendo = true;
     vista.ocupado(true);
     panel.progreso('Componiendo el mapa…', true);
     try {
       const hoja = crearHoja(config.hoja);
       const llamadas = aLlamadasDelMotor(config);
-      const { svg, meta } = await componerNacional({ hoja, cargador, ...llamadas.composicion });
+      const { svg, meta } = await componer({ hoja, cargador, ...llamadas.composicion });
       ultimo = { svg, meta, hoja, pdf: llamadas.pdf };
       vista.mostrar(svg, hoja);
       mostrarResumen(meta);
@@ -113,8 +119,8 @@ async function arrancar() {
   function programarComposicion() {
     clearTimeout(temporizador);
     temporizador = setTimeout(() => {
-      if (componiendo) pendiente = componer;
-      else componer();
+      if (componiendo) pendiente = recomponer;
+      else recomponer();
     }, 260);
   }
 
@@ -151,7 +157,7 @@ async function arrancar() {
       ['Detalle', `${meta.nivel} (±${{ bajo: 1200, medio: 300, alto: 40 }[meta.nivel]} m)`],
       ['Centros', `${meta.servicios.totalDibujado} en ${meta.servicios.tipos.length} tipos`],
       ['Rótulos', Object.entries(meta.etiquetas.porNivel)
-        .map(([n, v]) => `${n}s ${v.colocados}/${v.total}`).join(' · ') || '—'],
+        .map(([n, v]) => `${NOMBRE_NIVEL[n] || n} ${v.colocados}/${v.total}`).join(' · ') || '—'],
       ['Recuadros', meta.servicios.recuadros.length
         ? meta.servicios.recuadros.map((z) => z.etiqueta).join(', ') : 'ninguno'],
     ];
@@ -258,7 +264,7 @@ async function arrancar() {
   });
 
   document.body.classList.remove('cargando');
-  await componer();
+  await recomponer();
 }
 
 arrancar().catch((err) => {

@@ -9,10 +9,10 @@ No es una captura de pantalla ampliada: el PDF se construye a partir de la geome
 con las fuentes incrustadas, de modo que se puede imprimir en A0 sin que aparezca un
 solo píxel.
 
-> **Estado: Fase 5 — interfaz de configuración y vista previa.**
-> La página publicada ya compone mapas: se eligen hoja, textos, tipos de servicio,
-> capas y recuadros, se revisa el resultado en pantalla y se descarga el PDF. Faltan
-> los ámbitos departamental, provincial y distrital (Fases 6 y 7).
+> **Estado: Fase 6 — ámbitos departamental y provincial.**
+> Además del Perú entero se puede imprimir un departamento —coloreado por distrito— o
+> una provincia, con cada centro en su posición real. Falta el ámbito distrital con su
+> tabla de centros numerados (Fase 7).
 
 ## Puesta en marcha
 
@@ -241,6 +241,159 @@ hueco se dejan de dibujar, y eso es el máximo dinámico: A4 admite uno, A0 hast
 | A1 | 3 | 167 × 177 mm |
 | A0 | 4 | 337 × 351 mm |
 
+## Ámbitos: el país, un departamento, una provincia
+
+Un mapa del Perú, uno de Cusco y uno de la provincia de Lima no se diferencian sólo en
+el encuadre. Cambia la unidad que colorea el coropletas, cambia qué representa cada
+símbolo y cambian los nombres que se escriben. `src/motor/ambito.js` concentra esas tres
+decisiones y el resto del motor —proyección, layout, rótulos, recuadros— trabaja igual
+sea cual sea el ámbito. Que sea el mismo no es economía de código: es lo que garantiza
+que un mapa de Cusco se mida, se rotule y se imprima con el mismo criterio que el del
+país, y no con una variante que se le parezca.
+
+**Cada mapa se agrega un nivel por debajo del que retrata.** Es la regla que ordena
+todo lo demás, y es de lectura, no de implementación.
+
+| Ámbito | Coropletas y símbolos | Límite intermedio | Rótulos |
+|---|---|---|---|
+| Perú | por provincia | — | departamentos y provincias |
+| Departamento | por distrito | provincias | provincias y distritos |
+| Provincia | **cada centro en su sitio** | — | distritos |
+
+En ámbito provincial ya no se agrega nada. El mapa nacional responde «qué servicios
+llegan a esta provincia»; a escala de provincia esa pregunta ya está contestada y la que
+queda es «dónde está cada uno», que sólo se responde poniendo cada centro en su
+coordenada real. El ícono se ancla por su punta, como un alfiler, de modo que lo que
+señala es el punto y no el dibujo.
+
+Los recuadros de zoom dibujan **lo mismo** que el mapa principal: si éste pinta cada
+centro en su sitio, el recuadro también. Un zoom que agregara lo que el mapa desagrega
+estaría contando dos cosas distintas del mismo lugar en la misma lámina.
+
+### Lo que rodea al ámbito
+
+El territorio de alrededor se dibuja siempre, atenuado y con su nombre. Un departamento
+que acabara en su propio límite parecería una isla y nadie sabría por dónde se entra. Va
+en un gris algo más oscuro que un país vecino, para que no se confunda con el
+extranjero, y sin color de clase: ahí no se está midiendo nada, y pintarlo como si sí
+invitaría a compararlo con lo que el mapa sí mide.
+
+Eso cambia también qué puede tapar un bloque del layout. «Territorio» pasa a ser el
+**ámbito**, no todo el Perú: en un mapa de Cusco, poner la leyenda sobre Madre de Dios
+no le estorba a nadie, y prohibirlo dejaría la lámina sin ningún sitio donde colocarla.
+
+### El localizador
+
+Un mapa de la provincia de Yungay no dice dónde está Yungay: quien lo mira o ya lo sabe,
+o no tiene manera de averiguarlo, porque el encuadre ha eliminado justamente la
+referencia que haría falta. Por eso toda lámina de ámbito reducido lleva el Perú en
+miniatura, con el departamento teñido y el ámbito exacto en rojo encima. Con sólo el
+departamento, un mapa de Yungay y otro de todo Áncash llevarían el mismo localizador;
+con sólo la provincia, muchas son a ese tamaño una mancha de dos milímetros que no se
+encuentra. Los dos juntos dan la pieza del rompecabezas y, dentro de ella, el punto.
+
+Se dibuja con su propia proyección y con el contorno más ligero: a cuatro centímetros de
+ancho la diferencia entre niveles de detalle no se ve, y el pesado multiplicaría por
+veinte el tamaño del PDF.
+
+### Los recuadros de zoom, en cualquier ámbito
+
+La regla de los recuadros —uno por zona, nombrado, con las unidades de esa zona y nada
+más— se generaliza sin excepciones: **la zona es siempre el nivel inmediatamente
+superior a la unidad que se dibuja.**
+
+| Ámbito | Unidad | Zona ampliable | Ejemplo de título |
+|---|---|---|---|
+| Perú | provincia | departamento | «Cusco» |
+| Departamento | distrito | provincia | «Calca» |
+| Provincia | distrito | el propio distrito | «San Miguel» |
+
+Cada ámbito lo declara en una línea —cuántos dígitos del ubigeo forman la clave de la
+zona y cómo se llama cada una—, así que el módulo de recuadros no tiene que saber en
+qué ámbito está. El corte de Lima Metropolitana y Callao sólo se aplica cuando las
+zonas son departamentos: dentro de un mapa del departamento de Lima, «Lima
+Metropolitana» ya es una de sus provincias y partirla otra vez no significaría nada.
+
+### Girar la hoja, no agrandarla
+
+Cuando una zona no cabe ampliada, el consejo obvio —«usa una hoja mayor»— es falso, y
+medirlo lo deja claro. Cusco con el departamento entero:
+
+| | A4 v | A3 v | A2 v | A1 v | A0 v | A2 **horizontal** |
+|---|---|---|---|---|---|---|
+| Cusco mide | 53×63 | 76×91 | 108×130 | 154×185 | 218×262 mm | 75×89 mm |
+| Mayor hueco libre | 55×68 | 71×85 | 103×124 | 151×180 | 219×263 mm | 133×160 mm |
+| Ampliación | ×1,03 | ×0,93 | ×0,95 | ×0,98 | ×1,00 | **×1,77** |
+
+En vertical la zona y el hueco crecen **a la vez**, así que la proporción se queda
+clavada en torno a ×1 de A4 a A0: cambiar de tamaño no arregla nada. Lo que abre sitio
+es girar la hoja. El Perú es alto y estrecho; en horizontal el marco se ensancha, el país
+no, y aparece un hueco grande a los lados. Con el mismo papel, Cusco pasa de ×0,95 a
+×1,77. Los avisos lo dicen así.
+
+### En manual manda la selección
+
+El umbral de ampliación es del modo **automático**, donde el motor elige y no debe
+gastar el mayor hueco de la lámina en un recuadro que no amplía. Cuando la selección es
+de una persona, el motor obedece: dibuja la zona entera a la escala que toque y explica
+en el informe cuánto amplía en realidad. Antes el umbral se aplicaba a los dos casos, y
+seleccionar Cusco en una hoja vertical no dibujaba **nada**.
+
+Comprobado sobre los 25 departamentos, uno a uno, seleccionándolos a mano:
+
+- **25 de 25 se dibujan**, en las tres hojas probadas, y siempre completos.
+- **24 de 25 amplían ×1,5 o más en A2 horizontal.** La excepción es Loreto, que es casi un
+  tercio del país: ni girando ni agrandando la hoja cabe ampliado, y su aviso lo dice sin
+  ofrecer un remedio que no existe.
+- En A2 vertical, diez quedan por debajo de ×1,5 y se dibujan igual, con el aviso.
+
+### Cada recuadro, del lado donde está su zona
+
+El hueco se busca primero en la mitad de la lámina donde cae la zona, y sólo si ahí no
+cabe se admite el resto. Con «Lima Metropolitana y Callao» en el flanco derecho y
+«Cusco» en el izquierdo había que cruzar la lámina entera para ir de cada rectángulo
+rojo a su ampliación, y con dos o más recuadros tocaba compararlos para saber cuál era
+cuál. Cada uno de su lado, la línea entre el sitio y su detalle es corta y evidente.
+
+La preferencia cede si el hueco del lado bueno no amplía: un hueco pequeño del lado
+correcto no vale más que uno grande del otro.
+
+### La barra de escala se coloca antes que los recuadros
+
+Es pequeña y se acomoda en cualquier parte, así que parecía natural dejarla para el
+final. No lo es: en una Mercator transversa la escala crece al alejarse del meridiano
+central, de modo que una barra puesta en un flanco **mide algo distinto de lo que
+dice**. Cuando un recuadro le quitó el centro del ancho en A4 horizontal, la barra
+declaraba 500 km y cubría 489,6 — un 2,1 % de error en el único elemento de la lámina
+que sirve para medir. Un recuadro puede ir a cualquier hueco; la barra, no.
+
+### En el recuadro se ve cuál es la unidad que lo titula
+
+Los miembros que **son** la zona van con el trazo destacado y los que están de contexto
+con el fino. Sin esa diferencia, un recuadro titulado «San Miguel» que enseña cuatro
+distritos obliga a leer los nombres para saber cuál se amplía, y a ese tamaño los
+nombres son lo último que se mira.
+
+**Una zona de una sola unidad recibe contexto.** Pasa en el ámbito provincial, donde la
+zona es el propio distrito: el recuadro salía con un distrito flotando sobre el fondo y
+sólo el rectángulo rojo decía dónde estaba. Se le añaden las unidades vecinas del mismo
+ámbito, que es lo que sitúa sin cruzar ninguna división que el título prometa: en un
+mapa de la provincia de Lima, todo lo que entre sigue siendo la provincia de Lima.
+
+### En la interfaz
+
+El selector es encadenado —departamento y luego provincia— porque una lista plana de las
+196 provincias obligaría a buscar «Lima» entre tres entradas con ese nombre en
+departamentos distintos. Las zonas que se ofrecen para ampliar siguen al ámbito: en el
+nacional son provincias; en un departamento, sus provincias; en una provincia, sus
+distritos.
+
+En la URL el ámbito viaja como un ubigeo suelto (`?ambito=1501`), porque su longitud ya
+dice de qué nivel se trata. El subtítulo vacío significa **automático**: el campo enseña
+como marcador el texto que va a usarse («Departamento de Cusco»), de modo que no hay que
+adivinar, al cambiar de ámbito, si lo que hay escrito lo puso una persona o la
+aplicación.
+
 ## Los rótulos
 
 El problema no es escribir nombres: es decidir cuáles caben. Hay 25 departamentos y
@@ -258,8 +411,20 @@ dibujan por debajo: la cifra de sedes es un dato del mapa y el nombre casi siemp
 deduce de la posición.
 
 Se resuelve en dos pasadas. En la primera los íconos sí estorban, de modo que el nombre
-busca un hueco limpio dentro de su propia provincia; sólo si no encuentra ninguno se
-admite montarlo, que es preferible a omitirlo. La leyenda, los recuadros y la cabecera
+busca un hueco limpio dentro de su propia unidad; sólo si no encuentra ninguno se admite
+montarlo, que es preferible a omitirlo. Y en esa segunda pasada **no vale la primera
+posición que encaje**: se prueban todas y se elige la que menos tape. Valía la primera,
+que por el orden de búsqueda es la del polo, y el polo es justamente donde está el grupo
+de íconos; en un mapa provincial eso dejaba tapados tres de cada cinco nombres teniendo
+sitio mejor a un milímetro. Cada punto interior se prueba además a tres distancias
+crecientes, porque con una sola un nombre no lograba apartarse del grupo aunque su
+unidad tuviera sitio de sobra unos milímetros más allá.
+
+| | antes | ahora |
+|---|---|---|
+| Provincia de Lima en A2 | 59 % tapados | **15 %** |
+| Perú en A1 | 31 % | **16 %** |
+| Departamento de Cusco en A3 | 8 % | 10 % | La leyenda, los recuadros y la cabecera
 siguen siendo intocables: los símbolos no se sacan del índice de colisiones, se ignoran
 al preguntar.
 
