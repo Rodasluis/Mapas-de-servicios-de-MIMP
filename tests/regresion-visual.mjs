@@ -67,8 +67,27 @@ export const TOLERANCIA_CELDA = 6;
 const CARPETA = path.join(RAIZ, 'tests', 'referencias');
 const ARCHIVO = path.join(CARPETA, 'firmas.json');
 
-export const leerReferencias = () => (fs.existsSync(ARCHIVO)
-  ? JSON.parse(fs.readFileSync(ARCHIVO, 'utf8')) : { version: 1, firmas: {} });
+/**
+ * Las firmas se guardan en base64, no como listas de números.
+ *
+ * Son 4096 grises por lámina y quince láminas: en JSON indentado ocupaban medio mega y
+ * sesenta mil líneas, que nadie revisa de todas formas. En base64 son unos cinco
+ * kilobytes por lámina y una línea, y el diff dice lo único accionable —qué muestra
+ * cambió—; el QUÉ cambió lo enseña la imagen de diferencias, que para eso está.
+ */
+const aTexto = (firma) => Buffer.from(Uint8Array.from(firma)).toString('base64');
+const aFirma = (texto) => Array.from(Buffer.from(texto, 'base64'));
+
+export function leerReferencias() {
+  if (!fs.existsSync(ARCHIVO)) return { version: 1, firmas: {} };
+  const crudo = JSON.parse(fs.readFileSync(ARCHIVO, 'utf8'));
+  return {
+    ...crudo,
+    firmas: Object.fromEntries(
+      Object.entries(crudo.firmas || {}).map(([k, v]) => [k, typeof v === 'string' ? aFirma(v) : v]),
+    ),
+  };
+}
 
 /**
  * Rasteriza un PDF en el navegador y devuelve su firma.
@@ -168,7 +187,7 @@ export function escribirReferencias(firmas, meta) {
     ppp: PPP,
     /* Se guarda para qué versión de los datos se aprobaron: si cambia DATOS_TAG, las
        diferencias son esperables y hay que volver a aprobarlas, no investigarlas. */
-    firmas,
+    firmas: Object.fromEntries(Object.entries(firmas).map(([k, v]) => [k, aTexto(v)])),
   };
   fs.writeFileSync(ARCHIVO, `${JSON.stringify(contenido, null, 1)}\n`);
   return ARCHIVO;
