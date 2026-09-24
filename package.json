@@ -23,7 +23,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "muestras": "node scripts/muestras.mjs"
+    "muestras": "node scripts/muestras.mjs",
+    "qa": "node scripts/qa.mjs"
   },
   "dependencies": {
     "d3-geo": "^3.1.1",
@@ -34,6 +35,7 @@
   },
   "devDependencies": {
     "fflate": "^0.8.2",
+    "pdfjs-dist": "^4.10.38",
     "playwright": "^1.63.0",
     "polygon-clipping": "^0.15.7",
     "topojson-server": "^3.0.1",
