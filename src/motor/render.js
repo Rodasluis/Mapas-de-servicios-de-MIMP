@@ -200,7 +200,7 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     marco,
     ocupacion,
     margen: margenCabecera,
-    /* En apaisado el marco es mucho más ancho y la misma fracción daba un título
+    /* En horizontal el marco es mucho más ancho y la misma fracción daba un título
        larguísimo que llegaba a rozar el país. Se estrecha, con lo que gana líneas
        pero deja de invadir el mapa. */
     anchoMaximo: marco.ancho * (hoja.orientacion === 'horizontal' ? 0.24 : 0.38),
