@@ -9,10 +9,10 @@ No es una captura de pantalla ampliada: el PDF se construye a partir de la geome
 con las fuentes incrustadas, de modo que se puede imprimir en A0 sin que aparezca un
 solo píxel.
 
-> **Estado: Fase 6 — ámbitos departamental y provincial.**
-> Además del Perú entero se puede imprimir un departamento —coloreado por distrito— o
-> una provincia, con cada centro en su posición real. Falta el ámbito distrital con su
-> tabla de centros numerados (Fase 7).
+> **Estado: Fase 7 — ámbito distrital.**
+> Los cuatro ámbitos funcionan: Perú, departamento, provincia y distrito. El distrital
+> identifica cada centro con un número y una tabla de nombre, tipo y dirección. Falta el
+> control de calidad y el cierre (Fase 8).
 
 ## Puesta en marcha
 
@@ -259,6 +259,7 @@ todo lo demás, y es de lectura, no de implementación.
 | Perú | por provincia | — | departamentos y provincias |
 | Departamento | por distrito | provincias | provincias y distritos |
 | Provincia | **cada centro en su sitio** | — | distritos |
+| Distrito | **cada centro numerado**, sin coropletas | — | distritos vecinos |
 
 En ámbito provincial ya no se agrega nada. El mapa nacional responde «qué servicios
 llegan a esta provincia»; a escala de provincia esa pregunta ya está contestada y la que
@@ -395,6 +396,63 @@ dice de qué nivel se trata. El subtítulo vacío significa **automático**: el 
 como marcador el texto que va a usarse («Departamento de Cusco»), de modo que no hay que
 adivinar, al cambiar de ámbito, si lo que hay escrito lo puso una persona o la
 aplicación.
+
+## El ámbito distrital: cada centro identificado
+
+Es el único ámbito en el que el mapa no responde «dónde hay servicios» sino **cuáles
+son**, y eso no cabe en un ícono. Un pictograma sobre una manzana dice que ahí hay un
+Centro Emergencia Mujer; no dice cuál, ni en qué calle, ni si la coordenada es de fiar.
+
+Por eso la lámina se parte en dos mitades que se leen juntas: cada centro lleva un
+**número de referencia** junto a su ícono, y una tabla vectorial al margen lleva ese
+número, el nombre, el tipo y la dirección. La numeración se fija una sola vez, antes de
+dibujar nada, de modo que el número del mapa y el de la tabla no pueden discrepar.
+
+**No se colorea por clases.** El coropletas compara unidades entre sí y aquí sólo hay
+una: pintarla de un tono de la rampa invitaría a leer una intensidad que no significa
+nada. La leyenda se queda con los tipos de servicio y no anuncia una comparación que
+este mapa no hace.
+
+**Tampoco lleva recuadros de zoom**: la zona ampliable sería el propio distrito, así que
+el recuadro repetiría el mapa entero a su lado.
+
+### La tabla cede antes de mentir
+
+Compite por el sitio como cualquier otra pieza del layout: declara cuánto mide y el
+motor decide dónde va. Cuando no cabe entera, cede en este orden —cuerpo más pequeño,
+direcciones fuera, y sólo al final menos filas— y **en todos los casos lo declara**. Una
+tabla recortada en silencio obliga a contar los íconos del mapa para descubrir que
+faltan centros.
+
+### Coordenadas que el directorio no da por verificadas
+
+De los 704 centros publicados, 43 tienen la coordenada en otro distrito y 2 son
+referenciales. Un asterisco tras el número —en el mapa y en la tabla— los marca, y la
+tabla explica al pie qué significa. No es un adorno: quien vaya a esa dirección tiene
+que saber que el punto del mapa puede no ser exacto.
+
+### Un distrito sin centros también se imprime
+
+El mapa se genera igual, y su respuesta es **«Sin servicios del MIMP en el distrito»** en
+la cabecera de la tabla, seguida de los seis centros más cercanos con su distancia en
+línea recta desde el centro del distrito. La distancia se mide desde el centroide y no
+desde el borde: el borde daría metros para un centro al otro lado de la calle, que es
+cierto y no ayuda a nadie a decidir a dónde ir.
+
+Cuando esos centros quedan fuera del encuadre —lo normal: los más próximos a un distrito
+sin servicios suelen estar a veinte o treinta kilómetros y el encuadre mide diez—, la
+tabla lo dice. Un número de referencia que no está en el mapa es un cabo suelto.
+
+Los distritos se eligen desde la **cartografía**, no desde `centros.json`: el catálogo
+del buscador sólo lista los que tienen algún centro, y precisamente los que no lo tienen
+son los que necesitan este mapa. Se cargan por departamento y a demanda, porque los de
+los veinticinco departamentos juntos son varios megas que casi ninguna sesión necesita.
+
+### El localizador baja un nivel
+
+En los demás ámbitos enseña el Perú con el departamento teñido. Para un distrito eso no
+sirve: a escala de país es una mota de medio milímetro. El localizador distrital enseña
+el **departamento** con sus provincias, la provincia teñida y el distrito en rojo.
 
 ## Los rótulos
 

@@ -18,7 +18,7 @@
  * atenuados y con su nombre, que es como se resuelve en cualquier lámina impresa.
  */
 
-export const NIVELES = ['nacional', 'departamento', 'provincia'];
+export const NIVELES = ['nacional', 'departamento', 'provincia', 'distrito'];
 
 /** Ámbito por omisión: el país entero. */
 export const NACIONAL = { nivel: 'nacional', id: null };
@@ -36,6 +36,7 @@ export function normalizarAmbito(ambito) {
     if (!id || id.toLowerCase() === 'nacional' || id === 'pe') return { ...NACIONAL };
     if (id.length === 2) return { nivel: 'departamento', id };
     if (id.length === 4) return { nivel: 'provincia', id };
+    if (id.length === 6) return { nivel: 'distrito', id };
     throw new Error(`Ubigeo de ámbito no reconocido: «${ambito}».`);
   }
   const nivel = ambito.nivel || 'nacional';
@@ -63,8 +64,15 @@ export async function encajeDeTanteo(ambito, cargador) {
     const todos = await cargador.departamentos('bajo');
     return soloRasgos(todos, (f) => f.properties.ubigeo === id, `departamento ${id}`);
   }
-  const provincias = await cargador.provinciasDe(departamentoDe(ambito), 'bajo');
-  return soloRasgos(provincias, (f) => f.properties.ubigeo === id, `provincia ${id}`);
+  if (nivel === 'provincia') {
+    const provincias = await cargador.provinciasDe(departamentoDe(ambito), 'bajo');
+    return soloRasgos(provincias, (f) => f.properties.ubigeo === id, `provincia ${id}`);
+  }
+  /* Un distrito es tan pequeño que el nivel ligero ya no lo describe: a esa escala su
+     contorno son cuatro vértices y el encaje saldría torcido. Se tantea con el alto,
+     que es además el que se va a dibujar. */
+  const distritos = await cargador.distritosDe(departamentoDe(ambito), 'alto');
+  return soloRasgos(distritos, (f) => f.properties.ubigeo === id, `distrito ${id}`);
 }
 
 /**
@@ -85,7 +93,8 @@ export async function encajeDeTanteo(ambito, cargador) {
 export async function cargarAmbito({ ambito, cargador, nivel }) {
   if (ambito.nivel === 'nacional') return cargarNacional({ cargador, nivel });
   if (ambito.nivel === 'departamento') return cargarDepartamento({ ambito, cargador, nivel });
-  return cargarProvincia({ ambito, cargador, nivel });
+  if (ambito.nivel === 'provincia') return cargarProvincia({ ambito, cargador, nivel });
+  return cargarDistrito({ ambito, cargador, nivel });
 }
 
 /* ------------------------------- nacional -------------------------------- */
@@ -101,6 +110,7 @@ async function cargarNacional({ cargador, nivel }) {
   return {
     nombre: 'Perú',
     descripcion: 'Ámbito nacional',
+    jerarquia: '',
     unidades: provincias,
     intermedios: coleccion([]),
     contorno: departamentos,
@@ -143,6 +153,7 @@ async function cargarDepartamento({ ambito, cargador, nivel }) {
   return {
     nombre: propio.properties.nombre,
     descripcion: `Departamento de ${propio.properties.nombre}`,
+    jerarquia: '',
     unidades: distritos,
     intermedios: provincias,
     contorno: coleccion([propio]),
@@ -192,6 +203,7 @@ async function cargarProvincia({ ambito, cargador, nivel }) {
   const propia = provincias.features.find((f) => f.properties.ubigeo === ccpp);
   if (!propia) throw new Error(`No hay geometría de la provincia ${ccpp}.`);
 
+  const departamento = departamentos.features.find((f) => f.properties.ubigeo === ccdd);
   const dentro = distritos.features.filter((f) => f.properties.ubigeo.startsWith(ccpp));
   const fuera = distritos.features.filter((f) => !f.properties.ubigeo.startsWith(ccpp));
 
@@ -204,6 +216,7 @@ async function cargarProvincia({ ambito, cargador, nivel }) {
   return {
     nombre: propia.properties.nombre,
     descripcion: `Provincia de ${propia.properties.nombre}`,
+    jerarquia: departamento ? `Departamento de ${departamento.properties.nombre}` : '',
     unidades: coleccion(dentro),
     intermedios: coleccion([]),
     contorno: coleccion([propia]),
@@ -218,6 +231,67 @@ async function cargarProvincia({ ambito, cargador, nivel }) {
     rotulos: [
       { nivel: 'distrito', rasgos: dentro, prioridad: 1, mayusculas: false },
       { nivel: 'exterior', rasgos: fuera, prioridad: 3, mayusculas: false, exterior: true },
+    ],
+  };
+}
+
+/* -------------------------------- distrito ------------------------------- */
+
+/**
+ * Un distrito: todos sus centros identificados uno a uno.
+ *
+ * Es el único ámbito en el que el mapa no responde «dónde hay servicios» sino «cuáles
+ * son». A esta escala caben los dos datos que faltaban —el nombre y la dirección de
+ * cada centro—, y por eso la lámina lleva una tabla: un ícono sobre una manzana dice
+ * que ahí hay un CEM, pero no cuál ni en qué calle.
+ *
+ * No se colorea por clases. La coropleta compara unidades entre sí y aquí sólo hay una:
+ * pintarla de un tono de la rampa invitaría a leer una intensidad que no significa nada.
+ */
+async function cargarDistrito({ ambito, cargador, nivel }) {
+  const ubigeo = ambito.id;
+  const ccpp = ubigeo.slice(0, 4);
+  const ccdd = ubigeo.slice(0, 2);
+  const [distritos, provincias, departamentos] = await Promise.all([
+    cargador.distritosDe(ccdd, nivel),
+    cargador.provinciasDe(ccdd, nivel),
+    cargador.departamentos(nivel),
+  ]);
+  const propio = distritos.features.find((f) => f.properties.ubigeo === ubigeo);
+  if (!propio) throw new Error(`No hay geometría del distrito ${ubigeo}.`);
+  const provincia = provincias.features.find((f) => f.properties.ubigeo === ccpp);
+  const departamento = departamentos.features.find((f) => f.properties.ubigeo === ccdd);
+
+  const vecinos = distritos.features.filter((f) => f.properties.ubigeo !== ubigeo);
+  const otrosDepartamentos = departamentos.features.filter((f) => f.properties.ubigeo !== ccdd);
+
+  return {
+    nombre: propio.properties.nombre,
+    descripcion: `Distrito de ${propio.properties.nombre}`,
+    jerarquia: [
+      provincia && `Provincia de ${provincia.properties.nombre}`,
+      departamento && `Departamento de ${departamento.properties.nombre}`,
+    ].filter(Boolean).join(' · '),
+    unidades: coleccion([propio]),
+    intermedios: coleccion([]),
+    contorno: coleccion([propio]),
+    exterior: coleccion([...otrosDepartamentos, ...vecinos]),
+    encaje: coleccion([propio]),
+    /* Sin recuadros de zoom: la zona sería el propio distrito, así que el «recuadro»
+       repetiría el mapa entero a su lado. */
+    zonas: null,
+    coropleta: false,
+    trazos: { unidad: 'limiteNacional', intermedio: null, contorno: 'limiteNacional' },
+    agregacion: 'distrito',
+    simbolos: 'numerado',
+    claveCentro: (c) => c.ubigeo,
+    perteneceAlAmbito: (c) => c.ubigeo === ubigeo,
+    rotulos: [
+      /* El propio distrito lleva su nombre sobre el mapa, con prioridad máxima: el
+         título lo dice, pero sobre la lámina hay que poder señalar cuál de las áreas
+         blancas es la que se está retratando sin volver a leer la cabecera. */
+      { nivel: 'provincia', rasgos: [propio], prioridad: 1, mayusculas: true },
+      { nivel: 'exterior', rasgos: vecinos, prioridad: 2, mayusculas: false, exterior: true },
     ],
   };
 }

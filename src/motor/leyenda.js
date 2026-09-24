@@ -89,7 +89,7 @@ export function bloqueLeyenda({
       anchoColumna,
       ancho: relleno * 2 + Math.max(anchoColumna * columnas, anchoClases),
       alto: relleno * 2 + altoTituloBloque + filasTipos * altoFila
-        + altoSubBloque + clasesUsadas.length * altoFilaClase,
+        + (clasesUsadas.length ? altoSubBloque + clasesUsadas.length * altoFilaClase : 0),
     };
   };
 
@@ -150,11 +150,16 @@ export function bloqueLeyenda({
       });
 
       cursor += filasTipos * altoFila + altoSubBloque * 0.22;
-      piezas.push(texto(tituloClases, {
-        x: x + relleno, y: cursor + medidor.ascenso(eSub), fill: color.tinta,
-        'font-family': eSub.familia, 'font-size': ptAmm(eSub.pt), 'font-weight': 600,
-      }));
-      cursor += altoSubBloque;
+      /* Sin clases que mostrar no se escribe ni el título del bloque: en un mapa de un
+         solo distrito, «Presencia de servicios por distrito» anuncia una comparación
+         que no existe, porque no hay con qué comparar. */
+      if (clasesUsadas.length) {
+        piezas.push(texto(tituloClases, {
+          x: x + relleno, y: cursor + medidor.ascenso(eSub), fill: color.tinta,
+          'font-family': eSub.familia, 'font-size': ptAmm(eSub.pt), 'font-weight': 600,
+        }));
+        cursor += altoSubBloque;
+      }
 
       clasesUsadas.forEach((indice, k) => {
         const cy = cursor + k * altoFilaClase;

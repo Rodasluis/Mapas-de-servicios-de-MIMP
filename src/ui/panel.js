@@ -73,6 +73,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   }
 
   const selProvincia = el('select', { id: 'ambito-provincia' });
+  const selDistrito = el('select', { id: 'ambito-distrito' });
 
   const llenarProvincias = (ccdd, elegida) => {
     selProvincia.innerHTML = '';
@@ -84,20 +85,41 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     selProvincia.disabled = !ccdd;
   };
 
+  /* Los distritos salen de la CARTOGRAFÍA, no de centros.json. El catálogo del buscador
+     sólo lista los que tienen algún centro, y un distrito sin servicios también se
+     puede imprimir: su mapa dice que no hay ninguno y ofrece los más cercanos. */
+  const llenarDistritos = (ccpp, elegido) => {
+    selDistrito.innerHTML = '';
+    selDistrito.appendChild(el('option', { value: '', texto: ccpp ? 'Toda la provincia' : '—' }));
+    for (const d of (catalogo.distritosDe ? catalogo.distritosDe(ccpp) : [])) {
+      selDistrito.appendChild(el('option', { value: d.id, texto: d.nombre }));
+    }
+    selDistrito.value = elegido || '';
+    selDistrito.disabled = !ccpp;
+  };
+
   const ambitoActual = () => {
     if (!selDepartamento.value) return { nivel: 'nacional', id: null };
     if (!selProvincia.value) return { nivel: 'departamento', id: selDepartamento.value };
-    return { nivel: 'provincia', id: selProvincia.value };
+    if (!selDistrito.value) return { nivel: 'provincia', id: selProvincia.value };
+    return { nivel: 'distrito', id: selDistrito.value };
   };
 
   const departamentoInicial = config.ambito.id ? config.ambito.id.slice(0, 2) : '';
+  const provinciaInicial = config.ambito.id && config.ambito.id.length >= 4
+    ? config.ambito.id.slice(0, 4) : '';
   selDepartamento.value = departamentoInicial;
-  llenarProvincias(departamentoInicial, config.ambito.nivel === 'provincia' ? config.ambito.id : '');
+  llenarProvincias(departamentoInicial, provinciaInicial);
+  llenarDistritos(provinciaInicial, config.ambito.nivel === 'distrito' ? config.ambito.id : '');
 
   /* Nombre del ámbito, para el subtítulo. */
   const nombreDeAmbito = (a) => {
     if (a.nivel === 'departamento') return (catalogo.departamentos.find((d) => d.id === a.id) || {}).nombre || '';
     if (a.nivel === 'provincia') return (catalogo.provincias.find((p) => p.id === a.id) || {}).nombre || '';
+    if (a.nivel === 'distrito') {
+      const lista = catalogo.distritosDe ? catalogo.distritosDe(a.id.slice(0, 4)) : [];
+      return (lista.find((d) => d.id === a.id) || {}).nombre || '';
+    }
     return '';
   };
 
@@ -118,9 +140,14 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   };
   selDepartamento.addEventListener('change', () => {
     llenarProvincias(selDepartamento.value, '');
+    llenarDistritos('', '');
     alCambiarAmbito();
   });
-  selProvincia.addEventListener('change', alCambiarAmbito);
+  selProvincia.addEventListener('change', () => {
+    llenarDistritos(selProvincia.value, '');
+    alCambiarAmbito();
+  });
+  selDistrito.addEventListener('change', alCambiarAmbito);
 
   const bloqueHoja = grupo('Hoja y ámbito', [
     el('p', { clase: 'campo' }, [el('label', { for: 'tamano', texto: 'Tamaño' }), selTamano]),
@@ -131,7 +158,9 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     el('p', { clase: 'campo' }, [
       el('label', { for: 'ambito-provincia', texto: 'Provincia' }), selProvincia,
     ]),
-    el('p', { clase: 'nota', texto: 'El ámbito distrital llega en la Fase 7.' }),
+    el('p', { clase: 'campo' }, [
+      el('label', { for: 'ambito-distrito', texto: 'Distrito' }), selDistrito,
+    ]),
   ]);
 
   /* ------------------------------ textos ------------------------------- */
@@ -235,7 +264,13 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     if (a.nivel === 'departamento') {
       return catalogo.provincias.filter((p) => p.ccdd === a.id).map((p) => ({ id: p.id, texto: p.nombre }));
     }
-    return catalogo.distritos.filter((d) => d.ccpp === a.id).map((d) => ({ id: d.id, texto: d.nombre }));
+    if (a.nivel === 'provincia') {
+      return catalogo.distritos.filter((d) => d.ccpp === a.id).map((d) => ({ id: d.id, texto: d.nombre }));
+    }
+    // En el ámbito distrital no hay nada por debajo que ampliar.
+    if (a.nivel === 'distrito') return [];
+    // En el ámbito distrital no hay nada por debajo que ampliar.
+    return [];
   };
 
   const llenarZonas = () => {
@@ -295,6 +330,11 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   sincronizarSubtitulo();
 
   return {
+    /** Rehace la lista de distritos cuando su cartografía termina de cargarse. */
+    refrescarDistritos() {
+      llenarDistritos(selProvincia.value, config.ambito.nivel === 'distrito' ? config.ambito.id : '');
+    },
+
     /** Mensaje de estado del botón de generación. */
     progreso(texto, ocupado = false) {
       progreso.textContent = texto || '';

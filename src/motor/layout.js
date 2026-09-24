@@ -138,6 +138,7 @@ export const PLANTILLAS = {
     escala: ['abajo-derecha', 'abajo-izquierda', 'abajo-centro'],
     leyenda: ['abajo-izquierda'],
     ubicacion: ['abajo-derecha', 'arriba-izquierda', 'centro-derecha'],
+    tabla: ['centro-derecha', 'abajo-derecha', 'centro-izquierda'],
   },
   horizontal: {
     institucional: ['arriba-izquierda'],
@@ -154,11 +155,12 @@ export const PLANTILLAS = {
     escala: ['abajo-centro', 'abajo-derecha', 'abajo-izquierda'],
     leyenda: ['abajo-izquierda'],
     ubicacion: ['abajo-derecha', 'arriba-izquierda', 'centro-derecha'],
+    tabla: ['centro-derecha', 'abajo-derecha', 'centro-izquierda'],
   },
 };
 
 /** Orden de prioridad: quien va antes elige sitio antes. */
-export const PRIORIDAD = ['titulo', 'institucional', 'leyenda', 'ubicacion', 'escala', 'norte'];
+export const PRIORIDAD = ['titulo', 'institucional', 'tabla', 'leyenda', 'ubicacion', 'escala', 'norte'];
 
 /** Piezas de cabecera: sitio fijo y margen propio. */
 export const CABECERA = ['titulo', 'institucional'];
@@ -190,4 +192,6 @@ export const SITIO_FIJO = [...CABECERA, 'leyenda'];
    A4 horizontal, la barra declaraba 500 km y cubría 489,6: un 2,1 % de error en el
    único elemento del mapa que sirve para medir. Un recuadro puede ir a cualquier hueco;
    la barra, no. */
-export const ANTES_DE_ROTULOS = [...CABECERA, 'leyenda', 'ubicacion', 'escala'];
+/* La tabla entra con ellos: es la pieza más alta de la lámina distrital y si pidiera
+   sitio después de los rótulos, un topónimo podría dejarla sin el único hueco. */
+export const ANTES_DE_ROTULOS = [...CABECERA, 'tabla', 'leyenda', 'ubicacion', 'escala'];

@@ -17,7 +17,7 @@
  * Las capas se crean aunque queden vacías, cada una en su sitio del orden de dibujo,
  * para que las fases siguientes se limiten a rellenarlas sin recolocar nada.
  */
-import { geoPath, geoDistance } from 'd3-geo';
+import { geoPath, geoDistance, geoBounds as geoBoundsDe } from 'd3-geo';
 import { marcoDelMapa } from './hoja.js';
 import { crearProyeccion, medirEscala, nivelPara, crearRuta, RADIO_TERRESTRE_M } from './proyeccion.js';
 import { construirGrilla, anguloDelNorte } from './grilla.js';
@@ -38,6 +38,7 @@ import {
 import { normalizarAmbito, encajeDeTanteo, cargarAmbito } from './ambito.js';
 import { mapaDeUbicacion, resaltePara } from './localizador.js';
 import { bloqueLeyenda } from './leyenda.js';
+import { bloqueTabla, numeroDeCentro, esDudosa } from './tabla.js';
 import { construirRecuadros, maximoPorFormato, UMBRAL_APINAMIENTO } from './zoom.js';
 import { dibujarIcono, comprobarCobertura } from '../iconos/index.js';
 import { poloDeInaccesibilidad, polosDeInaccesibilidad, puntoEnAnillos } from './ocupacion.js';
@@ -67,6 +68,7 @@ export const PIEZAS_POR_DEFECTO = {
   escala: true,
   norte: true,
   ubicacion: true,
+  tabla: true,
 };
 
 export const CAPAS = [
@@ -194,15 +196,44 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
      hace falta un recuadro de zoom. */
   const tamanoIcono = Math.min(6, Math.max(3, 3.4 * Math.sqrt(factor)));
   const vacioSimbolos = { svg: '', grupos: [], apinados: [], apinamientoMaximoPct: 0 };
+  /* En el ámbito distrital cada centro lleva además un número, que es lo que lo une
+     con su fila de la tabla. La numeración se fija aquí, una sola vez, para que el
+     número del mapa y el de la tabla no puedan discrepar. */
+  /* Un distrito sin ningún centro no es un mapa en blanco: es una respuesta, y la
+     respuesta útil incluye a dónde hay que ir. Se listan los más cercanos de fuera con
+     su distancia en línea recta desde el centro del distrito. */
+  const sinServicios = plan.simbolos === 'numerado' && agregado.total === 0;
+  const cercanos = sinServicios
+    ? centrosMasCercanos({ centrosJson, plan, tiposActivos, cuantos: CERCANOS_A_LISTAR })
+    : [];
+
+  const listados = sinServicios ? cercanos.map((c) => c.centro) : agregado.centros;
+  const distanciaDe = new Map(cercanos.map((c) => [c.centro.id, c.km]));
+
+  const numerados = plan.simbolos === 'numerado'
+    ? [...listados]
+      .sort((a, b) => (sinServicios
+        ? (distanciaDe.get(a.id) - distanciaDe.get(b.id))
+        : a.nombre.localeCompare(b.nombre, 'es')) || a.id - b.id)
+      .map((centro, i) => ({ n: i + 1, centro, km: distanciaDe.get(centro.id) }))
+    : [];
+
   let simbolos = vacioSimbolos;
   if (capasVisibles.simbolos) {
-    simbolos = plan.simbolos === 'individual'
-      ? dibujarCentros({
+    if (plan.simbolos === 'numerado') {
+      simbolos = dibujarCentros({
+        centros: listados, proyeccion, iconos, marco, medidor, factor, tamanoIcono,
+        numeros: new Map(numerados.map((f) => [f.centro.id, f.n])),
+      });
+    } else if (plan.simbolos === 'individual') {
+      simbolos = dibujarCentros({
         centros: agregado.centros, proyeccion, iconos, marco, medidor, factor, tamanoIcono,
-      })
-      : dibujarSimbolos({
+      });
+    } else {
+      simbolos = dibujarSimbolos({
         unidades: plan.unidades, agregado, anillos, iconos, marco, medidor, factor, tamanoIcono,
       });
+    }
   }
 
   /* Los grupos de íconos se reservan en la rejilla antes de colocar nada del layout.
@@ -235,6 +266,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       /* El subtítulo dice de qué ámbito es el mapa cuando nadie lo ha escrito. Dejar
          «Ámbito nacional» en una lámina de Cusco sería peor que no poner nada. */
       subtitulo: textos.subtitulo ?? plan.descripcion,
+      jerarquia: textos.jerarquia ?? plan.jerarquia ?? '',
       periodo: textos.periodo ?? '',
     },
     medidor,
@@ -256,7 +288,9 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     leyenda: ajustarLeyenda({
       agregado,
       unidad: plan.agregacion,
-      clasesUsadas: clasesVisibles,
+      /* Sin coropleta no hay clases que explicar: la leyenda se queda con los tipos
+         de servicio y no anuncia una comparación que este mapa no hace. */
+      clasesUsadas: plan.coropleta === false ? [] : clasesVisibles,
       clases,
       iconos,
       medidor,
@@ -269,11 +303,18 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     /* El localizador sólo existe fuera del nacional: un mapa del Perú con una miniatura
        del Perú al lado no localiza nada. */
     ubicacion: elAmbito.nivel === 'nacional' ? null : mapaDeUbicacion({
-      pais: await cargador.departamentos('bajo'),
-      resaltar: resaltePara(elAmbito),
-      ambito: plan.contorno,
+      vistas: await vistasDeUbicacion({ ambito: elAmbito, cargador, plan }),
       factor,
     }),
+    /* La tabla sólo existe en el ámbito distrital, que es donde caben —y hacen falta—
+       el nombre y la dirección de cada centro. */
+    tabla: numerados.length ? ajustarTabla({
+      filas: numerados, medidor, factor, marco, sinServicios,
+      /* Cuáles de los listados se ven en el mapa. Los más cercanos a un distrito sin
+         servicios suelen estar a veinte o treinta kilómetros y el encuadre mide diez:
+         sus números no señalan nada, y la tabla tiene que decirlo. */
+      enElMapa: simbolos.dibujados || null,
+    }) : null,
   };
 
   const solicitud = (n) => ({
@@ -302,7 +343,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
      grande y con una forma concreta. No pasan por colocarPiezas porque eligen ellos
      mismos tamaño y ubicación. */
   const recuadros = construirRecuadros({
-    modo: opciones.zoom === false ? 'ninguno' : (opciones.zoom?.modo || 'auto'),
+    /* Un ámbito sin zonas declaradas —el distrital— no admite recuadros: la zona sería
+       el propio distrito y el «zoom» repetiría el mapa entero a su lado. */
+    modo: (opciones.zoom === false || !plan.zonas)
+      ? 'ninguno' : (opciones.zoom?.modo || 'auto'),
     seleccion: opciones.zoom?.seleccion || [],
     grupos: simbolos.grupos,
     umbral: UMBRAL_APINAMIENTO,
@@ -402,7 +446,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     contexto,
     ruta,
     marco,
-    conColor: capasVisibles.coropleta,
+    /* El ámbito distrital no colorea por clases: la coropleta compara unidades entre
+       sí y ahí sólo hay una, así que un tono de la rampa invitaría a leer una
+       intensidad que no significa nada. */
+    conColor: capasVisibles.coropleta && plan.coropleta !== false,
     grilla: dibujoGrilla.svgLineas,
     /* Dos capas distintas y a distinta altura: los nombres de departamento y provincia
        van bajo los símbolos, y los de contexto —países, mar, lagos— por encima de todo,
@@ -586,6 +633,86 @@ function ajustarLeyenda({ marco, ocupacion, ...resto }) {
     if (tapado <= TERRITORIO_TOLERADO_LEYENDA) break;
   }
   return mejor.pieza;
+}
+
+/**
+ * Tabla de centros, ajustada a lo que deja libre la lámina.
+ *
+ * Se le ofrece la franja más ancha que se puede reservar sin comerse el mapa, y ella
+ * decide cuerpo, columnas y cuántas filas caben. Si ni con el cuerpo menor cabe la
+ * lista entera, devuelve una tabla recortada que lo declara: el informe lo recoge y la
+ * interfaz lo avisa, porque una tabla incompleta sin avisar obliga a contar los íconos
+ * del mapa para descubrir que faltan.
+ */
+function ajustarTabla({ filas, medidor, factor, marco, sinServicios, enElMapa }) {
+  return bloqueTabla({
+    filas,
+    medidor,
+    factor,
+    sinServicios,
+    enElMapa,
+    anchoMm: marco.ancho * 0.36,
+    altoMaximoMm: marco.alto * 0.92,
+  });
+}
+
+/**
+ * Las miniaturas del localizador, de lo general a lo particular.
+ *
+ * Un departamento se sitúa con el Perú y basta. Una provincia o un distrito necesitan
+ * las dos: con sólo el país, una provincia es una mancha de dos milímetros y un
+ * distrito ni se ve; con sólo el departamento, se sabe en qué parte cae pero no en qué
+ * departamento. Puestas una al lado de la otra, la lectura va de fuera hacia dentro.
+ */
+async function vistasDeUbicacion({ ambito, cargador, plan }) {
+  const ccdd = ambito.id.slice(0, 2);
+  const departamentos = await cargador.departamentos('bajo');
+  const suDepartamento = {
+    type: 'FeatureCollection',
+    features: departamentos.features.filter((f) => f.properties.ubigeo === ccdd),
+  };
+  const nombreDep = suDepartamento.features[0]?.properties.nombre || '';
+
+  if (ambito.nivel === 'departamento') {
+    return [{ base: departamentos, ambito: plan.contorno, titulo: 'Perú' }];
+  }
+
+  return [
+    { base: departamentos, ambito: suDepartamento, titulo: 'Perú' },
+    {
+      base: await cargador.provinciasDe(ccdd, 'bajo'),
+      resaltar: resaltePara(ambito),
+      ambito: plan.contorno,
+      titulo: nombreDep,
+    },
+  ];
+}
+
+/** Cuántos centros de fuera se ofrecen cuando el distrito no tiene ninguno. */
+const CERCANOS_A_LISTAR = 6;
+
+/**
+ * Los centros más cercanos al ámbito, con su distancia en línea recta.
+ *
+ * Se mide desde el CENTROIDE del ámbito y no desde su borde: el borde daría distancias
+ * de unos metros para un centro al otro lado de la calle, que es cierto y no ayuda a
+ * nadie a decidir a dónde ir. Y en línea recta, no por carretera, que es lo único que
+ * este proyecto puede afirmar con los datos que tiene; el pie del mapa lo dice.
+ */
+function centrosMasCercanos({ centrosJson, plan, tiposActivos, cuantos }) {
+  const [[lon0, lat0], [lon1, lat1]] = geoBoundsDe(plan.encaje);
+  const centro = [(lon0 + lon1) / 2, (lat0 + lat1) / 2];
+
+  return centrosJson.centros
+    .filter((c) => (!tiposActivos || tiposActivos.has(c.tipo))
+      && Number.isFinite(c.lat) && Number.isFinite(c.lon)
+      && !plan.perteneceAlAmbito(c))
+    .map((c) => ({
+      centro: c,
+      km: (geoDistance(centro, [c.lon, c.lat]) * RADIO_TERRESTRE_M) / 1000,
+    }))
+    .sort((a, b) => a.km - b.km || a.centro.id - b.centro.id)
+    .slice(0, cuantos);
 }
 
 /** Cuánto territorio puede pisar la leyenda antes de que valga la pena encogerla. */
@@ -809,9 +936,13 @@ function dibujarSimbolos({
  * cada uno multiplicaría por cuatro la tinta sobre la misma superficie; la
  * identificación uno a uno es la tabla numerada de la Fase 7.
  */
-function dibujarCentros({ centros, proyeccion, iconos, marco, tamanoIcono }) {
+function dibujarCentros({
+  centros, proyeccion, iconos, marco, medidor, factor, tamanoIcono, numeros = null,
+}) {
   const piezas = [];
   const grupos = [];
+  const dibujados = new Set();
+  const eNumero = { familia: 'Poppins', variante: 'SemiBold', pt: 5.4 * Math.sqrt(factor) };
 
   /* Orden estable por id: dos ejecuciones dibujan los íconos en el mismo orden, que es
      lo que hace comparables dos PDF con la misma configuración. */
@@ -833,6 +964,19 @@ function dibujarCentros({ centros, proyeccion, iconos, marco, tamanoIcono }) {
       tamanoMm: tamanoIcono,
       color: iconos.tipos[c.tipo]?.color || color.tintaSuave,
     }));
+    dibujados.add(c.id);
+    if (numeros && numeros.has(c.id)) {
+      piezas.push(numeroDeCentro({
+        n: numeros.get(c.id),
+        x,
+        y,
+        tamanoMm: tamanoIcono,
+        medidor,
+        estilo: eNumero,
+        dudosa: esDudosa(c),
+      }));
+    }
+
     grupos.push({
       unidad: c.ubigeo,
       nombre: c.dist,
@@ -852,7 +996,7 @@ function dibujarCentros({ centros, proyeccion, iconos, marco, tamanoIcono }) {
 
   return {
     svg: piezas.join('\n'),
-    grupos: medidos,
+    grupos: medidos, dibujados,
     /* El apiñamiento se informa por DISTRITO, no centro a centro: «hay 14 centros que
        se pisan» no ayuda a decidir nada, y «se pisan en Breña» sí. */
     apinados: resumirApinadosPorUnidad(apinados),

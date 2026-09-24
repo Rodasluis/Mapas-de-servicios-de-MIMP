@@ -106,6 +106,11 @@ export function bloqueTitulo({ textos, medidor, factor, anchoMaximo, reduccion =
       .map((t) => ({ t, e: eTitulo, peso: 700, color: color.tinta })),
     ...(textos.subtitulo ? medidor.partir(textos.subtitulo, eSub, anchoTexto) : [])
       .map((t) => ({ t, e: eSub, peso: 600, color: color.tinta })),
+    /* La jerarquía territorial va en su propia línea y con menos peso: «Provincia de
+       Maynas» dice qué se está mirando y «Departamento de Loreto» dice dónde queda, que
+       son dos cosas distintas y se leen mejor separadas que encadenadas con comas. */
+    ...(textos.jerarquia ? medidor.partir(textos.jerarquia, ePeriodo, anchoTexto) : [])
+      .map((t) => ({ t, e: ePeriodo, peso: 500, color: color.tintaSuave })),
     ...(textos.periodo ? [{ t: String(textos.periodo), e: ePeriodo, peso: 500, color: color.mimpRojo }] : []),
   ];
 
