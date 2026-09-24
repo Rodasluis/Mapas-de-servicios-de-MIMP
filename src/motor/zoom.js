@@ -16,10 +16,16 @@
  * recuadro que hay que ir a buscar al mapa para saber de dónde sale no es un zoom: es
  * otro mapa suelto. Ahora dice «Cusco» y dentro sólo hay provincias de Cusco.
  *
- * QUÉ TROZO DEL DEPARTAMENTO. El del conglomerado que se estorba, no el departamento
- * entero: Cusco ocupa 154 × 185 mm en un A1 y el mayor hueco libre de la lámina son
- * 151 × 180, así que ampliarlo completo daría el mismo dibujo a la misma escala. El
- * rectángulo de referencia sobre el mapa principal dice qué trozo se ha ampliado.
+ * QUÉ TROZO DE LA ZONA. La zona entera siempre que quepa ampliada. Cuando no cabe, en
+ * automático se repliega a su núcleo —las provincias que concentran los servicios— y lo
+ * dice en el informe; en manual se dibuja entera igual, porque esa decisión ya la ha
+ * tomado una persona. El rectángulo de referencia sobre el mapa principal dice siempre
+ * qué trozo se ha ampliado de verdad.
+ *
+ * Que una zona no quepa es geometría, no una decisión: Cusco ocupa 154 × 185 mm en un A1
+ * y el mayor hueco libre de la lámina son 131 × 156. Y no se arregla con más papel,
+ * porque al agrandar la hoja crecen las dos cosas a la vez; se arregla GIRÁNDOLA, que es
+ * lo que dicen los avisos.
  *
  * CUÁNTO MIDE Y DÓNDE VA. No se coloca en un anclaje con tamaño fijo: cada recuadro le
  * pregunta a la rejilla de ocupación por el MAYOR HUECO LIBRE CON SU PROPORCIÓN. De ahí
@@ -49,6 +55,28 @@ export const UMBRAL_APINAMIENTO = 0.35;
 
 /** Por debajo de esta ampliación el recuadro repite el mapa en vez de ampliarlo. */
 export const AMPLIACION_MINIMA = 1.5;
+
+/**
+ * Qué hacer cuando una zona no cabe ampliada.
+ *
+ * NO es «usa una hoja mayor», aunque lo parezca. Medido departamento a departamento: al
+ * pasar de A4 a A0 en vertical, la zona y el hueco libre crecen a la vez y la ampliación
+ * se queda clavada en torno a ×1. Lo que abre sitio es girar la hoja: el Perú es alto y
+ * estrecho, así que en apaisado el marco se ensancha y deja un hueco grande a los lados.
+ * Cusco pasa de ×0,95 en A2 vertical a ×1,77 en A2 apaisado, con el mismo papel.
+ */
+function consejoDeEspacio(marco) {
+  if (marco.ancho <= marco.alto) {
+    return ' Prueba con la hoja apaisada: el Perú es alto y estrecho, así que girarla abre'
+      + ' un hueco libre mucho mayor que agrandarla.';
+  }
+  /* Ya está apaisada. Decir «gira la hoja» aquí sería un consejo imposible, y decir «usa
+     una hoja mayor» sería falso: de A2 a A0 la zona y el hueco crecen a la vez. Lo que
+     queda es la verdad, que es accionable de otra manera —imprimir ese departamento como
+     ámbito propio en vez de como recuadro del mapa nacional—. */
+  return ' Es demasiado grande respecto a la lámina para ampliarlo aquí, y cambiar de'
+    + ' tamaño de hoja no lo arregla: la zona y el hueco libre crecen a la vez.';
+}
 
 /** Por debajo de este lado el recuadro no aporta nada legible. */
 export const LADO_MINIMO_MM = 34;
@@ -328,6 +356,9 @@ export function construirRecuadros({
   };
   if (modo === 'ninguno') return vacio;
 
+  /* Ver el comentario del umbral más abajo: en manual no hay mínimo. */
+  const minimoAmpliacion = modo === 'manual' ? 0 : AMPLIACION_MINIMA;
+
   const margen = tamanoIcono * 0.8;
   const candidatas = modo === 'manual'
     ? regionesManuales({ seleccion, agregado, unidades, anillos, zonas, margenMm: margen })
@@ -426,12 +457,14 @@ export function construirRecuadros({
       break;
     }
 
-    /* Dos intentos de encuadre: el departamento ENTERO primero y, sólo si no cabe
-       ampliado, su núcleo. Así el recuadro de Cusco enseña Cusco entero siempre que
-       la hoja lo permita, y cuando no lo permite enseña la parte que concentra sus
-       servicios en vez de no enseñar nada. */
+    /* En AUTOMÁTICO se intentan dos encuadres: la zona entera primero y, si no cabe
+       ampliada, su núcleo. En MANUAL sólo el primero, porque ahí la decisión ya está
+       tomada: quien selecciona Cusco quiere Cusco, no la parte de Cusco que mejor le
+       venga al motor. */
     const intentos = [{ caja: region, parcial: false }];
-    if (region.nucleo && region.nucleo.ancho * region.nucleo.alto < region.ancho * region.alto * 0.8) {
+    if (modo !== 'manual'
+      && region.nucleo
+      && region.nucleo.ancho * region.nucleo.alto < region.ancho * region.alto * 0.8) {
       intentos.push({ caja: region.nucleo, parcial: true });
     }
 
@@ -441,13 +474,17 @@ export function construirRecuadros({
       const r = encajarEnHueco(intento.caja, region);
       if (!r) continue;
       mejor = Math.max(mejor, r.ampliacion);
-      if (r.ampliacion >= AMPLIACION_MINIMA) { encaje = { ...r, ...intento }; break; }
+      /* El umbral es del modo automático, no del recuadro. Ahí el motor elige y no
+         debe gastar el mayor hueco de la lámina en algo que no amplía; cuando la
+         selección es de una persona, obedece y explica. Antes el umbral se aplicaba a
+         los dos, y seleccionar Cusco en una hoja vertical no dibujaba NADA. */
+      if (r.ampliacion >= minimoAmpliacion) { encaje = { ...r, ...intento }; break; }
     }
 
     if (!encaje) {
       avisos.push(mejor > 0
         ? `${region.nombre} no cabe ampliado en esta hoja: el mayor hueco libre lo`
-          + ` agrandaría ${mejor.toFixed(1)} veces. Usa una hoja mayor.`
+          + ` agrandaría ${mejor.toFixed(1)} veces.${consejoDeEspacio(marco)}`
         : `No queda hueco libre para ampliar ${region.nombre} sin tapar territorio peruano.`);
       continue;
     }
@@ -457,7 +494,14 @@ export function construirRecuadros({
     } = encaje;
     if (parcial) {
       avisos.push(`${region.nombre} no cabe entero en esta hoja; se amplía la parte que`
-        + ' concentra sus servicios. Usa una hoja mayor para verlo completo.');
+        + ` concentra sus servicios.${consejoDeEspacio(marco)}`);
+    }
+    /* En manual el recuadro se dibuja aunque apenas amplíe, porque se ha pedido. Lo que
+       no puede ocurrir es que se dibuje sin decir lo que es: a esta escala los símbolos
+       se estorban igual que en el mapa principal. */
+    if (modo === 'manual' && ampliacion < AMPLIACION_MINIMA) {
+      avisos.push(`${region.nombre} se amplía sólo ${ampliacion.toFixed(1)} veces en esta`
+        + ` hoja, así que sus símbolos se estorban casi igual que en el mapa.${consejoDeEspacio(marco)}`);
     }
 
     /* El recuadro se llama como la zona que amplía. «Zoom 1» no dice nada: obliga a

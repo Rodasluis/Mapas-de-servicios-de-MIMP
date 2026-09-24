@@ -314,6 +314,39 @@ qué ámbito está. El corte de Lima Metropolitana y Callao sólo se aplica cuan
 zonas son departamentos: dentro de un mapa del departamento de Lima, «Lima
 Metropolitana» ya es una de sus provincias y partirla otra vez no significaría nada.
 
+### Girar la hoja, no agrandarla
+
+Cuando una zona no cabe ampliada, el consejo obvio —«usa una hoja mayor»— es falso, y
+medirlo lo deja claro. Cusco con el departamento entero:
+
+| | A4 v | A3 v | A2 v | A1 v | A0 v | A2 **apaisado** |
+|---|---|---|---|---|---|---|
+| Cusco mide | 53×63 | 76×91 | 108×130 | 154×185 | 218×262 mm | 75×89 mm |
+| Mayor hueco libre | 55×68 | 71×85 | 103×124 | 151×180 | 219×263 mm | 133×160 mm |
+| Ampliación | ×1,03 | ×0,93 | ×0,95 | ×0,98 | ×1,00 | **×1,77** |
+
+En vertical la zona y el hueco crecen **a la vez**, así que la proporción se queda
+clavada en torno a ×1 de A4 a A0: cambiar de tamaño no arregla nada. Lo que abre sitio
+es girar la hoja. El Perú es alto y estrecho; en apaisado el marco se ensancha, el país
+no, y aparece un hueco grande a los lados. Con el mismo papel, Cusco pasa de ×0,95 a
+×1,77. Los avisos lo dicen así.
+
+### En manual manda la selección
+
+El umbral de ampliación es del modo **automático**, donde el motor elige y no debe
+gastar el mayor hueco de la lámina en un recuadro que no amplía. Cuando la selección es
+de una persona, el motor obedece: dibuja la zona entera a la escala que toque y explica
+en el informe cuánto amplía en realidad. Antes el umbral se aplicaba a los dos casos, y
+seleccionar Cusco en una hoja vertical no dibujaba **nada**.
+
+Comprobado sobre los 25 departamentos, uno a uno, seleccionándolos a mano:
+
+- **25 de 25 se dibujan**, en las tres hojas probadas, y siempre completos.
+- **24 de 25 amplían ×1,5 o más en A2 apaisado.** La excepción es Loreto, que es casi un
+  tercio del país: ni girando ni agrandando la hoja cabe ampliado, y su aviso lo dice sin
+  ofrecer un remedio que no existe.
+- En A2 vertical, diez quedan por debajo de ×1,5 y se dibujan igual, con el aviso.
+
 **Una zona de una sola unidad recibe contexto.** Pasa en el ámbito provincial, donde la
 zona es el propio distrito: el recuadro salía con un distrito flotando sobre el fondo y
 sólo el rectángulo rojo decía dónde estaba. Se le añaden las unidades vecinas del mismo
