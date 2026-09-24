@@ -131,6 +131,36 @@ input[type="text"]:disabled, select:disabled { background: #f4f5f7; color: var(-
 
 .acciones-linea { display: flex; gap: .75rem; margin: .1rem 0 .45rem; }
 
+/* ------------------------- zonas a ampliar ------------------------------- */
+
+/* Los tres desplegables encadenados se marcan con una línea al costado: así se leen
+   como un solo control de tres pasos y no como tres campos independientes. */
+.zonas {
+  margin: .55rem 0 0;
+  padding: 0 0 .2rem .6rem;
+  border: 0;
+  border-left: 2px solid var(--borde);
+}
+.zonas legend {
+  padding: 0;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--tinta-2);
+}
+
+.lista-zonas { list-style: none; margin: .2rem 0 0; padding: 0; }
+.lista-zonas li {
+  display: flex;
+  gap: .5rem;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: .2rem 0;
+  font-size: .84rem;
+  border-top: 1px solid var(--borde);
+}
+.lista-zonas li:first-child { border-top: 0; }
+.lista-zonas .vacia { color: var(--tinta-3); border-top: 0; }
+
 button.enlace {
   background: none;
   border: 0;
@@ -141,6 +171,9 @@ button.enlace {
   cursor: pointer;
   text-decoration: underline;
 }
+/* «Añadir zona» se apaga cuando falta bajar un nivel más: si siguiera azul y subrayado
+   parecería que no funciona en vez de que todavía no toca. */
+button.enlace:disabled { color: var(--tinta-3); cursor: default; text-decoration: none; }
 
 .pie-panel {
   position: sticky;

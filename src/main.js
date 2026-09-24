@@ -57,18 +57,15 @@ async function arrancar() {
     provincias: centros.catalogo.provincias
       .map((p) => ({ ...p, departamento: nombreDepartamento.get(p.ccdd) || '' }))
       .sort((a, b) => a.departamento.localeCompare(b.departamento, 'es') || porNombre(a, b)),
-    /* Sólo los distritos CON algún centro: son los únicos que centros.json cataloga, y
-       también los únicos que tiene sentido ofrecer para AMPLIAR. */
-    distritos: [...centros.catalogo.distritos].sort(porNombre),
-
     /**
      * Distritos de una provincia, leídos de la CARTOGRAFÍA.
      *
-     * Para elegir el ámbito no sirve el catálogo del buscador, que sólo lista los que
-     * tienen algún centro: un distrito sin servicios también se puede imprimir, y su
-     * mapa es justamente el que dice que no hay ninguno y ofrece los más cercanos. Se
-     * cargan por departamento y se recuerdan, porque el selector los vuelve a pedir
-     * cada vez que se cambia de provincia dentro del mismo departamento.
+     * Ni para elegir el ámbito ni para elegir una zona a ampliar sirve el catálogo del
+     * buscador, que sólo lista los que tienen algún centro: un distrito sin servicios
+     * también se puede imprimir —su mapa es justamente el que dice que no hay ninguno y
+     * ofrece los más cercanos— y también se puede ampliar dentro de otro mapa. Se cargan
+     * por departamento y se recuerdan, porque los selectores los vuelven a pedir cada vez
+     * que se cambia de provincia dentro del mismo departamento.
      */
     distritosDe(ccpp) {
       if (!ccpp) return [];

@@ -245,13 +245,46 @@ export async function comprobarWebIgualQueMuestras({ navegador, pagina, urlBase 
   );
   const despues = await web.evaluate(() => document.querySelector('#vista svg').getAttribute('viewBox'));
   const urlTrasCambio = new URL(web.url()).searchParams.get('hoja');
+
+  /* Y las zonas a ampliar, que ya no son una lista sino tres desplegables encadenados:
+     elegir un departamento tiene que rellenar sus provincias, y «Añadir zona» tiene que
+     llegar hasta la URL. Sin esto, el encadenamiento podría estar roto y el mapa saldría
+     igual —sin recuadros— sin que nada lo dijera. */
+  const zonas = { problemas: [] };
+  await web.selectOption('#zoom-modo', 'manual');
+  await web.selectOption('#zona-departamento', '08');
+  zonas.provinciasDeCusco = await web.evaluate(
+    () => document.querySelectorAll('#zona-provincia option').length - 1,
+  );
+  if (zonas.provinciasDeCusco !== 13) {
+    zonas.problemas.push(`Cusco tiene 13 provincias y el desplegable ofrece ${zonas.provinciasDeCusco}`);
+  }
+  zonas.distritoBloqueado = await web.evaluate(() => document.getElementById('zona-distrito').disabled);
+  if (!zonas.distritoBloqueado) {
+    zonas.problemas.push('el mapa nacional amplía provincias, así que el distrito debería estar bloqueado');
+  }
+  await web.selectOption('#zona-provincia', '0801');
+  await web.click('#zona-anadir');
+  try {
+    await web.waitForFunction(() => new URL(location.href).searchParams.get('zoom') === '0801',
+      null, { timeout: 60000 });
+  } catch {
+    zonas.problemas.push('tras «Añadir zona» la URL no recogió zoom=0801');
+  }
+  zonas.urlTrasAnadir = await web.evaluate(() => new URL(location.href).searchParams.get('zoom'));
+  zonas.enLista = await web.evaluate(() => document.querySelectorAll('#zonas-elegidas li').length);
+  if (zonas.enLista !== 1) zonas.problemas.push(`la lista de zonas tiene ${zonas.enLista} entradas y debería tener 1`);
   await web.close();
 
   const panel = {
     antes,
     despues,
     urlTrasCambio,
-    problemas: urlTrasCambio === 'A4' ? [] : [`la URL dice hoja=${urlTrasCambio} tras elegir A4`],
+    zonas,
+    problemas: [
+      ...(urlTrasCambio === 'A4' ? [] : [`la URL dice hoja=${urlTrasCambio} tras elegir A4`]),
+      ...zonas.problemas,
+    ],
   };
 
   fs.rmSync(carpeta, { recursive: true, force: true });

@@ -247,55 +247,198 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   ]) selZoom.appendChild(el('option', { value: valor, texto }));
   selZoom.value = config.zoom.modo;
 
-  const selProvincias = el('select', { id: 'zoom-provincias', multiple: 'multiple', size: 8 });
+  /**
+   * Las zonas se eligen bajando por la jerarquía, no de una lista plana.
+   *
+   * Antes era un `select multiple` con todo lo ampliable del ámbito: en el nacional,
+   * 196 provincias entre las que hay que reconocer «Lima» de tres que se llaman igual,
+   * y con la tecla de control pulsada para marcar más de una. Tres desplegables
+   * encadenados —departamento, provincia, distrito— llegan a la zona en tres decisiones
+   * cortas, y lo elegido se acumula en una lista con su botón de quitar: se ve qué se ha
+   * pedido sin tener que releer una selección múltiple.
+   *
+   * Cada nivel se ofrece sólo mientras signifique algo. Los de arriba los fija el ámbito
+   * —en un mapa de Cusco el departamento no se elige— y el de abajo se apaga cuando el
+   * mapa no dibuja esa unidad: el nacional amplía provincias, así que pedir un distrito
+   * daría una zona que el motor descartaría sin que se entendiera por qué.
+   */
+  const selZonaDep = el('select', { id: 'zona-departamento' });
+  const selZonaProv = el('select', { id: 'zona-provincia' });
+  const selZonaDist = el('select', { id: 'zona-distrito' });
+  const listaZonas = el('ul', { clase: 'lista-zonas', id: 'zonas-elegidas' });
+  const notaNivel = el('p', { clase: 'nota' });
+  const botonAnadir = el('button', { type: 'button', clase: 'enlace', id: 'zona-anadir' },
+    [el('span', { texto: 'Añadir zona' })]);
+
+  const camposZona = [
+    el('p', { clase: 'campo' }, [
+      el('label', { for: 'zona-departamento', texto: 'Departamento' }), selZonaDep,
+    ]),
+    el('p', { clase: 'campo' }, [
+      el('label', { for: 'zona-provincia', texto: 'Provincia' }), selZonaProv,
+    ]),
+    el('p', { clase: 'campo' }, [
+      el('label', { for: 'zona-distrito', texto: 'Distrito' }), selZonaDist,
+    ]),
+  ];
 
   /**
-   * Las zonas que se ofrecen dependen del ámbito, porque ampliar es ampliar ALGO que
-   * el mapa esté dibujando. En el nacional se eligen provincias; en un departamento,
-   * sus provincias, que agrupan a los distritos dibujados; y en una provincia, sus
-   * distritos. Ofrecer siempre las 196 provincias daría a elegir zonas que no están
-   * en el mapa y el motor las descartaría sin que se entendiera por qué.
+   * Qué puede ser una zona en cada ámbito, en dígitos de ubigeo —2 departamento,
+   * 4 provincia, 6 distrito—.
+   *
+   * El techo lo pone la unidad que el mapa dibuja: el nacional colorea provincias, así
+   * que un distrito no es nada que pueda ampliar. El suelo lo pone la ZONA, que es el
+   * nivel por el que el motor agrupa y titula cada recuadro: en un mapa provincial cada
+   * recuadro es un distrito, así que pedir «toda la provincia» no daría un recuadro sino
+   * uno por cada distrito que tiene.
    */
-  const zonasDelAmbito = () => {
-    const a = ambitoActual();
-    if (a.nivel === 'nacional') {
-      return catalogo.provincias.map((p) => ({ id: p.id, texto: `${p.nombre} · ${p.departamento}` }));
-    }
-    if (a.nivel === 'departamento') {
-      return catalogo.provincias.filter((p) => p.ccdd === a.id).map((p) => ({ id: p.id, texto: p.nombre }));
-    }
-    if (a.nivel === 'provincia') {
-      return catalogo.distritos.filter((d) => d.ccpp === a.id).map((d) => ({ id: d.id, texto: d.nombre }));
-    }
-    // En el ámbito distrital no hay nada por debajo que ampliar.
-    if (a.nivel === 'distrito') return [];
-    // En el ámbito distrital no hay nada por debajo que ampliar.
-    return [];
+  const RANGO_DE_ZONA = {
+    nacional: [2, 4],
+    departamento: [4, 6],
+    provincia: [6, 6],
+    /* El distrital no lleva recuadros: la zona sería el propio distrito. */
+    distrito: [0, 0],
   };
 
-  const llenarZonas = () => {
-    const elegidas = new Set(config.zoom.seleccion);
-    selProvincias.innerHTML = '';
-    for (const z of zonasDelAmbito()) {
-      const o = el('option', { value: z.id, texto: z.texto });
-      o.selected = elegidas.has(z.id);
-      selProvincias.appendChild(o);
+  const NOTA_NIVEL = {
+    nacional: 'El mapa del Perú amplía provincias: elige un departamento entero o una de sus provincias.',
+    departamento: 'El mapa departamental amplía distritos: elige una provincia entera o uno de sus distritos.',
+    provincia: 'El mapa provincial amplía un distrito cada vez: elige uno.',
+    distrito: 'Un mapa distrital no lleva recuadros: la zona sería el propio distrito y el recuadro'
+      + ' repetiría el mapa a su lado.',
+  };
+
+  /** Rellena un desplegable conservando lo ya elegido si sigue estando en la lista. */
+  const rellenar = (sel, lista, vacio, fijo) => {
+    const previo = fijo || sel.value;
+    sel.innerHTML = '';
+    sel.appendChild(el('option', { value: '', texto: vacio }));
+    for (const x of lista) sel.appendChild(el('option', { value: x.id, texto: x.nombre }));
+    sel.value = [...sel.options].some((o) => o.value === previo) ? previo : '';
+  };
+
+  const sincronizarZonas = () => {
+    const a = ambitoActual();
+    const [minimo, hondo] = RANGO_DE_ZONA[a.nivel];
+    const depFijo = a.id ? a.id.slice(0, 2) : '';
+    const provFija = a.id && a.id.length >= 4 ? a.id.slice(0, 4) : '';
+
+    rellenar(selZonaDep, catalogo.departamentos, 'Elige un departamento', depFijo);
+    selZonaDep.disabled = Boolean(depFijo);
+
+    /* La opción vacía de cada nivel dice si quedarse ahí ya es una zona: «Todo el
+       departamento» sólo cuando un departamento entero puede ser un recuadro, y «Elige
+       una provincia» cuando hay que seguir bajando. */
+    const ccdd = selZonaDep.value;
+    rellenar(
+      selZonaProv,
+      ccdd ? catalogo.provincias.filter((p) => p.ccdd === ccdd) : [],
+      !ccdd ? '—' : (minimo <= 2 ? 'Todo el departamento' : 'Elige una provincia'),
+      provFija,
+    );
+    selZonaProv.disabled = Boolean(provFija) || !ccdd;
+
+    const ccpp = selZonaProv.value;
+    /* Pedir los distritos aquí dispara su carga si aún no están; cuando lleguen, la
+       aplicación llama a refrescarDistritos() y este desplegable se rellena solo. */
+    const distritos = hondo >= 6 && ccpp && catalogo.distritosDe ? catalogo.distritosDe(ccpp) : [];
+    let vacioDistrito = '—';
+    if (hondo < 6) vacioDistrito = 'No se amplían distritos en este mapa';
+    else if (ccpp) vacioDistrito = minimo <= 4 ? 'Toda la provincia' : 'Elige un distrito';
+    rellenar(selZonaDist, distritos, vacioDistrito);
+    selZonaDist.disabled = hondo < 6 || !ccpp;
+
+    notaNivel.textContent = NOTA_NIVEL[a.nivel] || '';
+    for (const campo of camposZona) campo.hidden = hondo === 0;
+    botonAnadir.hidden = hondo === 0;
+    listaZonas.hidden = hondo === 0;
+
+    /* El botón se apaga en vez de no hacer nada al pulsarlo: si falta bajar un nivel más,
+       lo dice el botón apagado junto al desplegable que hay que tocar. */
+    const elegida = zonaElegida();
+    botonAnadir.disabled = !elegida
+      || elegida.length < minimo
+      || config.zoom.seleccion.includes(elegida);
+  };
+
+  /** El ubigeo más profundo que se haya elegido, o null si no hay ninguno. */
+  const zonaElegida = () => selZonaDist.value || selZonaProv.value || selZonaDep.value || null;
+
+  /** Nombre legible de un ubigeo, de lo más concreto a lo más general. */
+  const nombreDeZona = (id) => {
+    const partes = [];
+    if (id.length >= 6) {
+      const lista = catalogo.distritosDe ? catalogo.distritosDe(id.slice(0, 4)) : [];
+      partes.push((lista.find((d) => d.id === id) || {}).nombre || id);
     }
-    /* Al cambiar de ámbito, lo seleccionado antes deja de existir en la lista nueva.
-       Se descarta en vez de arrastrarlo: una selección invisible que sigue actuando es
-       peor que perderla. */
-    config.zoom.seleccion = [...selProvincias.selectedOptions].map((o) => o.value);
+    if (id.length >= 4) {
+      partes.push((catalogo.provincias.find((p) => p.id === id.slice(0, 4)) || {}).nombre || id.slice(0, 4));
+    }
+    partes.push((catalogo.departamentos.find((d) => d.id === id.slice(0, 2)) || {}).nombre || id.slice(0, 2));
+    return partes.join(' · ');
+  };
+
+  const pintarZonas = () => {
+    listaZonas.innerHTML = '';
+    for (const id of config.zoom.seleccion) {
+      const nombre = nombreDeZona(id);
+      const quitar = el('button', {
+        type: 'button', clase: 'enlace', 'aria-label': `Quitar ${nombre}`,
+      }, [el('span', { texto: 'Quitar' })]);
+      quitar.addEventListener('click', () => {
+        config.zoom.seleccion = config.zoom.seleccion.filter((x) => x !== id);
+        pintarZonas();
+        sincronizarZonas();
+        emitir();
+      });
+      listaZonas.appendChild(el('li', {}, [el('span', { texto: nombre }), quitar]));
+    }
+    if (!config.zoom.seleccion.length) {
+      listaZonas.appendChild(el('li', { clase: 'vacia', texto: 'Ninguna zona elegida todavía.' }));
+    }
+  };
+
+  botonAnadir.addEventListener('click', () => {
+    const id = zonaElegida();
+    if (!id || config.zoom.seleccion.includes(id)) return;
+    config.zoom.seleccion = [...config.zoom.seleccion, id];
+    pintarZonas();
+    sincronizarZonas();
+    emitir();
+  });
+  selZonaDep.addEventListener('change', sincronizarZonas);
+  selZonaProv.addEventListener('change', sincronizarZonas);
+  selZonaDist.addEventListener('change', sincronizarZonas);
+
+  const llenarZonas = () => {
+    /* Al cambiar de ámbito, parte de lo elegido antes puede quedar fuera de lo que el
+       mapa dibuja. Se descarta en vez de arrastrarlo: una zona que ya no está en el mapa
+       seguiría contando en la URL sin aparecer en ninguna parte, y el motor la
+       descartaría en silencio. */
+    const a = ambitoActual();
+    const [minimo, hondo] = RANGO_DE_ZONA[a.nivel];
+    config.zoom.seleccion = config.zoom.seleccion.filter(
+      (id) => (!a.id || id.startsWith(a.id)) && id.length >= minimo && id.length <= hondo,
+    );
+    sincronizarZonas();
+    pintarZonas();
   };
   llenarZonas();
 
-  const campoProvincias = el('p', { clase: 'campo' }, [
-    el('label', { for: 'zoom-provincias', texto: 'Zonas a ampliar' }),
-    selProvincias,
+  /* Un `fieldset` anidado con su `legend`, y no un `div` con un párrafo en negrita: así
+     «Zonas a ampliar» es el nombre del grupo también para un lector de pantalla, que
+     anuncia los tres desplegables como tres pasos de lo mismo. */
+  const campoZonas = el('fieldset', { clase: 'zonas' }, [
+    el('legend', { texto: 'Zonas a ampliar' }),
+    notaNivel,
+    ...camposZona,
+    el('p', { clase: 'acciones-linea' }, [botonAnadir]),
+    listaZonas,
   ]);
   const avisoZoom = el('p', { clase: 'nota', id: 'aviso-zoom' });
 
   const sincronizarZoom = () => {
-    campoProvincias.hidden = selZoom.value !== 'manual';
+    campoZonas.hidden = selZoom.value !== 'manual';
     avisoZoom.hidden = selZoom.value !== 'manual';
   };
   selZoom.addEventListener('change', () => {
@@ -303,15 +446,11 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     sincronizarZoom();
     emitir();
   });
-  selProvincias.addEventListener('change', () => {
-    config.zoom.seleccion = [...selProvincias.selectedOptions].map((o) => o.value);
-    emitir();
-  });
   sincronizarZoom();
 
   const bloqueZoom = grupo('Recuadros de zoom', [
     el('p', { clase: 'campo' }, [el('label', { for: 'zoom-modo', texto: 'Modo' }), selZoom]),
-    campoProvincias,
+    campoZonas,
     avisoZoom,
   ]);
 
@@ -330,9 +469,17 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   sincronizarSubtitulo();
 
   return {
-    /** Rehace la lista de distritos cuando su cartografía termina de cargarse. */
+    /**
+     * Rehace las listas de distritos cuando su cartografía termina de cargarse.
+     *
+     * Son dos: la del ámbito y la de las zonas a ampliar. También se repinta la lista de
+     * zonas elegidas, porque una que viniera en la URL se muestra por su ubigeo hasta
+     * que llegan los nombres.
+     */
     refrescarDistritos() {
       llenarDistritos(selProvincia.value, config.ambito.nivel === 'distrito' ? config.ambito.id : '');
+      sincronizarZonas();
+      pintarZonas();
     },
 
     /** Mensaje de estado del botón de generación. */

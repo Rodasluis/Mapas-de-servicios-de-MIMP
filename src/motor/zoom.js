@@ -301,7 +301,14 @@ function cajaDelNucleo(zona, anillos, margenMm) {
  */
 function regionesManuales({ seleccion, agregado, unidades, anillos, zonas: def, margenMm }) {
   const pedidas = new Set(seleccion.map(String));
-  const coincide = (ubigeo) => pedidas.has(ubigeo) || pedidas.has(ubigeo.slice(0, 2));
+  /* Lo pedido puede estar en cualquier nivel POR ENCIMA de la unidad dibujada: en el mapa
+     de un departamento las unidades son distritos y se puede pedir una provincia entera.
+     Como el ubigeo codifica la jerarquía en su longitud —2 departamento, 4 provincia, 6
+     distrito—, pertenecer a lo pedido es que lo pedido sea uno de sus prefijos. Antes se
+     comparaban sólo el ubigeo entero y sus dos primeros dígitos, así que pedir una
+     provincia en un mapa departamental no ampliaba nada y no se decía por qué. */
+  const coincide = (ubigeo) => pedidas.has(ubigeo)
+    || pedidas.has(ubigeo.slice(0, 4)) || pedidas.has(ubigeo.slice(0, 2));
   const elegidas = unidades.features.filter((f) => coincide(f.properties.ubigeo));
   if (!elegidas.length) return [];
 

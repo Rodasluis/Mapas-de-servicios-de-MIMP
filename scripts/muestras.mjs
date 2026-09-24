@@ -254,6 +254,9 @@ for (const c of comparaciones) {
 }
 console.log(`  el panel manda: A2 ${panel.antes} → A4 ${panel.despues}`
   + ` · la URL queda en hoja=${panel.urlTrasCambio}${panel.problemas.length ? '  ✗' : '  ✓'}`);
+console.log(`  zonas encadenadas: Cusco ofrece ${panel.zonas.provinciasDeCusco} provincias`
+  + ` · añadir la provincia de Cusco deja zoom=${panel.zonas.urlTrasAnadir}`
+  + ` y ${panel.zonas.enLista} zona(s) en la lista`);
 for (const p of panel.problemas) { console.log(`    ✗ ${p}`); fallosWeb++; }
 
 await cerrar();

@@ -393,9 +393,26 @@ es lo que hay alrededor.
 
 El selector es encadenado —departamento y luego provincia— porque una lista plana de las
 196 provincias obligaría a buscar «Lima» entre tres entradas con ese nombre en
-departamentos distintos. Las zonas que se ofrecen para ampliar siguen al ámbito: en el
-nacional son provincias; en un departamento, sus provincias; en una provincia, sus
-distritos.
+departamentos distintos.
+
+Las zonas a ampliar se eligen igual, bajando por la jerarquía: departamento, provincia,
+distrito, y «Añadir zona» las va acumulando en una lista con su botón de quitar. Antes
+eran un `select multiple` con todo lo ampliable del ámbito —en el nacional, las 196
+provincias en una lista plana, y con la tecla de control pulsada para marcar más de una—.
+Cada nivel se ofrece sólo mientras signifique algo, y los dos límites vienen del motor:
+
+| Ámbito | Se puede ampliar | Por qué |
+|---|---|---|
+| Perú | un departamento o una provincia | el mapa dibuja provincias; un distrito no está |
+| Departamento | una provincia o un distrito | dibuja distritos, agrupados por provincia |
+| Provincia | un distrito | la zona **es** el distrito: pedir la provincia daría un recuadro por cada uno |
+| Distrito | nada | la zona sería el propio distrito y el recuadro repetiría el mapa al lado |
+
+El techo lo pone la unidad que el mapa dibuja y el suelo, el nivel por el que el motor
+agrupa y titula cada recuadro. Cuando falta bajar un nivel, el botón de añadir se queda
+apagado junto al desplegable que hay que tocar, en vez de no hacer nada al pulsarlo. Al
+cambiar de ámbito, las zonas que quedan fuera de lo que el mapa nuevo dibuja se descartan:
+arrastrarlas dejaría una selección invisible en la URL que el motor ignoraría en silencio.
 
 En la URL el ámbito viaja como un ubigeo suelto (`?ambito=1501`), porque su longitud ya
 dice de qué nivel se trata. El subtítulo vacío significa **automático**: el campo enseña

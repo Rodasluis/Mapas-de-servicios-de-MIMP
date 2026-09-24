@@ -24,6 +24,25 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    recuadros de zoom.
 5. **Generar PDF.**
 
+### Elegir a mano qué se amplía
+
+Los recuadros de zoom vienen en **automático**: el mapa amplía donde los símbolos se
+estorban. Con **Elegir zonas** se decide a mano, y las zonas se buscan bajando por la
+jerarquía —departamento, provincia, distrito— y pulsando **Añadir zona**. Lo añadido
+queda en una lista, cada entrada con su **Quitar**.
+
+Lo que se puede ampliar depende del mapa, y por eso algún desplegable aparece apagado:
+
+| Mapa de… | Se puede ampliar |
+|---|---|
+| Perú | un departamento entero o una de sus provincias |
+| Un departamento | una provincia entera o uno de sus distritos |
+| Una provincia | un distrito |
+| Un distrito | nada: el recuadro repetiría el mapa a su lado |
+
+Si el botón de añadir está apagado, falta bajar un nivel más: en un mapa provincial cada
+recuadro es un distrito, así que hay que elegir uno.
+
 ### Los cuatro ámbitos responden preguntas distintas
 
 | Ámbito | Qué responde | Cómo lo dibuja |
