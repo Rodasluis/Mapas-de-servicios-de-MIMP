@@ -354,7 +354,7 @@ function regionesManuales({ seleccion, agregado, unidades, anillos, zonas: def, 
 export function construirRecuadros({
   modo = 'auto', seleccion = [], grupos, umbral, unidades, zonas, anillos, agregado,
   clases, rampa, iconos, medidor, factor, tamanoIcono, marco, ocupacion, maximo,
-  modoSimbolos = 'agregado', centros = [],
+  modoSimbolos = 'agregado', centros = [], entorno = null, trazos = null,
 }) {
   const tope = maximo ?? maximoPorFormato(factor);
   const vacio = {
@@ -399,16 +399,13 @@ export function construirRecuadros({
       const c = cajaDe(anillos.get(f));
       return c && rectangulo.seSolapan(caja, c);
     };
-    let miembros = zona.miembros.filter(tocaElEncuadre);
+    /* Los miembros son la zona y nada más: en un mapa provincial, UN distrito. Lo que
+       lo rodea se dibuja igualmente, pero como FONDO —ver dibujarRecuadro—, no como
+       parte de lo que el recuadro amplía. Antes se añadían las vecinas a la lista de
+       miembros y el recuadro titulado «San Miguel» enseñaba cuatro distritos como si
+       los cuatro fueran el asunto. */
+    const miembros = zona.miembros.filter(tocaElEncuadre);
     if (!miembros.length) return null;
-
-    /* Una zona de una sola unidad no sitúa nada: el recuadro sale con un distrito
-       flotando sobre el fondo y sólo el rectángulo rojo dice dónde está. En ese caso se
-       añaden las unidades vecinas del MISMO ámbito, que es lo que da el contexto sin
-       cruzar ninguna división que el título prometa: en un mapa de la provincia de Lima
-       todo lo que entre sigue siendo la provincia de Lima. Pasa en el ámbito
-       provincial, donde la zona es el propio distrito. */
-    if (miembros.length === 1) miembros = unidades.features.filter(tocaElEncuadre);
 
     const sub = { type: 'FeatureCollection', features: miembros };
     const [[lon0, lat0], [lon1, lat1]] = geoBounds(sub);
@@ -605,6 +602,8 @@ export function construirRecuadros({
         factor,
         modoSimbolos,
         centros,
+        entorno,
+        trazos,
       }),
     });
     ocupacion.marcarBloque(rectangulo.expandir({ x, y, ancho, alto }, AIRE_MM / 2));
@@ -662,27 +661,58 @@ function dibujarRecuadro({
   x, y, ancho, alto, anchoMapa, altoMapa, cabecera, borde, etiqueta,
   sub, miembros, protagonistas, agregado, clases, rampa, iconos, tamanoIcono, altoCifra,
   eTitulo, eCifra, medidor, factor, modoSimbolos = 'agregado', centros = [],
+  entorno = null, trazos = null,
 }) {
   const marcoInterno = { x: x + borde, y: y + cabecera, ancho: anchoMapa, alto: altoMapa };
   const proy = crearProyeccion(sub, marcoInterno, 1.2);
   const ruta = crearRuta(proy);
   const idRecorte = `recorte-${etiqueta.replace(/\s+/g, '-').toLowerCase()}`;
 
-  const relleno = miembros.map((f) => {
+  /* El recuadro es un RECORTE AMPLIADO del mapa, no una isla. Antes se rellenaba de
+     color de mar y encima se dibujaban sólo los miembros, de modo que Cusco o San
+     Miguel aparecían flotando en el Pacífico. Ahora se dibujan las mismas capas que el
+     mapa principal —países, territorio de fuera del ámbito, coropleta, límites— y se
+     recortan al marco del recuadro, así que lo que rodea a la zona ampliada es lo que
+     de verdad la rodea. */
+  const e = entorno || {};
+  const tz = trazos || { unidad: 'limiteProvincial', intermedio: null, contorno: 'limiteDepartamental' };
+  const trazar = (rasgos, token) => (token && rasgos ? rasgos.map((f) => el('path', {
+    d: ruta(f.geometry), fill: 'none', stroke: color[token],
+    'stroke-width': trazoMm[token], 'stroke-linejoin': 'round',
+  })) : []);
+
+  const paises = (e.paises || []).map((f) => el('path', {
+    d: ruta(f.geometry), fill: color.paisVecino,
+    stroke: color.paisVecinoBorde, 'stroke-width': trazoMm.paisVecino, 'stroke-linejoin': 'round',
+  }));
+  const fuera = (e.exterior || []).map((f) => el('path', {
+    d: ruta(f.geometry), fill: color.territorioExterior,
+    stroke: color.territorioExteriorBorde, 'stroke-width': trazoMm.limiteProvincial,
+    'stroke-linejoin': 'round',
+  }));
+
+  /* La coropleta es la de TODAS las unidades del mapa que caigan dentro, no sólo la de
+     los miembros: eso es lo que hace que el recuadro se lea como un trozo del mapa. */
+  const relleno = (e.unidades || miembros).map((f) => {
     const datos = agregado.porUnidad.get(f.properties.ubigeo);
     const clase = claseDe(datos ? datos.tiposDistintos : 0, clases);
     return el('path', { d: ruta(f.geometry), fill: clase >= 0 ? rampa[clase] : color.sinDato });
   });
-  /* La unidad que da nombre al recuadro va con el trazo destacado y las que están de
-     contexto con el fino. Sin esa diferencia, un recuadro titulado «San Miguel» que
-     enseña cuatro distritos obliga a leer los nombres para saber cuál es el que se
-     amplía, y a ese tamaño los nombres son lo último que se mira. */
-  const esProtagonista = (f) => !protagonistas || protagonistas.has(f.properties.ubigeo);
-  const limites = miembros.map((f) => el('path', {
+
+  const limites = [
+    ...trazar(e.unidades || miembros, tz.unidad),
+    ...trazar(e.intermedios, tz.intermedio),
+    ...trazar(e.contorno, tz.contorno),
+  ];
+
+  /* Y encima, el contorno de la unidad que da nombre al recuadro. Sin él, en un recorte
+     donde todo se dibuja igual no habría manera de saber cuál de las áreas es la que se
+     ha ampliado. */
+  const resalte = miembros.map((f) => el('path', {
     d: ruta(f.geometry),
     fill: 'none',
-    stroke: esProtagonista(f) ? color.limiteProvincialDestacado : color.limiteProvincial,
-    'stroke-width': esProtagonista(f) ? trazoMm.limiteProvincialDestacado : trazoMm.limiteProvincial,
+    stroke: color.limiteProvincialDestacado,
+    'stroke-width': trazoMm.limiteProvincialDestacado * 1.4,
     'stroke-linejoin': 'round',
   }));
 
@@ -691,8 +721,9 @@ function dibujarRecuadro({
      el centro de la caja envolvente y los rótulos en el polo, así que la reserva que
      hacía el motor de rótulos no coincidía con dónde estaban los íconos y el nombre
      de Callao acababa encima de ellos. */
+  const visibles = e.unidades || miembros;
   const geometria = new Map();
-  for (const f of miembros) {
+  for (const f of visibles) {
     const recolector = recolectorDeAnillos();
     geoPath(proy, recolector)(f);
     const anillos = recolector.anillos;
@@ -714,10 +745,10 @@ function dibujarRecuadro({
   if (modoSimbolos === 'individual') {
     const dentroDelRecuadro = (x, y) => x >= marcoInterno.x && x <= marcoInterno.x + marcoInterno.ancho
       && y >= marcoInterno.y && y <= marcoInterno.y + marcoInterno.alto;
-    const enRecuadro = new Set(miembros.map((f) => f.properties.ubigeo));
-
+    /* Todos los centros que caigan dentro del marco, no sólo los del distrito que da
+       nombre al recuadro: lo que se amplía es un trozo del mapa, y un trozo en el que
+       faltaran los centros de la manzana de al lado diría algo falso. */
     for (const c of centros) {
-      if (!enRecuadro.has(c.ubigeo)) continue;
       if (!Number.isFinite(c.lat) || !Number.isFinite(c.lon)) continue;
       const punto = proy([c.lon, c.lat]);
       if (!punto || !dentroDelRecuadro(punto[0], punto[1])) continue;
@@ -737,7 +768,7 @@ function dibujarRecuadro({
       });
     }
   } else {
-  for (const f of miembros) {
+  for (const f of visibles) {
     const datos = agregado.porUnidad.get(f.properties.ubigeo);
     const geo = geometria.get(f);
     if (!datos || !geo) continue;
@@ -800,7 +831,7 @@ function dibujarRecuadro({
     }),
     grupo({ 'clip-path': `url(#${idRecorte})` }, [
       rect(marcoInterno, { fill: color.oceano }),
-      ...relleno, ...limites, ...simbolos, rotulos,
+      ...paises, ...fuera, ...relleno, ...limites, ...resalte, ...simbolos, rotulos,
     ]),
     rect(marcoInterno, {
       fill: 'none', stroke: color.marco, 'stroke-width': trazoMm.marcoInterior,
