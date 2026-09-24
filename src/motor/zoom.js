@@ -62,15 +62,15 @@ export const AMPLIACION_MINIMA = 1.5;
  * NO es «usa una hoja mayor», aunque lo parezca. Medido departamento a departamento: al
  * pasar de A4 a A0 en vertical, la zona y el hueco libre crecen a la vez y la ampliación
  * se queda clavada en torno a ×1. Lo que abre sitio es girar la hoja: el Perú es alto y
- * estrecho, así que en apaisado el marco se ensancha y deja un hueco grande a los lados.
- * Cusco pasa de ×0,95 en A2 vertical a ×1,77 en A2 apaisado, con el mismo papel.
+ * estrecho, así que en horizontal el marco se ensancha y deja un hueco grande a los lados.
+ * Cusco pasa de ×0,95 en A2 vertical a ×1,77 en A2 horizontal, con el mismo papel.
  */
 function consejoDeEspacio(marco) {
   if (marco.ancho <= marco.alto) {
-    return ' Prueba con la hoja apaisada: el Perú es alto y estrecho, así que girarla abre'
+    return ' Prueba con la hoja horizontal: el Perú es alto y estrecho, así que girarla abre'
       + ' un hueco libre mucho mayor que agrandarla.';
   }
-  /* Ya está apaisada. Decir «gira la hoja» aquí sería un consejo imposible, y decir «usa
+  /* Ya está horizontal. Decir «gira la hoja» aquí sería un consejo imposible, y decir «usa
      una hoja mayor» sería falso: de A2 a A0 la zona y el hueco crecen a la vez. Lo que
      queda es la verdad, que es accionable de otra manera —imprimir ese departamento como
      ámbito propio en vez de como recuadro del mapa nacional—. */
