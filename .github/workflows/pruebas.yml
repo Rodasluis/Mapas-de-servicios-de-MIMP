@@ -1,0 +1,76 @@
+# Controles de calidad en cada pull request.
+#
+# Lo que se comprueba aquí es lo mismo que en local, con los mismos comandos: no hay
+# una versión «de CI» del control que pudiera pasar mientras la de verdad falla.
+#
+# La preparación descarga unos 95 MB de cartografía y tipografías desde orígenes
+# anclados a una versión concreta. Se cachean por el contenido de package.json, que es
+# donde viven esas versiones: mientras no cambie un TAG, no se vuelve a descargar nada.
+name: Pruebas
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Un pull request que recibe varios empujones seguidos sólo comprueba el último.
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  calidad:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # Chromium compone las muestras y rasteriza los PDF; sin él no hay control alguno.
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Cachear los datos preparados
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache
+            public/data
+            public/fonts
+          key: datos-${{ hashFiles('package.json', 'scripts/fetch-*.mjs', 'scripts/build-geo.mjs') }}
+
+      - name: Preparar los datos
+        run: npm run preparar
+
+      - name: Construir el sitio
+        run: npm run build
+
+      # Totales por tipo y ámbito, superposiciones, escala gráfica, vectorialidad, y la
+      # comprobación de que el PDF descargado desde la web es idéntico al del banco.
+      - name: Muestras y comprobaciones estructurales
+        run: npm run muestras -- --fecha=2026-01-01
+
+      # Regresión visual contra las firmas aprobadas, más el informe de rendimiento.
+      - name: Control de calidad
+        run: npm run qa
+
+      # Si algo no cuadra, las láminas y los mapas de diferencias se pueden descargar y
+      # mirar: «la firma cambió» no es accionable sin ver qué cambió.
+      - name: Guardar las láminas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muestras
+          path: |
+            muestras/*.pdf
+            muestras/informe.json
+            muestras/regresion/*.png
+          retention-days: 14

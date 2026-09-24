@@ -1,1 +1,6 @@
 *.pdf
+
+# El informe de la última ejecución y las láminas de diferencias son salida, igual
+# que los PDF: se regeneran con «npm run muestras» y «npm run qa».
+informe.json
+regresion/

@@ -9,10 +9,14 @@ No es una captura de pantalla ampliada: el PDF se construye a partir de la geome
 con las fuentes incrustadas, de modo que se puede imprimir en A0 sin que aparezca un
 solo píxel.
 
-> **Estado: Fase 7 — ámbito distrital.**
-> Los cuatro ámbitos funcionan: Perú, departamento, provincia y distrito. El distrital
-> identifica cada centro con un número y una tabla de nombre, tipo y dirección. Falta el
-> control de calidad y el cierre (Fase 8).
+> **Estado: Fase 8 — control de calidad y cierre.**
+> Los cuatro ámbitos funcionan y el repositorio se comprueba solo: regresión visual de
+> los PDF, integridad de los totales, vectorialidad, rendimiento y un flujo de
+> integración continua en cada pull request.
+
+Documentación: **[manual de uso](docs/manual.md)** para quien produce mapas y
+**[decisiones cartográficas](docs/decisiones-cartograficas.md)** para quien necesita
+saber por qué el mapa es como es.
 
 ## Puesta en marcha
 
@@ -82,6 +86,7 @@ apareciera uno, incluso dentro de un recuento agregado.
 | `npm run logos` | Normaliza los logotipos de `referencias/logos/` |
 | `npm run metricas` | Extrae las métricas de las tipografías |
 | `npm run muestras` | Genera y verifica los PDF de `muestras/`, y compara la descarga de la web con ellos |
+| `npm run qa` | Regresión visual, vectorialidad y rendimiento (`-- --aprobar` fija referencias) |
 
 ## Cómo está organizado
 
@@ -93,7 +98,8 @@ src/estilo/   tokens.js — única definición de colores, tipografías y grosor
 public/       lo que se sirve tal cual (datos y tipografías, generados)
 referencias/  mapa de 2020 y logotipos que sirven de referencia
 muestras/     PDF de prueba que genera cada fase
-tests/        pruebas de integridad y de regresión visual (Fase 8)
+tests/        verificación de los PDF, regresión visual y la web frente a las muestras
+docs/         manual de uso y registro de decisiones cartográficas
 ```
 
 ### La cartografía, en tres niveles
@@ -663,6 +669,55 @@ seguiría saliendo verde. Por eso cada caso declara además qué tiene que haber
 —tamaño de página medido **en el archivo**, estado de los controles del panel y
 parámetros que sobreviven en la barra de direcciones—, y se comprueba que cambiar un
 control recompone el mapa y actualiza la URL.
+
+## Control de calidad
+
+```bash
+npm run muestras    # 15 láminas y lo que se puede medir mientras compone
+npm run qa          # lo que sólo se ve mirando el archivo terminado
+```
+
+Los dos corren en cada pull request (`.github/workflows/pruebas.yml`) con **los mismos
+comandos** que en local: no hay una versión «de CI» del control que pudiera pasar
+mientras la de verdad falla.
+
+### Regresión visual
+
+Se rasteriza el **PDF** —no el SVG del que salió— y se compara con una referencia
+aprobada. Rasterizarlo importa: entre el SVG y el papel está svg2pdf, que es justamente
+donde han aparecido los fallos más caros de este proyecto —el texto en Times, los halos
+sin `paint-order`, el interletraje—. Un control que mirara el SVG los habría dado todos
+por buenos.
+
+No se guardan las imágenes: un A0 a 150 ppp son 35 megapíxeles. Se guarda una **firma**
+—la lámina reducida a una rejilla de 64 × 64 grises— que ocupa unos kilobytes. Cuando
+una firma no cuadra, el control escribe la lámina en `muestras/regresion/` con las
+celdas que cambiaron marcadas en rojo, porque «la firma cambió» no es accionable.
+
+**Las tolerancias están medidas, no supuestas.** El primer intento las puso generosas por
+miedo al ruido del antialiasing, y con esos números cambiar el azul del mar de `#d9f1ff`
+a `#d4eeff` **pasaba el control**. Medido, el ruido entre dos ejecuciones idénticas es
+exactamente cero en las quince muestras —el PDF es determinista con fecha fija y el
+rasterizado también—, así que el margen no es para el ruido sino para un cambio de
+versión del navegador; y si eso ocurre, lo correcto es volver a aprobar, no ensanchar el
+umbral. Con las tolerancias actuales, ese cambio de color se detecta en ocho láminas.
+
+### Rendimiento
+
+| Lámina | Componer | Exportar | Total |
+|---|---:|---:|---:|
+| Perú A0 vertical | 12,4 s | 9,8 s | **22,8 s** |
+| Departamento de Lima A1 | 5,4 s | 4,3 s | 10,1 s |
+| Perú A0 horizontal | 3,9 s | 3,8 s | 7,9 s |
+| Distrito de Lima A3 | 2,0 s | 2,4 s | 4,5 s |
+| Perú A4 vertical | 1,4 s | 2,2 s | 3,8 s |
+
+El A0 vertical pasa del presupuesto de 20 s y el control lo dice sin fallar: la lámina
+sale bien, lo que se resiente es la espera. Es el caso extremo —el país entero al nivel
+de detalle más fino, con cuatro recuadros que redibujan su entorno— y el informe
+propone por dónde recortar: bajar de cuatro a tres recuadros en A0 quita una cuarta
+parte del entorno redibujado, y ese entorno podría ir al nivel medio si se comprueba que
+no abre hilos blancos en los límites compartidos.
 
 ## Despliegue
 

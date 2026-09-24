@@ -484,6 +484,31 @@ for (const { muestra, verificacion: v } of resultados) {
   for (const p of v.problemas) { console.log(`    ✗ ${p}`); fallos++; }
 }
 
+/* Informe legible por máquina de todo lo que salió de esta ejecución. Lo consume
+   `npm run qa` para la regresión visual y el informe de rendimiento, y sirve además
+   como registro de qué se generó y con qué versión de los datos. */
+fs.writeFileSync(path.join(DESTINO, 'informe.json'), `${JSON.stringify({
+  generado: new Date().toISOString(),
+  datosTag: resultados[0]?.salida.meta.datosTag,
+  fechaFija: fechaFija || null,
+  muestras: resultados.map(({ muestra, salida, verificacion, msTotalNode }) => ({
+    nombre: muestra.nombre,
+    ambito: salida.meta.ambito,
+    hoja: salida.meta.hoja,
+    escala: salida.meta.escala,
+    nivel: salida.meta.nivel,
+    centros: salida.meta.servicios.totalDibujado,
+    bytesPdf: verificacion.bytes,
+    bytesSvg: salida.bytesSvg,
+    msComposicion: salida.meta.msComposicion,
+    msPdf: salida.meta.msPdf,
+    msTotal: msTotalNode,
+    imagenes: verificacion.imagenes,
+    fuentes: verificacion.fuentes,
+  })),
+}, null, 1)}
+`);
+
 const totalBytes = resultados.reduce((s, r) => s + r.verificacion.bytes, 0);
 console.log(`\n  ${resultados.length} archivos en muestras/ (${peso(totalBytes)})`);
 if (fechaFija) console.log(`  fecha fija ${fechaFija}: la salida es reproducible byte a byte`);
