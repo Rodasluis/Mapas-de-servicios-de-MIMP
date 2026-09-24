@@ -43,10 +43,15 @@ export const color = {
   localizadorBorde: '#9a968f',
   localizadorResalte: '#ec1c24',
 
-  /* Límites administrativos. */
+  /* Límites administrativos.
+
+     El salto entre el departamental y el provincial es deliberado y grande, en color y
+     en grosor a la vez. Con 0,3 mm de gris medio, el límite de departamento apenas se
+     distinguía del de provincia y no se veía a qué departamento pertenece cada
+     provincia, que es la primera lectura que se le pide a este mapa. */
   limiteNacional: '#000000',
-  limiteDepartamental: '#3a3a3a',
-  limiteProvincial: '#6e6e6e',
+  limiteDepartamental: '#111111',
+  limiteProvincial: '#8a8a8a',
   limiteDistrital: '#9a9a9a',
 
   /* Tinta de los rótulos. */
@@ -114,8 +119,8 @@ export const fuentes = {
  */
 export const trazoMm = {
   limiteNacional: 0.5,
-  limiteDepartamental: 0.3,
-  limiteProvincial: 0.18,
+  limiteDepartamental: 0.5,
+  limiteProvincial: 0.15,
   limiteDistrital: 0.1,
   costa: 0.25,
   paisVecino: 0.15,

@@ -106,6 +106,7 @@ async function cargarNacional({ cargador, nivel }) {
     contorno: departamentos,
     exterior: coleccion([]),
     encaje: departamentos,
+    zonas: zonasPor(2, departamentos.features, true),
     trazos: { unidad: 'limiteProvincial', intermedio: null, contorno: 'limiteDepartamental' },
     agregacion: 'provincia',
     simbolos: 'agregado',
@@ -147,6 +148,7 @@ async function cargarDepartamento({ ambito, cargador, nivel }) {
     contorno: coleccion([propio]),
     exterior: coleccion(vecinos),
     encaje: coleccion([propio]),
+    zonas: zonasPor(4, provincias.features),
     trazos: { unidad: 'limiteDistrital', intermedio: 'limiteProvincial', contorno: 'limiteDepartamental' },
     agregacion: 'distrito',
     simbolos: 'agregado',
@@ -201,6 +203,7 @@ async function cargarProvincia({ ambito, cargador, nivel }) {
     contorno: coleccion([propia]),
     exterior: coleccion([...otrosDepartamentos, ...fuera]),
     encaje: coleccion([propia]),
+    zonas: zonasPor(6, dentro),
     trazos: { unidad: 'limiteDistrital', intermedio: null, contorno: 'limiteDepartamental' },
     agregacion: 'distrito',
     simbolos: 'individual',
@@ -216,6 +219,24 @@ async function cargarProvincia({ ambito, cargador, nivel }) {
 /* -------------------------------- utilidades ----------------------------- */
 
 const coleccion = (features) => ({ type: 'FeatureCollection', features });
+
+/**
+ * Cómo se agrupan las unidades en ZONAS ampliables, y cómo se llama cada una.
+ *
+ * La zona es siempre el nivel inmediatamente superior a la unidad que se dibuja, que es
+ * la agrupación que un lector reconoce: en el mapa del país, las provincias se amplían
+ * por departamento; en el de un departamento, los distritos por provincia. `longitud`
+ * son los dígitos del ubigeo de la unidad que forman la clave de su zona.
+ *
+ * `limaAparte` sólo tiene sentido cuando las zonas son departamentos: es el corte que
+ * separa Lima Metropolitana y Callao del resto de Lima. Dentro de un mapa del
+ * departamento de Lima, «Lima Metropolitana» ya es una de sus provincias.
+ */
+const zonasPor = (longitud, rasgos, limaAparte = false) => ({
+  longitud,
+  limaAparte,
+  nombres: new Map(rasgos.map((f) => [f.properties.ubigeo, f.properties.nombre])),
+});
 
 function soloRasgos(coleccionEntera, predicado, queEs) {
   const features = coleccionEntera.features.filter(predicado);

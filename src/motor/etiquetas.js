@@ -33,6 +33,22 @@ export const HOLGURA_MM = 0.35;
  * donde un rótulo estorba menos a un símbolo— y sólo después los laterales y las
  * diagonales.
  */
+/**
+ * Los grupos de íconos NO bloquean a los rótulos del mapa.
+ *
+ * El grupo de íconos de una provincia se ancla en su polo de inaccesibilidad, que es
+ * justamente el mejor sitio para su nombre, así que tratarlo como obstáculo empujaba
+ * cada rótulo hacia el borde de su provincia o lo dejaba fuera del todo: Huancavelica
+ * desaparecía y LA LIBERTAD acababa arrinconada en un extremo del departamento en vez
+ * de en su centro. Un nombre montado sobre unos íconos se lee —lleva halo y va encima—,
+ * mientras que un nombre ausente o descolocado no dice a qué se refiere.
+ *
+ * Esto vale sólo para los rótulos entre sí y con los símbolos. La leyenda, los
+ * recuadros de zoom y la cabecera siguen siendo intocables, y por eso los símbolos no
+ * se sacan del índice: se ignoran al preguntar.
+ */
+const ES_SIMBOLO = (caja) => caja.nivel === 'simbolos';
+
 const DIRECCIONES = [
   [0, 0], [0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1],
 ];
@@ -106,6 +122,15 @@ function colocarUna(s, { indice, medidor, marco, factor }) {
     variantes.push(partirEnDos(s.texto, medidor, s.estilo));
   }
 
+  /* Dos pasadas. En la primera los grupos de íconos SÍ estorban, así que el nombre se
+     va a un hueco limpio de su propia provincia y se lee entero. Sólo si no encuentra
+     ninguno se admite montarlo sobre los íconos, que es preferible a omitirlo: un
+     nombre medio tapado se adivina, uno ausente no dice nada.
+
+     Importa porque los rótulos se dibujan DEBAJO de los símbolos: sin la primera
+     pasada, un nombre centrado en el polo de su provincia —que es justo donde está el
+     grupo de íconos— quedaba oculto tras las insignias. */
+  for (const admitirSimbolos of [false, true]) {
   for (const lineas of variantes) {
     const ancho = Math.max(...lineas.map((l) => medidor.ancho(l, s.estilo)));
     const alto = medidor.alto(s.estilo) * (lineas.length === 1 ? 1 : 1.82);
@@ -117,7 +142,7 @@ function colocarUna(s, { indice, medidor, marco, factor }) {
         const caja = { x: cx - ancho / 2, y: cy - alto / 2, ancho, alto };
 
         if (!dentroDe(marco, caja)) continue;
-        if (indice.choca(caja, HOLGURA_MM)) continue;
+        if (indice.choca(caja, HOLGURA_MM, admitirSimbolos ? ES_SIMBOLO : null)) continue;
 
         /* Un rótulo tiene que señalar lo que nombra. Lo ideal es que su centro caiga
            dentro del polígono, pero en una provincia diminuta el nombre no cabe
@@ -132,6 +157,7 @@ function colocarUna(s, { indice, medidor, marco, factor }) {
         return { caja, lineas, svg: dibujar(lineas, cx, cy, s, medidor, factor) };
       }
     }
+  }
   }
   return null;
 }

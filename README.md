@@ -189,9 +189,37 @@ a tamaño real siguen distinguiéndose.
 
 ### Los recuadros de zoom
 
-**Qué se amplía.** En automático no hay una lista de «amplía Lima y Cusco»: el motor
-mide, provincia a provincia, qué fracción de su grupo de íconos pisa la del vecino,
-agrupa las que pasan del umbral y las amplía. El criterio vale para cualquier hoja y
+**De quién es cada recuadro.** Uno por **departamento**, y se llama por su nombre.
+Antes la región se armaba fusionando las cajas de las provincias apiñadas que se
+tocaban, y salían conjuntos sin correspondencia con ninguna división real —tres
+provincias de Áncash, una de La Libertad y media de Huánuco— que sólo se podían rotular
+«Zoom 1». Un recuadro que hay que ir a buscar al mapa para saber de dónde sale no es un
+zoom: es otro mapa suelto. Ahora dice «Cusco» y dentro sólo hay provincias de Cusco.
+
+Lima se parte en dos zonas, y no por capricho administrativo. **Lima Metropolitana y
+Callao van juntos**: son dos ámbitos en el papel y una sola mancha urbana en el mapa, y
+ampliarlos por separado daría dos recuadros que enseñan lo mismo. **Lima provincias va
+aparte**: las otras nueve provincias se extienden trescientos kilómetros al norte y al
+sur, y meterlas en el mismo recuadro obligaría a una escala en la que la conurbación
+—que es lo apiñado— volvería a ser un punto.
+
+**Qué se amplía.** Los departamentos con **más servicios**, de mayor a menor. El
+criterio anterior era el apiñamiento, que mide otra cosa: cuánto se pisan los íconos en
+el papel, lo cual depende del tamaño de la hoja y de la forma de la provincia. Con él,
+una provincia diminuta con tres servicios salía por delante de un departamento con
+cuarenta repartidos. Lo que se quiere ver de cerca es dónde hay más.
+
+**Qué trozo del departamento.** El departamento **entero**, siempre que quepa ampliado.
+Cuando no cabe, su núcleo, y el informe lo dice.
+
+Es una limitación de superficie, no una decisión: Cusco ocupa 154 × 185 mm en un A1 y el
+mayor hueco libre de la lámina son 131 × 156, porque el Perú está en medio y a los lados
+sólo quedan dos franjas de unos 130 mm. Dibujarlo ahí daría un «zoom» a 0,85 veces el
+tamaño del mapa: una reducción rotulada como ampliación. En A0 apaisado, donde el hueco
+sí da, Cusco sale completo con sus trece provincias a ×1,9; en A2 sale su núcleo —las
+provincias del entorno de la ciudad— a ×4,3. El rectángulo rojo sobre el mapa principal
+marca exactamente el trozo ampliado, y cuando es parcial el informe avisa de que hace
+falta una hoja mayor para verlo completo. El criterio vale para cualquier hoja y
 cualquier filtro; con un solo tipo activo los símbolos dejan de estorbarse y no se
 dibuja ninguno. También se pueden **elegir a mano** por ubigeo de provincia o de
 departamento, y entonces el motor avisa si la selección abarca demasiado para que
@@ -268,17 +296,29 @@ Se dibuja con su propia proyección y con el contorno más ligero: a cuatro cent
 ancho la diferencia entre niveles de detalle no se ve, y el pesado multiplicaría por
 veinte el tamaño del PDF.
 
-### Cuándo un zoom deja de serlo
+### Los recuadros de zoom, en cualquier ámbito
 
-El tope de unidades por recuadro pasa a ser doble. En selección manual sigue siendo
-bajo —alguien puede marcar un departamento entero, y ampliar veintitantas provincias es
-volver a dibujar el mismo mapa—, pero en automático se relaja, porque ahí el
-agrupamiento ya impone un tope **geométrico** y ése es el criterio que de verdad decide
-si ampliar sirve de algo. Contar unidades es un mal sustituto: el conglomerado de Lima
-son 43 distritos en 800 km² y ampliarlo es justamente para lo que existe un recuadro,
-mientras que las 36 provincias que llegaban a agruparse en el mapa nacional ocupaban
-medio país. Con el mismo tope para los dos casos, el departamento de Lima se quedaba sin
-un solo recuadro precisamente donde más falta hacía.
+La regla de los recuadros —uno por zona, nombrado, con las unidades de esa zona y nada
+más— se generaliza sin excepciones: **la zona es siempre el nivel inmediatamente
+superior a la unidad que se dibuja.**
+
+| Ámbito | Unidad | Zona ampliable | Ejemplo de título |
+|---|---|---|---|
+| Perú | provincia | departamento | «Cusco» |
+| Departamento | distrito | provincia | «Calca» |
+| Provincia | distrito | el propio distrito | «San Miguel» |
+
+Cada ámbito lo declara en una línea —cuántos dígitos del ubigeo forman la clave de la
+zona y cómo se llama cada una—, así que el módulo de recuadros no tiene que saber en
+qué ámbito está. El corte de Lima Metropolitana y Callao sólo se aplica cuando las
+zonas son departamentos: dentro de un mapa del departamento de Lima, «Lima
+Metropolitana» ya es una de sus provincias y partirla otra vez no significaría nada.
+
+**Una zona de una sola unidad recibe contexto.** Pasa en el ámbito provincial, donde la
+zona es el propio distrito: el recuadro salía con un distrito flotando sobre el fondo y
+sólo el rectángulo rojo decía dónde estaba. Se le añaden las unidades vecinas del mismo
+ámbito, que es lo que sitúa sin cruzar ninguna división que el título prometa: en un
+mapa de la provincia de Lima, todo lo que entre sigue siendo la provincia de Lima.
 
 ### En la interfaz
 
@@ -301,9 +341,23 @@ El problema no es escribir nombres: es decidir cuáles caben. Hay 25 departament
 mapa con rótulos superpuestos es ilegible y uno que los omita en silencio es engañoso,
 así que el motor coloca lo que cabe **por prioridad** y deja constancia de lo que no.
 
-Cada rótulo prueba hasta diez puntos interiores de su polígono —no sólo el polo, que
-es justo donde está el grupo de íconos— y, en cada uno, la posición centrada más las
-ocho de alrededor, primero en una línea y luego partido en dos. Se mide con las
+**Los rótulos van debajo de los símbolos, y los ceden sólo si no hay más remedio.** El
+grupo de íconos de una provincia se ancla en su polo de inaccesibilidad, que es
+justamente el mejor sitio para su nombre. Tratarlo como obstáculo insalvable empujaba
+cada rótulo hacia el borde de su provincia o lo dejaba fuera del todo —Huancavelica
+desaparecía y LA LIBERTAD acababa arrinconada en un extremo en vez de en el centro—,
+pero permitirlo sin más escondía el nombre bajo las insignias, porque los rótulos se
+dibujan por debajo: la cifra de sedes es un dato del mapa y el nombre casi siempre se
+deduce de la posición.
+
+Se resuelve en dos pasadas. En la primera los íconos sí estorban, de modo que el nombre
+busca un hueco limpio dentro de su propia provincia; sólo si no encuentra ninguno se
+admite montarlo, que es preferible a omitirlo. La leyenda, los recuadros y la cabecera
+siguen siendo intocables: los símbolos no se sacan del índice de colisiones, se ignoran
+al preguntar.
+
+Cada rótulo prueba hasta diez puntos interiores de su polígono y, en cada uno, la
+posición centrada más las ocho de alrededor, primero en una línea y luego partido en dos. Se mide con las
 métricas reales de la tipografía incrustada y se comprueba el choque con **rectángulos
 exactos**, no con la rejilla de ocupación: su celda de 2 mm sirve para decidir si un
 bloque cabe en una esquina, pero no para garantizar que dos rótulos no se tocan.
@@ -313,10 +367,10 @@ compara PDF contra PDF.
 
 | Hoja | Departamentos | Provincias |
 |---|---:|---:|
-| A0 vertical | 24/25 | 184/196 |
-| A1 vertical | 23/25 | 161/196 |
-| A3 vertical | 18/24 | 88/195 |
-| A4 vertical | 10/24 | 51/195 |
+| A0 vertical | 25/25 | 196/196 |
+| A1 vertical | 25/25 | 195/196 |
+| A3 vertical | 24/24 | 177/195 |
+| A4 vertical | 24/24 | 146/195 |
 
 Las provincias que el mapa principal no llega a nombrar son las que su propio grupo de
 íconos llena por completo: Lima, Callao, Huamanga. Son justamente las que acaban en un
@@ -340,6 +394,28 @@ Para decidirlo dibuja el país en una rejilla de 2 mm y consulta, para cada rect
 cuánto territorio cubriría. La misma rejilla resuelve dónde poner los nombres de los
 países —en el **polo de inaccesibilidad** de la parte visible, no en el centroide, que
 en una forma cóncava cae fuera— y dónde cabe «OCÉANO PACÍFICO» sin tocar tierra.
+
+### Ningún nombre de país sobre el Perú
+
+Cuando un recuadro de zoom ocupa el hueco de Brasil, el rótulo «BRASIL» buscaba sitio
+al lado, y al oeste de Brasil está el Perú: el nombre acababa sobre territorio peruano y
+el mapa decía algo **falso**. Comprobar sólo el punto de anclaje no bastaba, porque
+«BRASIL» mide unos treinta milímetros en A1 y un ancla a dos de la frontera deja media
+palabra al otro lado.
+
+Ahora se comprueba la **caja entera** del texto contra la rejilla de territorio, y las
+posiciones candidatas son una retícula sobre la parte visible del país, ordenada
+prefiriendo el desplazamiento vertical: por encima y por debajo de un recuadro se sigue
+estando en Brasil, al lado no. Si aun así no queda sitio, el nombre se **omite** y el
+informe dice por qué; un país sin su nombre se sigue reconociendo por su posición,
+mientras que un país mal nombrado engaña.
+
+### Jerarquía de los límites
+
+El salto entre el límite departamental y el provincial es deliberado y grande, en color
+y en grosor a la vez: 0,5 mm casi negro frente a 0,15 mm de gris claro. Con los dos en
+grises parecidos no se distinguía a qué departamento pertenece cada provincia, que es la
+primera lectura que se le pide a este mapa.
 
 ### La retícula lleva coordenadas UTM
 

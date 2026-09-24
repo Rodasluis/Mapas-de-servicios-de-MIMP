@@ -197,6 +197,16 @@ async function arrancar() {
         + `${meta.etiquetas.omitidos.slice(0, 5).join(', ')}${omitidos > 5 ? '…' : ''}.`);
     }
     for (const a of meta.servicios.avisosRecuadros || []) avisos.push(a);
+
+    /* Un nombre de país que falta se nota; saber por qué falta no, y sin eso parece un
+       descuido del programa. El caso normal es que un recuadro de zoom ocupe el hueco. */
+    const paisesFuera = (meta.rotulos.omitidos || [])
+      .filter((n) => n === n.toLocaleUpperCase('es') && !n.startsWith('OCÉANO') && !n.startsWith('LAGO'));
+    for (const n of paisesFuera) {
+      const motivo = (meta.rotulos.motivos || {})[n];
+      avisos.push(`Sin sitio para el nombre de ${n}${motivo ? ` (${motivo})` : ''}.`
+        + ' Se omite antes que escribirlo sobre el Perú.');
+    }
     if (meta.layout.omitidas.length) {
       avisos.push(`No cupieron estos elementos: ${meta.layout.omitidas.join(', ')}.`);
     }
