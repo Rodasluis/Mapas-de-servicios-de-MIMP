@@ -189,9 +189,31 @@ a tamaño real siguen distinguiéndose.
 
 ### Los recuadros de zoom
 
+**De quién es cada recuadro.** Uno por **departamento**, y se llama por su nombre.
+Antes la región se armaba fusionando las cajas de las provincias apiñadas que se
+tocaban, y salían conjuntos sin correspondencia con ninguna división real —tres
+provincias de Áncash, una de La Libertad y media de Huánuco— que sólo se podían rotular
+«Zoom 1». Un recuadro que hay que ir a buscar al mapa para saber de dónde sale no es un
+zoom: es otro mapa suelto. Ahora dice «Cusco» y dentro sólo hay provincias de Cusco.
+
+Lima se parte en dos zonas, y no por capricho administrativo. **Lima Metropolitana y
+Callao van juntos**: son dos ámbitos en el papel y una sola mancha urbana en el mapa, y
+ampliarlos por separado daría dos recuadros que enseñan lo mismo. **Lima provincias va
+aparte**: las otras nueve provincias se extienden trescientos kilómetros al norte y al
+sur, y meterlas en el mismo recuadro obligaría a una escala en la que la conurbación
+—que es lo apiñado— volvería a ser un punto.
+
+**Qué trozo del departamento.** El del conglomerado que se estorba, no el departamento
+entero. Encuadrarlo completo parece lo natural y no funciona: Cusco ocupa 154 × 185 mm
+en un A1 y el mayor hueco libre de la lámina son 151 × 180, así que el «zoom» saldría a
+la misma escala que el mapa y los símbolos se seguirían pisando igual. Encuadrando el
+racimo —en Cusco, las provincias del entorno de la ciudad— la ampliación llega a ×9,5, y
+el rectángulo de referencia sobre el mapa principal dice qué trozo se ha ampliado. Si ni
+así compensa, el recuadro no se dibuja y el informe dice cuántas veces habría agrandado.
+
 **Qué se amplía.** En automático no hay una lista de «amplía Lima y Cusco»: el motor
-mide, provincia a provincia, qué fracción de su grupo de íconos pisa la del vecino,
-agrupa las que pasan del umbral y las amplía. El criterio vale para cualquier hoja y
+mide, provincia a provincia, qué fracción de su grupo de íconos pisa la del vecino y
+amplía donde se estorban. El criterio vale para cualquier hoja y
 cualquier filtro; con un solo tipo activo los símbolos dejan de estorbarse y no se
 dibuja ninguno. También se pueden **elegir a mano** por ubigeo de provincia o de
 departamento, y entonces el motor avisa si la selección abarca demasiado para que
@@ -220,9 +242,17 @@ El problema no es escribir nombres: es decidir cuáles caben. Hay 25 departament
 mapa con rótulos superpuestos es ilegible y uno que los omita en silencio es engañoso,
 así que el motor coloca lo que cabe **por prioridad** y deja constancia de lo que no.
 
-Cada rótulo prueba hasta diez puntos interiores de su polígono —no sólo el polo, que
-es justo donde está el grupo de íconos— y, en cada uno, la posición centrada más las
-ocho de alrededor, primero en una línea y luego partido en dos. Se mide con las
+**Los grupos de íconos no bloquean a los rótulos.** El grupo de una provincia se ancla
+en su polo de inaccesibilidad, que es justamente el mejor sitio para su nombre, así que
+tratarlo como obstáculo empujaba cada rótulo hacia el borde de su provincia o lo dejaba
+fuera del todo: Huancavelica desaparecía y LA LIBERTAD acababa arrinconada en un extremo
+en vez de en el centro. Un nombre montado sobre unos íconos se lee —lleva halo y va
+encima—; uno ausente o descolocado no dice a qué se refiere. La leyenda, los recuadros y
+la cabecera siguen siendo intocables: los símbolos no se sacan del índice de colisiones,
+se ignoran al preguntar.
+
+Cada rótulo prueba hasta diez puntos interiores de su polígono y, en cada uno, la
+posición centrada más las ocho de alrededor, primero en una línea y luego partido en dos. Se mide con las
 métricas reales de la tipografía incrustada y se comprueba el choque con **rectángulos
 exactos**, no con la rejilla de ocupación: su celda de 2 mm sirve para decidir si un
 bloque cabe en una esquina, pero no para garantizar que dos rótulos no se tocan.
@@ -232,10 +262,10 @@ compara PDF contra PDF.
 
 | Hoja | Departamentos | Provincias |
 |---|---:|---:|
-| A0 vertical | 24/25 | 184/196 |
-| A1 vertical | 23/25 | 161/196 |
-| A3 vertical | 18/24 | 88/195 |
-| A4 vertical | 10/24 | 51/195 |
+| A0 vertical | 25/25 | 196/196 |
+| A1 vertical | 25/25 | 195/196 |
+| A3 vertical | 24/24 | 175/195 |
+| A4 vertical | 24/24 | 139/195 |
 
 Las provincias que el mapa principal no llega a nombrar son las que su propio grupo de
 íconos llena por completo: Lima, Callao, Huamanga. Son justamente las que acaban en un

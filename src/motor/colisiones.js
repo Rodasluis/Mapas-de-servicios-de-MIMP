@@ -46,12 +46,21 @@ export function crearIndice() {
      * ¿Choca con algo ya guardado? `holguraMm` separa además los rótulos entre sí:
      * dos cajas que se tocan justo en el borde son legales pero ilegibles.
      */
-    choca(rect, holguraMm = 0) {
+    /**
+     * ¿Choca con algo ya guardado?
+     *
+     * `ignorar` permite excluir una clase de rectángulos sin sacarlos del índice: los
+     * rótulos del mapa pueden montarse sobre los grupos de íconos, pero ésos siguen
+     * teniendo que bloquear a la leyenda y a los recuadros de zoom, así que no se
+     * pueden quitar de aquí.
+     */
+    choca(rect, holguraMm = 0, ignorar = null) {
       const h = holguraMm;
       for (const k of cubosDe({
         x: rect.x - h, y: rect.y - h, ancho: rect.ancho + h * 2, alto: rect.alto + h * 2,
       })) {
         for (const otro of cubos.get(k) || []) {
+          if (ignorar && ignorar(otro)) continue;
           if (!(rect.x + rect.ancho + h <= otro.x || otro.x + otro.ancho + h <= rect.x
             || rect.y + rect.alto + h <= otro.y || otro.y + otro.alto + h <= rect.y)) {
             return otro;
@@ -84,6 +93,10 @@ export function buscarSolapes(rectangulos, holguraMm = 0) {
         solapes.push({
           a: a.etiqueta || a.id || 'sin nombre',
           b: b.etiqueta || b.id || 'sin nombre',
+          // El nivel viaja con el solape para que quien comprueba pueda decidir si
+          // ese par concreto está permitido, sin volver a buscar las cajas.
+          nivelA: a.nivel || 'bloque',
+          nivelB: b.nivel || 'bloque',
           areaMm2: Number((dx * dy).toFixed(2)),
         });
       }
