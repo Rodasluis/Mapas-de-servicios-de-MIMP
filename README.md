@@ -347,6 +347,33 @@ Comprobado sobre los 25 departamentos, uno a uno, seleccionándolos a mano:
   ofrecer un remedio que no existe.
 - En A2 vertical, diez quedan por debajo de ×1,5 y se dibujan igual, con el aviso.
 
+### Cada recuadro, del lado donde está su zona
+
+El hueco se busca primero en la mitad de la lámina donde cae la zona, y sólo si ahí no
+cabe se admite el resto. Con «Lima Metropolitana y Callao» en el flanco derecho y
+«Cusco» en el izquierdo había que cruzar la lámina entera para ir de cada rectángulo
+rojo a su ampliación, y con dos o más recuadros tocaba compararlos para saber cuál era
+cuál. Cada uno de su lado, la línea entre el sitio y su detalle es corta y evidente.
+
+La preferencia cede si el hueco del lado bueno no amplía: un hueco pequeño del lado
+correcto no vale más que uno grande del otro.
+
+### La barra de escala se coloca antes que los recuadros
+
+Es pequeña y se acomoda en cualquier parte, así que parecía natural dejarla para el
+final. No lo es: en una Mercator transversa la escala crece al alejarse del meridiano
+central, de modo que una barra puesta en un flanco **mide algo distinto de lo que
+dice**. Cuando un recuadro le quitó el centro del ancho en A4 horizontal, la barra
+declaraba 500 km y cubría 489,6 — un 2,1 % de error en el único elemento de la lámina
+que sirve para medir. Un recuadro puede ir a cualquier hueco; la barra, no.
+
+### En el recuadro se ve cuál es la unidad que lo titula
+
+Los miembros que **son** la zona van con el trazo destacado y los que están de contexto
+con el fino. Sin esa diferencia, un recuadro titulado «San Miguel» que enseña cuatro
+distritos obliga a leer los nombres para saber cuál se amplía, y a ese tamaño los
+nombres son lo último que se mira.
+
 **Una zona de una sola unidad recibe contexto.** Pasa en el ámbito provincial, donde la
 zona es el propio distrito: el recuadro salía con un distrito flotando sobre el fondo y
 sólo el rectángulo rojo decía dónde estaba. Se le añaden las unidades vecinas del mismo
@@ -384,8 +411,20 @@ dibujan por debajo: la cifra de sedes es un dato del mapa y el nombre casi siemp
 deduce de la posición.
 
 Se resuelve en dos pasadas. En la primera los íconos sí estorban, de modo que el nombre
-busca un hueco limpio dentro de su propia provincia; sólo si no encuentra ninguno se
-admite montarlo, que es preferible a omitirlo. La leyenda, los recuadros y la cabecera
+busca un hueco limpio dentro de su propia unidad; sólo si no encuentra ninguno se admite
+montarlo, que es preferible a omitirlo. Y en esa segunda pasada **no vale la primera
+posición que encaje**: se prueban todas y se elige la que menos tape. Valía la primera,
+que por el orden de búsqueda es la del polo, y el polo es justamente donde está el grupo
+de íconos; en un mapa provincial eso dejaba tapados tres de cada cinco nombres teniendo
+sitio mejor a un milímetro. Cada punto interior se prueba además a tres distancias
+crecientes, porque con una sola un nombre no lograba apartarse del grupo aunque su
+unidad tuviera sitio de sobra unos milímetros más allá.
+
+| | antes | ahora |
+|---|---|---|
+| Provincia de Lima en A2 | 59 % tapados | **15 %** |
+| Perú en A1 | 31 % | **16 %** |
+| Departamento de Cusco en A3 | 8 % | 10 % | La leyenda, los recuadros y la cabecera
 siguen siendo intocables: los símbolos no se sacan del índice de colisiones, se ignoran
 al preguntar.
 

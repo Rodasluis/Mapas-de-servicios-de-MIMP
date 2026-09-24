@@ -52,6 +52,11 @@ export const color = {
   limiteNacional: '#000000',
   limiteDepartamental: '#111111',
   limiteProvincial: '#8a8a8a',
+  /* La provincia DENTRO de un mapa departamental hace el papel que el departamento hace
+     en el nacional: es la división que ordena la lectura. Con el gris claro del mapa
+     nacional no se distinguía de los límites de distrito y el departamento se leía como
+     una retícula plana de cien piezas iguales. */
+  limiteProvincialDestacado: '#1f1f1f',
   limiteDistrital: '#9a9a9a',
 
   /* Tinta de los rótulos. */
@@ -121,6 +126,7 @@ export const trazoMm = {
   limiteNacional: 0.5,
   limiteDepartamental: 0.5,
   limiteProvincial: 0.15,
+  limiteProvincialDestacado: 0.4,
   limiteDistrital: 0.1,
   costa: 0.25,
   paisVecino: 0.15,

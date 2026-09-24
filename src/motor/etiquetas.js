@@ -53,6 +53,9 @@ const DIRECCIONES = [
   [0, 0], [0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1],
 ];
 
+/** Múltiplos del desplazamiento base que se prueban alrededor de cada punto. */
+const DISTANCIAS = [1, 1.9, 3];
+
 /**
  * Coloca un conjunto de rótulos.
  *
@@ -130,34 +133,76 @@ function colocarUna(s, { indice, medidor, marco, factor }) {
      Importa porque los rótulos se dibujan DEBAJO de los símbolos: sin la primera
      pasada, un nombre centrado en el polo de su provincia —que es justo donde está el
      grupo de íconos— quedaba oculto tras las insignias. */
-  for (const admitirSimbolos of [false, true]) {
-  for (const lineas of variantes) {
-    const ancho = Math.max(...lineas.map((l) => medidor.ancho(l, s.estilo)));
-    const alto = medidor.alto(s.estilo) * (lineas.length === 1 ? 1 : 1.82);
-
+  /**
+   * Genera las posiciones que se van a probar, de la mejor a la peor.
+   *
+   * Cada punto interior se prueba centrado y en las ocho direcciones, y esas ocho a
+   * tres distancias crecientes. Con una sola distancia, un nombre cuyo polo está bajo
+   * el grupo de íconos no lograba apartarse lo suficiente y acababa debajo de las
+   * insignias aunque su provincia tuviera sitio de sobra unos milímetros más allá.
+   */
+  function* posiciones(ancho, alto) {
     for (const punto of s.puntos) {
-      for (const [dx, dy] of DIRECCIONES) {
-        const cx = punto.x + dx * (ancho / 2 + paso * 0.55);
-        const cy = punto.y + dy * (alto / 2 + paso * 0.55);
-        const caja = { x: cx - ancho / 2, y: cy - alto / 2, ancho, alto };
+      for (const distancia of DISTANCIAS) {
+        for (const [dx, dy] of DIRECCIONES) {
+          if (distancia > 1 && dx === 0 && dy === 0) continue; // el centro no se repite
+          const cx = punto.x + dx * (ancho / 2 + paso * 0.55) * distancia;
+          const cy = punto.y + dy * (alto / 2 + paso * 0.55) * distancia;
 
-        if (!dentroDe(marco, caja)) continue;
-        if (indice.choca(caja, HOLGURA_MM, admitirSimbolos ? ES_SIMBOLO : null)) continue;
+          /* Un rótulo tiene que señalar lo que nombra. Lo ideal es que su centro caiga
+             dentro del polígono, pero en una provincia diminuta el nombre no cabe
+             dentro por mucho que se busque, y omitirlo sería peor que dejarlo asomar:
+             se admite que sobresalga mientras siga pegado a su punto de anclaje, que
+             sí es interior. */
+          if (s.dentro && !s.dentro(cx, cy)) {
+            const margen = Math.max((punto.radioMm || 0) * 1.4, alto * 1.6);
+            if (Math.hypot(cx - punto.x, cy - punto.y) > margen) continue;
+          }
 
-        /* Un rótulo tiene que señalar lo que nombra. Lo ideal es que su centro caiga
-           dentro del polígono, pero en una provincia diminuta el nombre no cabe
-           dentro por mucho que se busque, y omitirlo sería peor que dejarlo asomar:
-           se admite que sobresalga mientras siga pegado a su punto de anclaje, que
-           sí es interior. */
-        if (s.dentro && !s.dentro(cx, cy)) {
-          const margen = Math.max((punto.radioMm || 0) * 1.4, alto * 1.6);
-          if (Math.hypot(cx - punto.x, cy - punto.y) > margen) continue;
+          const caja = { x: cx - ancho / 2, y: cy - alto / 2, ancho, alto };
+          if (!dentroDe(marco, caja)) continue;
+          yield { cx, cy, caja };
         }
-
-        return { caja, lineas, svg: dibujar(lineas, cx, cy, s, medidor, factor) };
       }
     }
   }
+
+  /* PRIMERA PASADA: los grupos de íconos estorban como cualquier otra cosa, así que el
+     nombre se va a un hueco limpio de su propia unidad y se lee entero. Vale la primera
+     posición que encaje, que por el orden de generación es la más cercana a su polo. */
+  for (const lineas of variantes) {
+    const ancho = Math.max(...lineas.map((l) => medidor.ancho(l, s.estilo)));
+    const alto = medidor.alto(s.estilo) * (lineas.length === 1 ? 1 : 1.82);
+    for (const { cx, cy, caja } of posiciones(ancho, alto)) {
+      if (indice.choca(caja, HOLGURA_MM)) continue;
+      return { caja, lineas, svg: dibujar(lineas, cx, cy, s, medidor, factor) };
+    }
+  }
+
+  /* SEGUNDA PASADA: no hay ningún hueco limpio, así que se admite montar el nombre
+     sobre los íconos —preferible a omitirlo: uno medio tapado se adivina, uno ausente
+     no dice nada—. Aquí NO vale la primera que encaje: se prueban todas y se elige la
+     que MENOS tape. Antes valía la primera, que por el orden es la del polo, y el polo
+     es justamente donde está el grupo de íconos; en un mapa provincial eso dejaba
+     tapados tres de cada cinco nombres teniendo sitio mejor a un milímetro. */
+  let mejor = null;
+  for (const lineas of variantes) {
+    const ancho = Math.max(...lineas.map((l) => medidor.ancho(l, s.estilo)));
+    const alto = medidor.alto(s.estilo) * (lineas.length === 1 ? 1 : 1.82);
+    for (const { cx, cy, caja } of posiciones(ancho, alto)) {
+      if (indice.choca(caja, HOLGURA_MM, ES_SIMBOLO)) continue;
+      const tapado = indice.areaSolapada(caja, ES_SIMBOLO);
+      if (!mejor || tapado < mejor.tapado) mejor = { cx, cy, caja, lineas, tapado };
+      if (tapado === 0) break;
+    }
+    if (mejor && mejor.tapado === 0) break;
+  }
+  if (mejor) {
+    return {
+      caja: mejor.caja,
+      lineas: mejor.lineas,
+      svg: dibujar(mejor.lineas, mejor.cx, mejor.cy, s, medidor, factor),
+    };
   }
   return null;
 }

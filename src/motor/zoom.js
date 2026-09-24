@@ -57,6 +57,16 @@ export const UMBRAL_APINAMIENTO = 0.35;
 export const AMPLIACION_MINIMA = 1.5;
 
 /**
+ * Listón más bajo para el encuadre que muestra la zona ENTERA.
+ *
+ * Enseñar la unidad completa vale por sí mismo: un recuadro titulado «Calca» que enseña
+ * Calca entera dice algo que uno que enseña dos tercios de Calca no dice, aunque
+ * amplíe algo menos. Por eso el encuadre completo se acepta con ×1,25 mientras que el
+ * recortado tiene que llegar a ×1,5 para justificar el recorte.
+ */
+export const AMPLIACION_ENTERA = 1.25;
+
+/**
  * Qué hacer cuando una zona no cabe ampliada.
  *
  * NO es «usa una hoja mayor», aunque lo parezca. Medido departamento a departamento: al
@@ -417,20 +427,57 @@ export function construirRecuadros({
     const aspectoDe = (alturaMapa) => (alturaMapa * proporcionZona + borde * 2)
       / (alturaMapa + cabecera + borde * 2);
 
+    /* El recuadro se busca primero del LADO en el que está la zona, y sólo si ahí no
+       cabe se admite el resto de la lámina.
+
+       Un recuadro de Lima Metropolitana en el flanco derecho y otro de Cusco en el
+       izquierdo obligan a cruzar la lámina entera para ir del rectángulo rojo a su
+       ampliación, y con dos o más recuadros hay que compararlos para saber cuál es
+       cuál. Puestos cada uno de su lado, la línea entre el sitio y su detalle es corta
+       y evidente. Se compara el centro de la zona con el del marco: al oeste del
+       meridiano del marco, mitad izquierda; al este, mitad derecha. */
+    const centroZona = caja.x + caja.ancho / 2;
+    const mitad = centroZona < marco.x + marco.ancho / 2
+      ? { x: marco.x, y: marco.y, ancho: marco.ancho * 0.55, alto: marco.alto }
+      : { x: marco.x + marco.ancho * 0.45, y: marco.y, ancho: marco.ancho * 0.55, alto: marco.alto };
+
+    const buscar = (region, altura) => mayorRectanguloLibre(ocupacion, {
+      aspecto: aspectoDe(altura),
+      region,
+      minLadoMm: LADO_MINIMO_MM,
+      maxLadoMm: ladoMaximo,
+    });
+
     let hueco = null;
     let altura = Math.max(LADO_MINIMO_MM, LADO_MINIMO_MM / Math.max(0.3, proporcionZona));
-    for (let pasada = 0; pasada < 2; pasada++) {
-      const encontrado = mayorRectanguloLibre(ocupacion, {
-        aspecto: aspectoDe(altura),
-        region: marco,
-        minLadoMm: LADO_MINIMO_MM,
-        maxLadoMm: ladoMaximo,
-      });
-      if (!encontrado) return null;
-      hueco = encontrado;
-      altura = encontrado.alto - AIRE_MM - cabecera - borde * 2;
-      if (altura <= 0) return null;
+    for (const region of [mitad, marco]) {
+      let candidato = null;
+      let alturaLocal = altura;
+      for (let pasada = 0; pasada < 2; pasada++) {
+        const encontrado = buscar(region, alturaLocal);
+        if (!encontrado) { candidato = null; break; }
+        candidato = encontrado;
+        alturaLocal = encontrado.alto - AIRE_MM - cabecera - borde * 2;
+        if (alturaLocal <= 0) { candidato = null; break; }
+      }
+      /* La mitad preferida sólo se acepta si el recuadro que sale de ella amplía de
+         verdad; si no, se vuelve a buscar en la lámina entera. Sin esta condición, un
+         hueco pequeño del lado bueno ganaba a uno grande del otro y la ampliación se
+         perdía por respetar una preferencia de colocación. */
+      if (!candidato) continue;
+      const anchoUtil = candidato.ancho - AIRE_MM - borde * 2;
+      const altoUtil = candidato.alto - AIRE_MM - cabecera - borde * 2;
+      const amplia = Math.min(anchoUtil / caja.ancho, altoUtil / caja.alto);
+      hueco = candidato;
+      /* Mismo listón que aplica después la decisión del encuadre: si no, la mitad
+         preferida se descartaba por no llegar a ×1,5 y el encuadre completo acababa
+         colocado al otro lado de la lámina pese a valer con ×1,25. */
+      const minimoAqui = caja === zona
+        ? Math.min(minimoAmpliacion, AMPLIACION_ENTERA) : minimoAmpliacion;
+      if (amplia >= minimoAqui || region === marco) break;
+      hueco = null;
     }
+    if (!hueco) return null;
 
     const ancho = hueco.ancho - AIRE_MM;
     const alto = hueco.alto - AIRE_MM;
@@ -442,7 +489,12 @@ export function construirRecuadros({
        mapa principal no es una ampliación: es el mismo dibujo dos veces, gastando un
        hueco que otra zona sí aprovecharía. */
     const ampliacion = Math.min(anchoMapa / caja.ancho, altoMapa / caja.alto);
-    return { miembros, sub, hueco, ancho, alto, anchoMapa, altoMapa, ampliacion };
+    /* Cuáles de los miembros SON la zona: los demás están de contexto. El recuadro se
+       titula con el nombre de la zona, así que hay que poder ver cuál es dentro. */
+    const protagonistas = new Set(
+      zona.miembros.map((f) => f.properties.ubigeo).filter((u) => miembros.some((m) => m.properties.ubigeo === u)),
+    );
+    return { miembros, protagonistas, sub, hueco, ancho, alto, anchoMapa, altoMapa, ampliacion };
   }
 
   const colocados = [];
@@ -462,6 +514,12 @@ export function construirRecuadros({
        tomada: quien selecciona Cusco quiere Cusco, no la parte de Cusco que mejor le
        venga al motor. */
     const intentos = [{ caja: region, parcial: false }];
+    /* El repliegue al núcleo hace falta en TODOS los niveles, no sólo con los
+       departamentos del mapa nacional. La zona siempre es grande respecto a lo que
+       retrata el mapa: en una lámina del departamento de Lima, la provincia de Lima
+       —que es la que tiene 134 de sus 155 servicios— ocupa 140 × 226 mm y el mayor
+       hueco libre son 147 × 248, o sea ×1,05. Sin repliegue, esa lámina se quedaba con
+       un solo recuadro, el de Barranca, que tiene cuatro servicios. */
     if (modo !== 'manual'
       && region.nucleo
       && region.nucleo.ancho * region.nucleo.alto < region.ancho * region.alto * 0.8) {
@@ -474,11 +532,15 @@ export function construirRecuadros({
       const r = encajarEnHueco(intento.caja, region);
       if (!r) continue;
       mejor = Math.max(mejor, r.ampliacion);
+      /* El encuadre completo pasa con un listón más bajo: enseñar la unidad entera
+         vale por sí mismo. Con el mismo listón para los dos, provincias que cabían
+         completas a ×1,3 se recortaban para ganar unas décimas. */
+      const minimo = intento.parcial ? minimoAmpliacion : Math.min(minimoAmpliacion, AMPLIACION_ENTERA);
       /* El umbral es del modo automático, no del recuadro. Ahí el motor elige y no
          debe gastar el mayor hueco de la lámina en algo que no amplía; cuando la
          selección es de una persona, obedece y explica. Antes el umbral se aplicaba a
          los dos, y seleccionar Cusco en una hoja vertical no dibujaba NADA. */
-      if (r.ampliacion >= minimoAmpliacion) { encaje = { ...r, ...intento }; break; }
+      if (r.ampliacion >= minimo) { encaje = { ...r, ...intento }; break; }
     }
 
     if (!encaje) {
@@ -490,7 +552,8 @@ export function construirRecuadros({
     }
 
     const {
-      miembros, sub, hueco, ancho, alto, anchoMapa, altoMapa, ampliacion, parcial, caja,
+      miembros, protagonistas, sub, hueco, ancho, alto, anchoMapa, altoMapa,
+      ampliacion, parcial, caja,
     } = encaje;
     if (parcial) {
       avisos.push(`${region.nombre} no cabe entero en esta hoja; se amplía la parte que`
@@ -529,6 +592,7 @@ export function construirRecuadros({
         etiqueta,
         sub,
         miembros,
+        protagonistas,
         agregado,
         clases,
         rampa,
@@ -596,7 +660,7 @@ export function construirRecuadros({
 /** Dibuja un recuadro ya dimensionado. */
 function dibujarRecuadro({
   x, y, ancho, alto, anchoMapa, altoMapa, cabecera, borde, etiqueta,
-  sub, miembros, agregado, clases, rampa, iconos, tamanoIcono, altoCifra,
+  sub, miembros, protagonistas, agregado, clases, rampa, iconos, tamanoIcono, altoCifra,
   eTitulo, eCifra, medidor, factor, modoSimbolos = 'agregado', centros = [],
 }) {
   const marcoInterno = { x: x + borde, y: y + cabecera, ancho: anchoMapa, alto: altoMapa };
@@ -609,11 +673,16 @@ function dibujarRecuadro({
     const clase = claseDe(datos ? datos.tiposDistintos : 0, clases);
     return el('path', { d: ruta(f.geometry), fill: clase >= 0 ? rampa[clase] : color.sinDato });
   });
+  /* La unidad que da nombre al recuadro va con el trazo destacado y las que están de
+     contexto con el fino. Sin esa diferencia, un recuadro titulado «San Miguel» que
+     enseña cuatro distritos obliga a leer los nombres para saber cuál es el que se
+     amplía, y a ese tamaño los nombres son lo último que se mira. */
+  const esProtagonista = (f) => !protagonistas || protagonistas.has(f.properties.ubigeo);
   const limites = miembros.map((f) => el('path', {
     d: ruta(f.geometry),
     fill: 'none',
-    stroke: color.limiteProvincial,
-    'stroke-width': trazoMm.limiteProvincial,
+    stroke: esProtagonista(f) ? color.limiteProvincialDestacado : color.limiteProvincial,
+    'stroke-width': esProtagonista(f) ? trazoMm.limiteProvincialDestacado : trazoMm.limiteProvincial,
     'stroke-linejoin': 'round',
   }));
 

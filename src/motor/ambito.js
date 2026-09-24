@@ -149,7 +149,13 @@ async function cargarDepartamento({ ambito, cargador, nivel }) {
     exterior: coleccion(vecinos),
     encaje: coleccion([propio]),
     zonas: zonasPor(4, provincias.features),
-    trazos: { unidad: 'limiteDistrital', intermedio: 'limiteProvincial', contorno: 'limiteDepartamental' },
+    /* Tres pesos bien separados: distrito fino y gris, provincia gruesa y oscura, y el
+       contorno del departamento por encima de las dos. */
+    trazos: {
+      unidad: 'limiteDistrital',
+      intermedio: 'limiteProvincialDestacado',
+      contorno: 'limiteNacional',
+    },
     agregacion: 'distrito',
     simbolos: 'agregado',
     claveCentro: (c) => c.ubigeo,
@@ -204,7 +210,7 @@ async function cargarProvincia({ ambito, cargador, nivel }) {
     exterior: coleccion([...otrosDepartamentos, ...fuera]),
     encaje: coleccion([propia]),
     zonas: zonasPor(6, dentro),
-    trazos: { unidad: 'limiteDistrital', intermedio: null, contorno: 'limiteDepartamental' },
+    trazos: { unidad: 'limiteDistrital', intermedio: null, contorno: 'limiteNacional' },
     agregacion: 'distrito',
     simbolos: 'individual',
     claveCentro: (c) => c.ubigeo,

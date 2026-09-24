@@ -181,5 +181,13 @@ export const SITIO_FIJO = [...CABECERA, 'leyenda'];
  * nombre de un país o del océano podría dejarla sin el único hueco donde cabía.
  */
 /* El localizador entra con la leyenda, antes que los rótulos del mapa: necesita una
-   superficie concreta, mientras que un topónimo se acomoda en cualquier hueco. */
-export const ANTES_DE_ROTULOS = [...CABECERA, 'leyenda', 'ubicacion'];
+   superficie concreta, mientras que un topónimo se acomoda en cualquier hueco.
+
+   Y con ellos la ESCALA GRÁFICA, aunque sea pequeña y se acomode en cualquier parte.
+   Su sitio no es una preferencia estética: en una Mercator transversa la escala crece
+   al alejarse del meridiano central, así que una barra colocada en un flanco mide algo
+   distinto de lo que dice. Cuando un recuadro de zoom le quitaba el centro del ancho en
+   A4 horizontal, la barra declaraba 500 km y cubría 489,6: un 2,1 % de error en el
+   único elemento del mapa que sirve para medir. Un recuadro puede ir a cualquier hueco;
+   la barra, no. */
+export const ANTES_DE_ROTULOS = [...CABECERA, 'leyenda', 'ubicacion', 'escala'];
