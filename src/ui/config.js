@@ -94,6 +94,7 @@ export function desdeParametros(p) {
   const ambito = (p.get('ambito') || '').trim();
   if (/^[0-9]{2}$/.test(ambito)) config.ambito = { nivel: 'departamento', id: ambito };
   else if (/^[0-9]{4}$/.test(ambito)) config.ambito = { nivel: 'provincia', id: ambito };
+  else if (/^[0-9]{6}$/.test(ambito)) config.ambito = { nivel: 'distrito', id: ambito };
 
   const hoja = p.get('hoja');
   if (hoja && TAMANOS.includes(hoja)) config.hoja.tamano = hoja;
@@ -149,7 +150,8 @@ export function desdeParametros(p) {
 export function subtituloDe(ambito, nombre) {
   if (!ambito || ambito.nivel === 'nacional') return 'Ámbito nacional';
   if (ambito.nivel === 'departamento') return `Departamento de ${nombre}`;
-  return `Provincia de ${nombre}`;
+  if (ambito.nivel === 'provincia') return `Provincia de ${nombre}`;
+  return `Distrito de ${nombre}`;
 }
 
 /** Nombres de los niveles de rótulo, para los informes de la interfaz. */

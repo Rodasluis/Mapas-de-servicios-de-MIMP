@@ -665,7 +665,10 @@ function dibujarRecuadro({
 }) {
   const marcoInterno = { x: x + borde, y: y + cabecera, ancho: anchoMapa, alto: altoMapa };
   const proy = crearProyeccion(sub, marcoInterno, 1.2);
-  const ruta = crearRuta(proy);
+  /* Dos decimales en vez de tres: 0,01 mm de precisión, muy por debajo de los 0,15 mm
+     que una imprenta distingue, y el recuadro redibuja el entorno entero del mapa. En un
+     A0 con cuatro recuadros, la tercera cifra decimal son megas de PDF que nadie ve. */
+  const ruta = crearRuta(proy, 2);
   const idRecorte = `recorte-${etiqueta.replace(/\s+/g, '-').toLowerCase()}`;
 
   /* El recuadro es un RECORTE AMPLIADO del mapa, no una isla. Antes se rellenaba de
@@ -674,8 +677,29 @@ function dibujarRecuadro({
      mapa principal —países, territorio de fuera del ámbito, coropleta, límites— y se
      recortan al marco del recuadro, así que lo que rodea a la zona ampliada es lo que
      de verdad la rodea. */
-  const e = entorno || {};
+  const entorno0 = entorno || {};
   const tz = trazos || { unidad: 'limiteProvincial', intermedio: null, contorno: 'limiteDepartamental' };
+
+  /* Sólo lo que de verdad cae dentro del marco del recuadro.
+     
+     El recorte por clip-path OCULTA lo que sobra pero no evita dibujarlo: el PDF lleva
+     igual sus miles de trazados, sólo que invisibles. Con cuatro recuadros en un A0, el
+     archivo pasaba de 8 a 40 MB por redibujar las 196 provincias, los 25 departamentos
+     y los países vecinos dentro de cada uno. Descartar por caja envolvente antes de
+     generar la geometría es lo que hace viable dibujar el entorno. */
+  const limitesDe = geoPath(proy);
+  const seVe = (f) => {
+    const [[x0, y0], [x1, y1]] = limitesDe.bounds(f);
+    return !(x1 < marcoInterno.x || x0 > marcoInterno.x + marcoInterno.ancho
+      || y1 < marcoInterno.y || y0 > marcoInterno.y + marcoInterno.alto);
+  };
+  const e = {
+    paises: (entorno0.paises || []).filter(seVe),
+    exterior: (entorno0.exterior || []).filter(seVe),
+    unidades: entorno0.unidades ? entorno0.unidades.filter(seVe) : null,
+    intermedios: (entorno0.intermedios || []).filter(seVe),
+    contorno: (entorno0.contorno || []).filter(seVe),
+  };
   const trazar = (rasgos, token) => (token && rasgos ? rasgos.map((f) => el('path', {
     d: ruta(f.geometry), fill: 'none', stroke: color[token],
     'stroke-width': trazoMm[token], 'stroke-linejoin': 'round',

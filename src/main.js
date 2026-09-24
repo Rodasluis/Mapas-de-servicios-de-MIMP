@@ -58,9 +58,44 @@ async function arrancar() {
       .map((p) => ({ ...p, departamento: nombreDepartamento.get(p.ccdd) || '' }))
       .sort((a, b) => a.departamento.localeCompare(b.departamento, 'es') || porNombre(a, b)),
     /* Sólo los distritos CON algún centro: son los únicos que centros.json cataloga, y
-       también los únicos que tiene sentido ofrecer para ampliar. */
+       también los únicos que tiene sentido ofrecer para AMPLIAR. */
     distritos: [...centros.catalogo.distritos].sort(porNombre),
+
+    /**
+     * Distritos de una provincia, leídos de la CARTOGRAFÍA.
+     *
+     * Para elegir el ámbito no sirve el catálogo del buscador, que sólo lista los que
+     * tienen algún centro: un distrito sin servicios también se puede imprimir, y su
+     * mapa es justamente el que dice que no hay ninguno y ofrece los más cercanos. Se
+     * cargan por departamento y se recuerdan, porque el selector los vuelve a pedir
+     * cada vez que se cambia de provincia dentro del mismo departamento.
+     */
+    distritosDe(ccpp) {
+      if (!ccpp) return [];
+      const lista = distritosPorDepartamento.get(ccpp.slice(0, 2));
+      if (!lista) {
+        pedirDistritos(ccpp.slice(0, 2));
+        return [];
+      }
+      return lista.filter((d) => d.id.startsWith(ccpp));
+    },
   };
+
+  /* Carga perezosa: los distritos de los veinticinco departamentos son varios megas y
+     casi ninguna sesión los necesita todos. Se pide el del departamento elegido y, al
+     llegar, se rehace el panel para que su selector aparezca relleno. */
+  const distritosPorDepartamento = new Map();
+  const pedidos = new Set();
+  function pedirDistritos(ccdd) {
+    if (!ccdd || pedidos.has(ccdd)) return;
+    pedidos.add(ccdd);
+    cargador.distritosDe(ccdd, 'bajo').then((geo) => {
+      distritosPorDepartamento.set(ccdd, geo.features
+        .map((f) => ({ id: f.properties.ubigeo, nombre: f.properties.nombre }))
+        .sort(porNombre));
+      if (panel) panel.refrescarDistritos();
+    }).catch(() => { pedidos.delete(ccdd); });
+  }
 
   const vista = crearVista({
     contenedor: $('vista'),
@@ -72,6 +107,10 @@ async function arrancar() {
   let ultimo = null;
   let pendiente = null;
   let componiendo = false;
+
+  /* El ámbito puede venir de la URL, así que los distritos de su departamento hacen
+     falta desde el primer dibujo. */
+  if (config.ambito.id) pedirDistritos(config.ambito.id.slice(0, 2));
 
   const panel = crearPanel({
     contenedor: $('panel'),

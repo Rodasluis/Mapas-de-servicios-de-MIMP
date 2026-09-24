@@ -96,6 +96,29 @@ const MUESTRAS = [
     hoja: { tamano: 'A4', orientacion: 'vertical' },
     textos: { subtitulo: undefined },
   },
+
+  /* Fase 7. Los tres casos del criterio de aceptación, que son los tres extremos de la
+     tabla: llena, con una sola fila, y vacía. */
+  {
+    nombre: 'distrito_Lima_A3',
+    ambito: '150101',
+    hoja: { tamano: 'A3', orientacion: 'vertical' },
+    textos: { subtitulo: undefined },
+  },
+  {
+    nombre: 'distrito_Apata_A4',
+    ambito: '120403',
+    hoja: { tamano: 'A4', orientacion: 'vertical' },
+    textos: { subtitulo: undefined },
+  },
+  /* Chicche no tiene ningún centro: el mapa se genera igual, dice que no hay ninguno y
+     ofrece los seis más cercanos con su distancia en línea recta. */
+  {
+    nombre: 'distrito_Chicche_sin_centros_A4',
+    ambito: '120106',
+    hoja: { tamano: 'A4', orientacion: 'vertical' },
+    textos: { subtitulo: undefined },
+  },
 ];
 
 const TEXTOS = {
@@ -276,7 +299,8 @@ let fallosDatos = 0;
     const dentro = (c) => {
       if (!ambito) return true;
       if (ambito.length === 2) return c.ccdd === ambito;
-      return c.ccpp === ambito;
+      if (ambito.length === 4) return c.ccpp === ambito;
+      return c.ubigeo === ambito;
     };
     const cuenta = new Map();
     let total = 0;

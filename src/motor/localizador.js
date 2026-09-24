@@ -103,5 +103,9 @@ export function mapaDeUbicacion({ pais, resaltar, ambito, factor }) {
  */
 export function resaltePara(ambito) {
   if (ambito.nivel === 'nacional') return [];
+  /* El tinte marca la pieza que contiene al ámbito dentro del mapa del localizador: el
+     departamento cuando el localizador enseña el Perú, y la provincia cuando enseña el
+     departamento. El ámbito exacto va encima en rojo. */
+  if (ambito.nivel === 'distrito') return [ambito.id.slice(0, 4)];
   return [ambito.id.slice(0, 2)];
 }
