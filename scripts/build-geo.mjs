@@ -72,7 +72,7 @@ const pesoDe = (toleranciaM) => (toleranciaM / METROS_POR_GRADO) ** 2;
  * Marco de contexto alrededor del Perú (lon/lat) para recortar Natural Earth.
  *
  * Tiene que cubrir lo que llegue a verse en CUALQUIER hoja, no sólo lo que rodea al
- * país. El caso exigente es el nacional apaisado: el Perú es más alto que ancho, así
+ * país. El caso exigente es el nacional horizontal: el Perú es más alto que ancho, así
  * que en A0 horizontal el encaje lo limita la altura y a los lados queda sitio para
  * unos 26° de longitud. Si el contexto acabara antes, aparecerían franjas blancas en
  * los bordes de la hoja. Con este marco sobra holgura para cualquier formato.

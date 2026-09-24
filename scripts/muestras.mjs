@@ -31,7 +31,7 @@ const fechaFija = opcion('fecha');
 
 /**
  * Muestras. La Fase 1 pedía los tres formatos verticales; la Fase 2 añade A4 y A0
- * apaisados, que es donde se comprueba que el layout se recoloca de verdad y no
+ * horizontales, que es donde se comprueba que el layout se recoloca de verdad y no
  * está clavado a una plantilla vertical.
  */
 const MUESTRAS = [
