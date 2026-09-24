@@ -315,6 +315,16 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
        su sitio, el zoom también. */
     modoSimbolos: plan.simbolos,
     centros: agregado.centros,
+    /* Las mismas capas que dibuja el mapa, para que el recuadro sea un recorte
+       ampliado y no una isla sobre el mar. */
+    entorno: {
+      paises: contexto.features.filter((f) => f.properties.capa === 'pais'),
+      exterior: plan.exterior.features,
+      unidades: plan.unidades.features,
+      intermedios: plan.intermedios.features,
+      contorno: plan.contorno.features,
+    },
+    trazos: plan.trazos,
     anillos,
     agregado,
     clases,

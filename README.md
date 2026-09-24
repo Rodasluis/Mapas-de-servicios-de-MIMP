@@ -367,18 +367,20 @@ dice**. Cuando un recuadro le quitó el centro del ancho en A4 horizontal, la ba
 declaraba 500 km y cubría 489,6 — un 2,1 % de error en el único elemento de la lámina
 que sirve para medir. Un recuadro puede ir a cualquier hueco; la barra, no.
 
-### En el recuadro se ve cuál es la unidad que lo titula
+### El recuadro es un recorte ampliado del mapa
 
-Los miembros que **son** la zona van con el trazo destacado y los que están de contexto
-con el fino. Sin esa diferencia, un recuadro titulado «San Miguel» que enseña cuatro
-distritos obliga a leer los nombres para saber cuál se amplía, y a ese tamaño los
-nombres son lo último que se mira.
+Se rellenaba de color de mar y encima se dibujaban sólo las unidades de la zona, de modo
+que Cusco o San Miguel aparecían **flotando en el Pacífico**. Ahora dentro del recuadro
+se dibujan las mismas capas que en el mapa —países, territorio de fuera del ámbito,
+coropleta, límites, símbolos— recortadas a su marco, así que lo que rodea a la zona
+ampliada es lo que de verdad la rodea.
 
-**Una zona de una sola unidad recibe contexto.** Pasa en el ámbito provincial, donde la
-zona es el propio distrito: el recuadro salía con un distrito flotando sobre el fondo y
-sólo el rectángulo rojo decía dónde estaba. Se le añaden las unidades vecinas del mismo
-ámbito, que es lo que sitúa sin cruzar ninguna división que el título prometa: en un
-mapa de la provincia de Lima, todo lo que entre sigue siendo la provincia de Lima.
+El asunto del recuadro se distingue por su **contorno destacado**, no por ser lo único
+que se dibuja. Eso permite que la zona sea exactamente lo que el título dice —un
+departamento en el mapa nacional, una provincia en el departamental, **un distrito** en
+el provincial— sin que el resultado quede descolgado: el recuadro titulado «San Miguel»
+amplía San Miguel, y alrededor se ve Pueblo Libre, Magdalena del Mar y el Cercado porque
+es lo que hay alrededor.
 
 ### En la interfaz
 
@@ -420,11 +422,19 @@ sitio mejor a un milímetro. Cada punto interior se prueba además a tres distan
 crecientes, porque con una sola un nombre no lograba apartarse del grupo aunque su
 unidad tuviera sitio de sobra unos milímetros más allá.
 
+**Y se prueban antes todas las posiciones interiores.** Se recorrían mezcladas, punto
+por punto, así que una posición que se salía del distrito se probaba antes que otra
+interior del punto siguiente, y muchos nombres acababan fuera de su área teniendo sitio
+dentro. Se recorren ahora en dos bloques: primero las que caen dentro del polígono y
+sólo después las que asoman. La separación entre el nombre y su punto baja además de
+0,55 a 0,3 interlineados: cuanto más aire, más fácil es salirse, y el halo ya separa el
+nombre de lo que tiene debajo.
+
 | | antes | ahora |
 |---|---|---|
-| Provincia de Lima en A2 | 59 % tapados | **15 %** |
+| Provincia de Lima en A2 | 59 % tapados | **12 %** |
 | Perú en A1 | 31 % | **16 %** |
-| Departamento de Cusco en A3 | 8 % | 10 % | La leyenda, los recuadros y la cabecera
+| Departamento de Cusco en A3 | 8 % | 9 % | La leyenda, los recuadros y la cabecera
 siguen siendo intocables: los símbolos no se sacan del índice de colisiones, se ignoran
 al preguntar.
 

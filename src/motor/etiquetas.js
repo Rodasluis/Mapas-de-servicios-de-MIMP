@@ -54,7 +54,17 @@ const DIRECCIONES = [
 ];
 
 /** Múltiplos del desplazamiento base que se prueban alrededor de cada punto. */
-const DISTANCIAS = [1, 1.9, 3];
+const DISTANCIAS = [1, 1.6, 2.4];
+
+/**
+ * Cuánto se separa el rótulo de su punto, en múltiplos del interlineado.
+ *
+ * Cuanto más aire, más fácil es que el nombre se salga de su unidad. Con 0,55 los
+ * nombres de distrito de un mapa provincial se iban fuera de su área con sitio dentro;
+ * lo justo para que no se toquen basta, porque el halo ya los separa de lo que hay
+ * debajo.
+ */
+const SEPARACION = 0.3;
 
 /**
  * Coloca un conjunto de rótulos.
@@ -142,29 +152,36 @@ function colocarUna(s, { indice, medidor, marco, factor }) {
    * insignias aunque su provincia tuviera sitio de sobra unos milímetros más allá.
    */
   function* posiciones(ancho, alto) {
+    const dentro = [];
+    const asomando = [];
+
     for (const punto of s.puntos) {
       for (const distancia of DISTANCIAS) {
         for (const [dx, dy] of DIRECCIONES) {
           if (distancia > 1 && dx === 0 && dy === 0) continue; // el centro no se repite
-          const cx = punto.x + dx * (ancho / 2 + paso * 0.55) * distancia;
-          const cy = punto.y + dy * (alto / 2 + paso * 0.55) * distancia;
-
-          /* Un rótulo tiene que señalar lo que nombra. Lo ideal es que su centro caiga
-             dentro del polígono, pero en una provincia diminuta el nombre no cabe
-             dentro por mucho que se busque, y omitirlo sería peor que dejarlo asomar:
-             se admite que sobresalga mientras siga pegado a su punto de anclaje, que
-             sí es interior. */
-          if (s.dentro && !s.dentro(cx, cy)) {
-            const margen = Math.max((punto.radioMm || 0) * 1.4, alto * 1.6);
-            if (Math.hypot(cx - punto.x, cy - punto.y) > margen) continue;
-          }
-
+          const cx = punto.x + dx * (ancho / 2 + paso * SEPARACION) * distancia;
+          const cy = punto.y + dy * (alto / 2 + paso * SEPARACION) * distancia;
           const caja = { x: cx - ancho / 2, y: cy - alto / 2, ancho, alto };
           if (!dentroDe(marco, caja)) continue;
-          yield { cx, cy, caja };
+
+          if (!s.dentro || s.dentro(cx, cy)) { dentro.push({ cx, cy, caja }); continue; }
+
+          /* Un rótulo tiene que señalar lo que nombra. En un distrito diminuto el
+             nombre no cabe dentro por mucho que se busque, y omitirlo sería peor que
+             dejarlo asomar, así que se admite que sobresalga mientras siga pegado a su
+             punto de anclaje, que sí es interior. */
+          const margen = Math.max((punto.radioMm || 0) * 1.4, alto * 1.6);
+          if (Math.hypot(cx - punto.x, cy - punto.y) <= margen) asomando.push({ cx, cy, caja });
         }
       }
     }
+
+    /* Primero TODAS las posiciones interiores y sólo después las que asoman. Antes se
+       recorrían mezcladas, punto por punto, así que una posición que se salía del
+       distrito se probaba antes que otra interior del punto siguiente y muchos nombres
+       acababan fuera de su área teniendo sitio dentro. */
+    yield* dentro;
+    yield* asomando;
   }
 
   /* PRIMERA PASADA: los grupos de íconos estorban como cualquier otra cosa, así que el
