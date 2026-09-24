@@ -33,6 +33,22 @@ export const HOLGURA_MM = 0.35;
  * donde un rótulo estorba menos a un símbolo— y sólo después los laterales y las
  * diagonales.
  */
+/**
+ * Los grupos de íconos NO bloquean a los rótulos del mapa.
+ *
+ * El grupo de íconos de una provincia se ancla en su polo de inaccesibilidad, que es
+ * justamente el mejor sitio para su nombre, así que tratarlo como obstáculo empujaba
+ * cada rótulo hacia el borde de su provincia o lo dejaba fuera del todo: Huancavelica
+ * desaparecía y LA LIBERTAD acababa arrinconada en un extremo del departamento en vez
+ * de en su centro. Un nombre montado sobre unos íconos se lee —lleva halo y va encima—,
+ * mientras que un nombre ausente o descolocado no dice a qué se refiere.
+ *
+ * Esto vale sólo para los rótulos entre sí y con los símbolos. La leyenda, los
+ * recuadros de zoom y la cabecera siguen siendo intocables, y por eso los símbolos no
+ * se sacan del índice: se ignoran al preguntar.
+ */
+const ES_SIMBOLO = (caja) => caja.nivel === 'simbolos';
+
 const DIRECCIONES = [
   [0, 0], [0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1],
 ];
@@ -117,7 +133,7 @@ function colocarUna(s, { indice, medidor, marco, factor }) {
         const caja = { x: cx - ancho / 2, y: cy - alto / 2, ancho, alto };
 
         if (!dentroDe(marco, caja)) continue;
-        if (indice.choca(caja, HOLGURA_MM)) continue;
+        if (indice.choca(caja, HOLGURA_MM, ES_SIMBOLO)) continue;
 
         /* Un rótulo tiene que señalar lo que nombra. Lo ideal es que su centro caiga
            dentro del polígono, pero en una provincia diminuta el nombre no cabe

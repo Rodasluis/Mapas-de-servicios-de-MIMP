@@ -247,6 +247,8 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     grupos: simbolos.grupos,
     umbral: UMBRAL_APINAMIENTO,
     provincias,
+    // Para nombrar cada recuadro con su departamento.
+    departamentos,
     anillos,
     agregado,
     clases,
@@ -290,7 +292,10 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     indiceRotulos.agregar({ x: z.x, y: z.y, ancho: z.ancho, alto: z.alto, etiqueta: z.nombre });
   }
   for (const g of simbolos.grupos) {
-    indiceRotulos.agregar({ x: g.x, y: g.y, ancho: g.ancho, alto: g.alto, etiqueta: `símbolos ${g.nombre}` });
+    indiceRotulos.agregar({
+      x: g.x, y: g.y, ancho: g.ancho, alto: g.alto,
+      etiqueta: `símbolos ${g.nombre}`, nivel: 'simbolos',
+    });
   }
   for (const c of etiquetas.cajas || []) indiceRotulos.agregar(c);
 

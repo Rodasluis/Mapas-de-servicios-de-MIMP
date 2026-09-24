@@ -303,14 +303,26 @@ for (const { muestra, salida } of resultados) {
 
   /* Criterio de aceptación de la fase: cero superposiciones, comprobadas
      geométricamente por pares y sin fiarse del índice que las colocó.
-  
-     Se excluyen los pares símbolo-contra-símbolo: que dos grupos de íconos se pisen
-     es el APIÑAMIENTO, que ya se mide aparte y se resuelve ampliando la zona en un
-     recuadro de zoom, no omitiendo símbolos. Lo que aquí no puede ocurrir es que un
-     rótulo o un bloque pisen algo. */
-  const esSimbolo = (n) => String(n).startsWith('símbolos ');
-  const solapes = buscarSolapes(e.cajas, 0.01)
-    .filter((x) => !(esSimbolo(x.a) && esSimbolo(x.b)));
+
+     Dos clases de solape están PERMITIDAS, y las dos por decisión, no por descuido:
+
+     - símbolo contra símbolo, que es el APIÑAMIENTO. Se mide aparte y se resuelve
+       ampliando la zona en un recuadro, no borrando símbolos.
+     - un rótulo del mapa sobre un grupo de símbolos. El grupo de íconos de una
+       provincia se ancla justo en el mejor sitio para su nombre, así que tratarlo como
+       obstáculo dejaba a Huancavelica sin rótulo y a LA LIBERTAD arrinconada. Un
+       nombre con halo sobre unos íconos se lee; uno ausente no dice nada.
+
+     Todo lo demás —dos rótulos entre sí, un bloque sobre cualquier cosa— sigue siendo
+     un fallo. */
+  const PERMITIDO_SOBRE_SIMBOLO = new Set(['simbolos', 'departamento', 'provincia', 'distrito']);
+  const permitido = (x) => {
+    const na = x.nivelA || '';
+    const nb = x.nivelB || '';
+    return (na === 'simbolos' && PERMITIDO_SOBRE_SIMBOLO.has(nb))
+      || (nb === 'simbolos' && PERMITIDO_SOBRE_SIMBOLO.has(na));
+  };
+  const solapes = buscarSolapes(e.cajas, 0.01).filter((x) => !permitido(x));
   if (solapes.length) {
     console.log(`    ✗ ${solapes.length} superposición(es): `
       + solapes.slice(0, 4).map((x) => `${x.a} × ${x.b} (${x.areaMm2} mm²)`).join(', '));
