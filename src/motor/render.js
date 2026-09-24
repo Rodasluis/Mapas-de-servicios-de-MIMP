@@ -36,7 +36,7 @@ import {
   CLASES_POR_DEFECTO,
 } from './servicios.js';
 import { bloqueLeyenda } from './leyenda.js';
-import { construirRecuadros, maximoPorFormato } from './zoom.js';
+import { construirRecuadros, maximoPorFormato, UMBRAL_APINAMIENTO } from './zoom.js';
 import { dibujarIcono, comprobarCobertura } from '../iconos/index.js';
 import { poloDeInaccesibilidad, polosDeInaccesibilidad, puntoEnAnillos } from './ocupacion.js';
 import { crearIndice } from './colisiones.js';
@@ -73,9 +73,15 @@ export const CAPAS = [
   'territorio',    // relleno del ámbito
   'limites',       // límites administrativos
   'grilla',        // retícula UTM
+  /* Los nombres de departamento y provincia van DEBAJO de los símbolos. Encima, un
+     rótulo tapaba el ícono y la cifra de sedes que tiene al lado, y esa cifra es un
+     dato del mapa mientras que el nombre casi siempre se deduce de la posición. Debajo,
+     el halo blanco del rótulo sigue separándolo del relleno y lo que se pierde es sólo
+     el trozo de letra que queda bajo una insignia. */
+  'rotulos',       // nombres de departamentos y provincias
   'simbolos',      // Fase 3
   'recuadros',     // Fase 3: rectángulos de los zooms
-  'etiquetas',     // rótulos de contexto; la Fase 4 añade los del país
+  'etiquetas',     // países, océano y lagos: por encima de todo, orientan la lectura
 ];
 
 export async function componerNacional({ hoja, cargador, textos = {}, opciones = {} }) {
@@ -329,10 +335,11 @@ export async function componerNacional({ hoja, cargador, textos = {}, opciones =
     marco,
     conColor: capasVisibles.coropleta,
     grilla: dibujoGrilla.svgLineas,
-    /* Los rótulos del país van DESPUÉS de los de contexto dentro de la misma capa:
-       si un nombre de provincia y el de un país llegaran a rozarse, manda el del
-       país, que es el que orienta la lectura. */
-    etiquetas: [etiquetas.svg, rotulos.svg].filter(Boolean).join('\n'),
+    /* Dos capas distintas y a distinta altura: los nombres de departamento y provincia
+       van bajo los símbolos, y los de contexto —países, mar, lagos— por encima de todo,
+       porque son los que orientan la lectura antes de mirar el detalle. */
+    rotulos: rotulos.svg,
+    etiquetas: etiquetas.svg,
     simbolos: simbolos.svg,
     recuadros: recuadros.referencias,
   });
@@ -701,8 +708,9 @@ function dibujarSimbolos({
   };
 }
 
-/** Por encima de esta fracción pisada, el grupo pide un recuadro de zoom. */
-export const UMBRAL_APINAMIENTO = 0.35;
+/* El umbral de apiñamiento vive en zoom.js, que es quien decide qué se amplía; aquí
+   se reexporta porque el informe lo usa para marcar los grupos que se estorban. */
+export { UMBRAL_APINAMIENTO };
 
 /** Caja envolvente de unos anillos, recortada al marco. */
 function cajaDeAnillos(anillosRasgo, marco) {
@@ -739,7 +747,7 @@ function anillosPorRasgo(proyeccion, rasgos) {
 
 function dibujarCapas({
   departamentos, provincias, agregado, clases, rampa, contexto, ruta, marco,
-  grilla, etiquetas, simbolos, recuadros, conColor = true,
+  grilla, etiquetas, rotulos, simbolos, recuadros, conColor = true,
 }) {
   const porCapa = (nombre) => contexto.features.filter((f) => f.properties.capa === nombre);
   const rasgos = {};
@@ -806,6 +814,7 @@ function dibujarCapas({
     territorio: [],
     limites,
     grilla: [grilla],
+    rotulos: [rotulos],
     simbolos: [simbolos],
     recuadros: [recuadros],
     etiquetas: [etiquetas],

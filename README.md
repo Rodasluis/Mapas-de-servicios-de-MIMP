@@ -203,17 +203,23 @@ aparte**: las otras nueve provincias se extienden trescientos kilómetros al nor
 sur, y meterlas en el mismo recuadro obligaría a una escala en la que la conurbación
 —que es lo apiñado— volvería a ser un punto.
 
-**Qué trozo del departamento.** El del conglomerado que se estorba, no el departamento
-entero. Encuadrarlo completo parece lo natural y no funciona: Cusco ocupa 154 × 185 mm
-en un A1 y el mayor hueco libre de la lámina son 151 × 180, así que el «zoom» saldría a
-la misma escala que el mapa y los símbolos se seguirían pisando igual. Encuadrando el
-racimo —en Cusco, las provincias del entorno de la ciudad— la ampliación llega a ×9,5, y
-el rectángulo de referencia sobre el mapa principal dice qué trozo se ha ampliado. Si ni
-así compensa, el recuadro no se dibuja y el informe dice cuántas veces habría agrandado.
+**Qué se amplía.** Los departamentos con **más servicios**, de mayor a menor. El
+criterio anterior era el apiñamiento, que mide otra cosa: cuánto se pisan los íconos en
+el papel, lo cual depende del tamaño de la hoja y de la forma de la provincia. Con él,
+una provincia diminuta con tres servicios salía por delante de un departamento con
+cuarenta repartidos. Lo que se quiere ver de cerca es dónde hay más.
 
-**Qué se amplía.** En automático no hay una lista de «amplía Lima y Cusco»: el motor
-mide, provincia a provincia, qué fracción de su grupo de íconos pisa la del vecino y
-amplía donde se estorban. El criterio vale para cualquier hoja y
+**Qué trozo del departamento.** El departamento **entero**, siempre que quepa ampliado.
+Cuando no cabe, su núcleo, y el informe lo dice.
+
+Es una limitación de superficie, no una decisión: Cusco ocupa 154 × 185 mm en un A1 y el
+mayor hueco libre de la lámina son 131 × 156, porque el Perú está en medio y a los lados
+sólo quedan dos franjas de unos 130 mm. Dibujarlo ahí daría un «zoom» a 0,85 veces el
+tamaño del mapa: una reducción rotulada como ampliación. En A0 apaisado, donde el hueco
+sí da, Cusco sale completo con sus trece provincias a ×1,9; en A2 sale su núcleo —las
+provincias del entorno de la ciudad— a ×4,3. El rectángulo rojo sobre el mapa principal
+marca exactamente el trozo ampliado, y cuando es parcial el informe avisa de que hace
+falta una hoja mayor para verlo completo. El criterio vale para cualquier hoja y
 cualquier filtro; con un solo tipo activo los símbolos dejan de estorbarse y no se
 dibuja ninguno. También se pueden **elegir a mano** por ubigeo de provincia o de
 departamento, y entonces el motor avisa si la selección abarca demasiado para que
@@ -242,14 +248,20 @@ El problema no es escribir nombres: es decidir cuáles caben. Hay 25 departament
 mapa con rótulos superpuestos es ilegible y uno que los omita en silencio es engañoso,
 así que el motor coloca lo que cabe **por prioridad** y deja constancia de lo que no.
 
-**Los grupos de íconos no bloquean a los rótulos.** El grupo de una provincia se ancla
-en su polo de inaccesibilidad, que es justamente el mejor sitio para su nombre, así que
-tratarlo como obstáculo empujaba cada rótulo hacia el borde de su provincia o lo dejaba
-fuera del todo: Huancavelica desaparecía y LA LIBERTAD acababa arrinconada en un extremo
-en vez de en el centro. Un nombre montado sobre unos íconos se lee —lleva halo y va
-encima—; uno ausente o descolocado no dice a qué se refiere. La leyenda, los recuadros y
-la cabecera siguen siendo intocables: los símbolos no se sacan del índice de colisiones,
-se ignoran al preguntar.
+**Los rótulos van debajo de los símbolos, y los ceden sólo si no hay más remedio.** El
+grupo de íconos de una provincia se ancla en su polo de inaccesibilidad, que es
+justamente el mejor sitio para su nombre. Tratarlo como obstáculo insalvable empujaba
+cada rótulo hacia el borde de su provincia o lo dejaba fuera del todo —Huancavelica
+desaparecía y LA LIBERTAD acababa arrinconada en un extremo en vez de en el centro—,
+pero permitirlo sin más escondía el nombre bajo las insignias, porque los rótulos se
+dibujan por debajo: la cifra de sedes es un dato del mapa y el nombre casi siempre se
+deduce de la posición.
+
+Se resuelve en dos pasadas. En la primera los íconos sí estorban, de modo que el nombre
+busca un hueco limpio dentro de su propia provincia; sólo si no encuentra ninguno se
+admite montarlo, que es preferible a omitirlo. La leyenda, los recuadros y la cabecera
+siguen siendo intocables: los símbolos no se sacan del índice de colisiones, se ignoran
+al preguntar.
 
 Cada rótulo prueba hasta diez puntos interiores de su polígono y, en cada uno, la
 posición centrada más las ocho de alrededor, primero en una línea y luego partido en dos. Se mide con las
@@ -264,8 +276,8 @@ compara PDF contra PDF.
 |---|---:|---:|
 | A0 vertical | 25/25 | 196/196 |
 | A1 vertical | 25/25 | 195/196 |
-| A3 vertical | 24/24 | 175/195 |
-| A4 vertical | 24/24 | 139/195 |
+| A3 vertical | 24/24 | 177/195 |
+| A4 vertical | 24/24 | 146/195 |
 
 Las provincias que el mapa principal no llega a nombrar son las que su propio grupo de
 íconos llena por completo: Lima, Callao, Huamanga. Son justamente las que acaban en un
