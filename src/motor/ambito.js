@@ -110,6 +110,7 @@ async function cargarNacional({ cargador, nivel }) {
   return {
     nombre: 'Perú',
     descripcion: 'Ámbito nacional',
+    jerarquia: '',
     unidades: provincias,
     intermedios: coleccion([]),
     contorno: departamentos,
@@ -152,6 +153,7 @@ async function cargarDepartamento({ ambito, cargador, nivel }) {
   return {
     nombre: propio.properties.nombre,
     descripcion: `Departamento de ${propio.properties.nombre}`,
+    jerarquia: '',
     unidades: distritos,
     intermedios: provincias,
     contorno: coleccion([propio]),
@@ -201,6 +203,7 @@ async function cargarProvincia({ ambito, cargador, nivel }) {
   const propia = provincias.features.find((f) => f.properties.ubigeo === ccpp);
   if (!propia) throw new Error(`No hay geometría de la provincia ${ccpp}.`);
 
+  const departamento = departamentos.features.find((f) => f.properties.ubigeo === ccdd);
   const dentro = distritos.features.filter((f) => f.properties.ubigeo.startsWith(ccpp));
   const fuera = distritos.features.filter((f) => !f.properties.ubigeo.startsWith(ccpp));
 
@@ -213,6 +216,7 @@ async function cargarProvincia({ ambito, cargador, nivel }) {
   return {
     nombre: propia.properties.nombre,
     descripcion: `Provincia de ${propia.properties.nombre}`,
+    jerarquia: departamento ? `Departamento de ${departamento.properties.nombre}` : '',
     unidades: coleccion(dentro),
     intermedios: coleccion([]),
     contorno: coleccion([propia]),
@@ -256,14 +260,18 @@ async function cargarDistrito({ ambito, cargador, nivel }) {
   const propio = distritos.features.find((f) => f.properties.ubigeo === ubigeo);
   if (!propio) throw new Error(`No hay geometría del distrito ${ubigeo}.`);
   const provincia = provincias.features.find((f) => f.properties.ubigeo === ccpp);
+  const departamento = departamentos.features.find((f) => f.properties.ubigeo === ccdd);
 
   const vecinos = distritos.features.filter((f) => f.properties.ubigeo !== ubigeo);
   const otrosDepartamentos = departamentos.features.filter((f) => f.properties.ubigeo !== ccdd);
 
   return {
     nombre: propio.properties.nombre,
-    descripcion: `Distrito de ${propio.properties.nombre}`
-      + (provincia ? `, provincia de ${provincia.properties.nombre}` : ''),
+    descripcion: `Distrito de ${propio.properties.nombre}`,
+    jerarquia: [
+      provincia && `Provincia de ${provincia.properties.nombre}`,
+      departamento && `Departamento de ${departamento.properties.nombre}`,
+    ].filter(Boolean).join(' · '),
     unidades: coleccion([propio]),
     intermedios: coleccion([]),
     contorno: coleccion([propio]),
@@ -279,8 +287,10 @@ async function cargarDistrito({ ambito, cargador, nivel }) {
     claveCentro: (c) => c.ubigeo,
     perteneceAlAmbito: (c) => c.ubigeo === ubigeo,
     rotulos: [
-      /* Los vecinos se rotulan; el propio distrito no, porque su nombre ya está en el
-         título y aquí el sitio lo necesitan los números de los centros. */
+      /* El propio distrito lleva su nombre sobre el mapa, con prioridad máxima: el
+         título lo dice, pero sobre la lámina hay que poder señalar cuál de las áreas
+         blancas es la que se está retratando sin volver a leer la cabecera. */
+      { nivel: 'provincia', rasgos: [propio], prioridad: 1, mayusculas: true },
       { nivel: 'exterior', rasgos: vecinos, prioridad: 2, mayusculas: false, exterior: true },
     ],
   };

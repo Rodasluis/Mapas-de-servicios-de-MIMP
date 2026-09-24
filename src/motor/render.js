@@ -266,6 +266,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       /* El subtítulo dice de qué ámbito es el mapa cuando nadie lo ha escrito. Dejar
          «Ámbito nacional» en una lámina de Cusco sería peor que no poner nada. */
       subtitulo: textos.subtitulo ?? plan.descripcion,
+      jerarquia: textos.jerarquia ?? plan.jerarquia ?? '',
       periodo: textos.periodo ?? '',
     },
     medidor,
@@ -302,14 +303,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     /* El localizador sólo existe fuera del nacional: un mapa del Perú con una miniatura
        del Perú al lado no localiza nada. */
     ubicacion: elAmbito.nivel === 'nacional' ? null : mapaDeUbicacion({
-      /* En el ámbito distrital el localizador enseña el DEPARTAMENTO con sus provincias,
-         no el Perú entero: a escala de país un distrito es una mota de medio milímetro
-         que no se encuentra, mientras que dentro de su departamento sí se sitúa. */
-      pais: elAmbito.nivel === 'distrito'
-        ? await cargador.provinciasDe(elAmbito.id.slice(0, 2), 'bajo')
-        : await cargador.departamentos('bajo'),
-      resaltar: resaltePara(elAmbito),
-      ambito: plan.contorno,
+      vistas: await vistasDeUbicacion({ ambito: elAmbito, cargador, plan }),
       factor,
     }),
     /* La tabla sólo existe en el ámbito distrital, que es donde caben —y hacen falta—
@@ -660,6 +654,38 @@ function ajustarTabla({ filas, medidor, factor, marco, sinServicios, enElMapa })
     anchoMm: marco.ancho * 0.36,
     altoMaximoMm: marco.alto * 0.92,
   });
+}
+
+/**
+ * Las miniaturas del localizador, de lo general a lo particular.
+ *
+ * Un departamento se sitúa con el Perú y basta. Una provincia o un distrito necesitan
+ * las dos: con sólo el país, una provincia es una mancha de dos milímetros y un
+ * distrito ni se ve; con sólo el departamento, se sabe en qué parte cae pero no en qué
+ * departamento. Puestas una al lado de la otra, la lectura va de fuera hacia dentro.
+ */
+async function vistasDeUbicacion({ ambito, cargador, plan }) {
+  const ccdd = ambito.id.slice(0, 2);
+  const departamentos = await cargador.departamentos('bajo');
+  const suDepartamento = {
+    type: 'FeatureCollection',
+    features: departamentos.features.filter((f) => f.properties.ubigeo === ccdd),
+  };
+  const nombreDep = suDepartamento.features[0]?.properties.nombre || '';
+
+  if (ambito.nivel === 'departamento') {
+    return [{ base: departamentos, ambito: plan.contorno, titulo: 'Perú' }];
+  }
+
+  return [
+    { base: departamentos, ambito: suDepartamento, titulo: 'Perú' },
+    {
+      base: await cargador.provinciasDe(ccdd, 'bajo'),
+      resaltar: resaltePara(ambito),
+      ambito: plan.contorno,
+      titulo: nombreDep,
+    },
+  ];
 }
 
 /** Cuántos centros de fuera se ofrecen cuando el distrito no tiene ninguno. */
