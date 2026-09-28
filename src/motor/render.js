@@ -46,6 +46,7 @@ import { crearIndice } from './colisiones.js';
 import { colocarEtiquetas, crearSolicitud } from './etiquetas.js';
 import { color, trazoMm, tipografia, layoutMm, rampaNaranjas, ptAmm } from '../estilo/tokens.js';
 import { el, grupo, texto, textoConHalo, rect, documento, num } from './svg.js';
+import { fechaDelMapa } from './fecha.js';
 
 /** Holgura entre el ámbito y el borde del marco, para que el país no toque el filo. */
 export const HOLGURA_MM = 3;
@@ -130,7 +131,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
      informe porque es lo ÚNICO que el pie no deduce del mapa: quien compare dos
      láminas necesita poder afirmar que la fecha estaba fija, o una diferencia de la
      fecha del día se confundiría con un cambio del dibujo. */
-  const fechaPie = fechaDelPie(textos.fecha);
+  const fechaPie = fechaDelMapa(textos.fecha);
 
   /* El pie es obligatorio en todo PDF y la retícula necesita una banda fuera del
      marco para sus números: los dos se descuentan antes de encajar el mapa. */
@@ -1175,34 +1176,6 @@ function dibujarMarco(marco) {
 }
 
 /* -------------------------------- pie ----------------------------------- */
-
-/**
- * La fecha del pie, siempre en el calendario del Perú.
- *
- * Dos trampas, y las dos daban PDF distintos según la máquina:
- *
- * `new Date('2026-01-01')` es medianoche UTC, no del Perú. Formateada en la zona del
- * anfitrión, en Lima (UTC−5) sale «31/12/2025» y en un servidor en UTC «01/01/2026».
- * Por eso se ancla la hora al mediodía de Lima: a esa hora ninguna zona razonable
- * cambia de día.
- *
- * Y `toLocaleDateString` sin `timeZone` usa la del anfitrión. Este mapa lo firma un
- * ministerio peruano, así que la fecha que le corresponde es la del Perú, tanto si lo
- * genera una máquina en Lima como una en UTC. Se pide explícitamente.
- *
- * @param {string} [iso]  fecha fija en YYYY-MM-DD; sin ella, el momento actual
- * @returns {{texto: string, iso: string}} lo que se imprime y su forma ordenable
- */
-export function fechaDelPie(iso) {
-  const cuando = iso ? new Date(`${iso}T12:00:00-05:00`) : new Date();
-  const partes = new Intl.DateTimeFormat('es-PE', {
-    timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric',
-  }).formatToParts(cuando).reduce((o, p) => Object.assign(o, { [p.type]: p.value }), {});
-  return {
-    texto: `${partes.day}/${partes.month}/${partes.year}`,
-    iso: `${partes.year}-${partes.month}-${partes.day}`,
-  };
-}
 
 function medidasDelPie(medidor, factor) {
   const estilo = { familia: 'Poppins', variante: 'Regular', pt: tipografia.pie.pt * factor };

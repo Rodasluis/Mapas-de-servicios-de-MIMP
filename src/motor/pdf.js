@@ -15,6 +15,7 @@
 import { jsPDF } from 'jspdf';
 import { svg2pdf } from 'svg2pdf.js';
 import { fuentes } from '../estilo/tokens.js';
+import { aFechaPdf } from './fecha.js';
 
 /**
  * Estilo y peso CSS de cada variante tipográfica.
@@ -119,7 +120,7 @@ export async function aPdf({ svg, hoja, leerTtf, propiedades = {}, fecha }) {
      se parezcan al compararlas. Se deriva del propio contenido, así que dos mapas
      distintos siguen teniendo identificadores distintos. */
   if (fecha) {
-    doc.setCreationDate(fecha);
+    doc.setCreationDate(aFechaPdf(fecha));
     doc.setFileId(await huellaHex(`${svg}|${hoja.nombre}|${fecha.toISOString()}`));
   }
 

@@ -12,6 +12,7 @@ import { componer } from './motor/render.js';
 import { aPdf, lectorTtfNavegador } from './motor/pdf.js';
 import { componerHojaDeIconos } from './iconos/hoja.js';
 import { crearMedidor } from './motor/texto.js';
+import { fechaDelMapa } from './motor/fecha.js';
 
 const BASE = import.meta.env.BASE_URL;
 const cargador = crearCargador(lectorNavegador(BASE));
@@ -115,7 +116,7 @@ window.generarHojaIconos = async function generarHojaIconos(config = {}) {
     iconos, centros, medidor: crearMedidor(metricas),
   });
   const { bytes, fuentes } = await aPdf({
-    svg, hoja, leerTtf, fecha: config.fecha ? new Date(config.fecha) : undefined,
+    svg, hoja, leerTtf, fecha: config.fecha ? fechaDelMapa(config.fecha).fecha : undefined,
     propiedades: { titulo: 'Íconos de los servicios del MIMP' },
   });
   return { pdf: aBase64(bytes), bytesSvg: svg.length, fuentes, meta: { hoja: hoja.nombre } };
@@ -136,7 +137,7 @@ window.generarMapa = async function generarMapa(config = {}) {
     svg,
     hoja,
     leerTtf,
-    fecha: config.fecha ? new Date(config.fecha) : undefined,
+    fecha: config.fecha ? fechaDelMapa(config.fecha).fecha : undefined,
     propiedades: config.propiedades,
   });
   const msPdf = performance.now() - t1;
