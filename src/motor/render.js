@@ -126,6 +126,12 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
   const medidor = crearMedidor(metricas);
   const factor = factorFormato(hoja);
 
+  /* La fecha del pie se resuelve aquí, una sola vez, y sale en el informe. Va al
+     informe porque es lo ÚNICO que el pie no deduce del mapa: quien compare dos
+     láminas necesita poder afirmar que la fecha estaba fija, o una diferencia de la
+     fecha del día se confundiría con un cambio del dibujo. */
+  const fechaPie = textos.fecha ? new Date(textos.fecha) : new Date();
+
   /* El pie es obligatorio en todo PDF y la retícula necesita una banda fuera del
      marco para sus números: los dos se descuentan antes de encajar el mapa. */
   const pie = medidasDelPie(medidor, factor);
@@ -473,7 +479,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       ...colocacion.colocadas.map((c) => c.pieza.dibujar(c.x, c.y)),
       ...recuadros.colocados.map((z) => z.svg),
     ]),
-    dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor }),
+    dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor, fechaPie }),
   ].join('\n');
 
   return {
@@ -557,6 +563,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
         })),
       },
       datosTag: version.datosTag,
+      fechaPie: fechaPie.toISOString().slice(0, 10),
       msComposicion: Date.now() - inicio,
     },
   };
@@ -1179,7 +1186,7 @@ function medidasDelPie(medidor, factor) {
  * aviso de que la escala sólo vale si se imprime sin reducir. Un mapa impreso sin esa
  * información no se puede auditar meses después.
  */
-function dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor }) {
+function dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor, fechaPie }) {
   const x = marco.x;
   const derecha = marco.x + marco.ancho;
   /* Por debajo del marco va primero la banda con los números de la retícula; el pie
@@ -1192,7 +1199,7 @@ function dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor
   const destacado = { ...comun, 'text-anchor': 'end', 'font-weight': 600, fill: color.tinta };
   const eFuerte = { ...pie.estilo, variante: 'SemiBold' };
 
-  const fecha = (textos.fecha ? new Date(textos.fecha) : new Date())
+  const fecha = fechaPie
     .toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const elaborado = textos.elaboradoPor || 'el Ministerio de la Mujer y Poblaciones Vulnerables';
 

@@ -212,7 +212,11 @@ for (const muestra of MUESTRAS) {
     salida = await pagina.evaluate((cfg) => window.generarMapa(cfg), {
       hoja: muestra.hoja,
       ambito: muestra.ambito,
-      textos: { ...TEXTOS, ...(muestra.textos || {}) },
+      /* La fecha fija va en los DOS sitios, igual que la pone la interfaz en
+         aLlamadasDelMotor(): en `textos` porque de ahí sale la del pie, y suelta porque
+         de ahí sale la de los metadatos del PDF. Pasándola sólo suelta, el pie seguía
+         imprimiendo la fecha del día y la firma de regresión cambiaba cada mañana. */
+      textos: { ...TEXTOS, ...(fechaFija ? { fecha: fechaFija } : {}), ...(muestra.textos || {}) },
       opciones: muestra.opciones,
       fecha: fechaFija,
     });
@@ -222,6 +226,18 @@ for (const muestra of MUESTRAS) {
     abortar(`Falló la generación de ${muestra.nombre}.`, `${err.message}\n${erroresPagina.join('\n')}`);
   }
   const msTotalNode = Date.now() - t0;
+
+  /* Con --fecha, el pie tiene que imprimir ESA fecha. Si se quedara con la del día, la
+     regresión visual fallaría cada mañana por una diferencia que no es del mapa, y el
+     aviso saldría a los veinte minutos en la integración continua, no aquí. */
+  if (fechaFija && salida.meta.fechaPie !== fechaFija) {
+    console.log('ERROR');
+    await cerrar();
+    abortar(
+      `${muestra.nombre}: se pidió la fecha ${fechaFija} y el pie lleva ${salida.meta.fechaPie}.`,
+      'La fecha fija tiene que ir también en `textos`, que es de donde sale la del pie.',
+    );
+  }
 
   const archivo = path.join(DESTINO, `${muestra.nombre}.pdf`);
   fs.writeFileSync(archivo, Buffer.from(salida.pdf, 'base64'));
