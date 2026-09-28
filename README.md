@@ -332,8 +332,9 @@ estaría contando dos cosas distintas del mismo lugar en la misma lámina.
 
 Dentro del recuadro sólo la **zona ampliada** —el departamento, la provincia o el
 distrito— lleva íconos. Lo que la rodea se sigue dibujando, para que el recorte no
-parezca una isla, pero bajo un velo blanco semitransparente: se lee como entorno, con
-los nombres de los vecinos atenuados, y la zona queda con su color. El velo es un
+parezca una isla, pero bajo un velo blanco semitransparente y sin nombres: se lee como
+entorno y la zona queda con su color. Sólo se rotula la zona; los nombres de los
+vecinos ya están en el mapa principal. El velo es un
 trazado vectorial con opacidad (`opacidad.veloZoom` en los tokens), no un desenfoque,
 que acabaría rasterizado en el PDF.
 
