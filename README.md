@@ -691,6 +691,10 @@ Los dos corren en cada pull request (`.github/workflows/pruebas.yml`) con **los 
 comandos** que en local: no hay una versión «de CI» del control que pudiera pasar
 mientras la de verdad falla.
 
+Y corren **antes de publicar**: el despliegue a Pages llama a ese mismo workflow y no
+publica si no pasa, porque una lámina mal compuesta en la web no lleva ningún aviso de
+que no pasó el control. A cambio, publicar tarda lo que tarda comprobar.
+
 ### Regresión visual
 
 Se rasteriza el **PDF** —no el SVG del que salió— y se compara con una referencia
