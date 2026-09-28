@@ -24,7 +24,8 @@ export function factorFormato(hoja) {
   /* De A4 a A0 la diagonal se multiplica por cuatro. El exponente reparte ese
      crecimiento entre las piezas del layout: con 0,9 un A0 las agranda 3,5 veces,
      que es lo que hace falta para que no se pierdan frente a un mapa de metro y
-     medio. La progresión queda A4 1,0 · A3 1,37 · A2 1,87 · A1 2,56 · A0 3,50. */
+     medio. La progresión queda A4 1,0 · A3 1,37 · A2 1,87 · A1 2,56 · A0 3,50 ·
+     2A0 4,76 · 4A0 6,50. */
   return (hoja.diagonalMm / DIAGONAL_A4) ** 0.9;
 }
 

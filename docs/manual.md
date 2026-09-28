@@ -14,7 +14,9 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
 
 1. **Hoja y ámbito.** El tamaño manda sobre todo lo demás: en A4 caben la mitad de los
    nombres que en A1, y un solo recuadro de zoom en vez de cuatro. Elige primero el
-   papel en el que vas a imprimir.
+   papel en el que vas a imprimir. Van de A4 a A0, más 2A0 y 4A0 para carteles de gran
+   formato (necesitan un plóter con rollo de 1,2 m y 1,7 m respectivamente, y el mapa
+   tarda unos 30 s en componerse).
 2. **Ámbito.** Los tres selectores están encadenados: departamento, luego provincia,
    luego distrito. Déjalos en blanco para subir de nivel —sin provincia se imprime el
    departamento entero; sin departamento, el Perú—.
@@ -22,7 +24,7 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    texto que se va a usar («Distrito de Breña»). Escribe sólo si quieres otro.
 4. **Tipos de servicio.** Desmarcar tipos recalcula todo: los colores, la leyenda y los
    recuadros de zoom.
-5. **Recuadros de zoom.** Tres opciones: *Automáticos* (el motor amplía donde los
+5. **Recuadros de zoom.** Por omisión, *Ninguno*. Tres opciones: *Automáticos* (el motor amplía donde los
    símbolos no caben), *Elegir zonas* o *Ninguno*. Con *Elegir zonas* aparecen tres
    selectores encadenados —departamento, provincia y distrito—: elige la zona y pulsa
    **Añadir zona**; se amplía el nivel más fino que hayas elegido. Repite para pedir

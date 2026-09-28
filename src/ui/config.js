@@ -16,7 +16,7 @@ import { fechaDelMapa } from '../motor/fecha.js';
 import { CLASES_POR_DEFECTO } from '../motor/servicios.js';
 import { CAPAS_POR_DEFECTO, PIEZAS_POR_DEFECTO } from '../motor/render.js';
 
-export const TAMANOS = ['A4', 'A3', 'A2', 'A1', 'A0'];
+export const TAMANOS = ['A4', 'A3', 'A2', 'A1', 'A0', '2A0', '4A0'];
 export const ORIENTACIONES = ['vertical', 'horizontal'];
 
 export const POR_DEFECTO = {
@@ -36,7 +36,9 @@ export const POR_DEFECTO = {
   tipos: null, // null es «todos»
   capas: { ...CAPAS_POR_DEFECTO },
   piezas: { ...PIEZAS_POR_DEFECTO },
-  zoom: { modo: 'auto', seleccion: [] },
+  /* Sin recuadros de zoom por omisión: se piden. Un recuadro automático tapa parte de
+     la lámina con un trozo del mapa que quien la prepara no ha elegido. */
+  zoom: { modo: 'ninguno', seleccion: [] },
   /* Fecha de generación. Normalmente es la del día, pero se puede fijar en la URL
      para REPETIR una configuración tal cual: un mapa regenerado meses después con la
      misma dirección sale idéntico, incluida la línea «Generado el» del pie. Es también
@@ -78,7 +80,9 @@ export function aParametros(config) {
   const piezas = apagadas(config.piezas, PIEZAS_POR_DEFECTO);
   if (piezas.length) p.set('sinPiezas', piezas.join(','));
 
-  if (config.zoom.modo === 'ninguno') p.set('zoom', 'ninguno');
+  /* «Ninguno» es el modo por omisión y no se escribe. Los automáticos se piden con
+     zoom=auto y los elegidos, con la lista de ubigeos. */
+  if (config.zoom.modo === 'auto') p.set('zoom', 'auto');
   else if (config.zoom.modo === 'manual') p.set('zoom', config.zoom.seleccion.join(',') || 'ninguno');
 
   if (config.fecha) p.set('fecha', config.fecha);
@@ -122,7 +126,10 @@ export function desdeParametros(p) {
   }
 
   const zoom = p.get('zoom');
-  if (zoom === 'ninguno') config.zoom = { modo: 'ninguno', seleccion: [] };
+  /* zoom=ninguno se sigue aceptando: es lo que escribían los enlaces de antes, cuando
+     el modo por omisión era el automático. */
+  if (zoom === 'auto') config.zoom = { modo: 'auto', seleccion: [] };
+  else if (zoom === 'ninguno') config.zoom = { modo: 'ninguno', seleccion: [] };
   else if (zoom) config.zoom = { modo: 'manual', seleccion: zoom.split(',').filter(Boolean) };
 
   if (p.has('fecha') && FECHA_ISO.test(p.get('fecha'))) config.fecha = p.get('fecha');

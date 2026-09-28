@@ -32,6 +32,7 @@ const FECHA = '2026-09-23';
 /** Medidas nominales en mm, para comprobar el tamaño de página por fuera del motor. */
 const MEDIDAS = {
   A4: [210, 297], A3: [297, 420], A2: [420, 594], A1: [594, 841], A0: [841, 1189],
+  '2A0': [1189, 1682], '4A0': [1682, 2378],
 };
 
 /**
@@ -47,7 +48,8 @@ export const CASOS = [
     parametros: { hoja: 'A3', fecha: FECHA },
     esperado: {
       paginaMm: MEDIDAS.A3,
-      controles: { tamano: 'A3', orientacion: 'vertical', 'zoom-modo': 'auto' },
+      /* Sin recuadros por omisión (Fase 10). */
+      controles: { tamano: 'A3', orientacion: 'vertical', 'zoom-modo': 'ninguno' },
       marcadas: ['capa-grilla', 'pieza-norte', 'pieza-leyenda'],
       desmarcadas: [],
     },
@@ -55,14 +57,25 @@ export const CASOS = [
   {
     nombre: 'A2 horizontal, sólo CEM',
     parametros: {
-      hoja: 'A2', orientacion: 'h', tipos: 'CEM', fecha: FECHA,
+      hoja: 'A2', orientacion: 'h', tipos: 'CEM', zoom: 'auto', fecha: FECHA,
     },
     esperado: {
       paginaMm: [MEDIDAS.A2[1], MEDIDAS.A2[0]],
-      controles: { tamano: 'A2', orientacion: 'horizontal' },
+      controles: { tamano: 'A2', orientacion: 'horizontal', 'zoom-modo': 'auto' },
       marcadas: ['capa-simbolos'],
       desmarcadas: [],
       unTipo: 'CEM',
+    },
+  },
+  /* Fase 10: los formatos mayores que el A0 también se eligen y descargan desde la web. */
+  {
+    nombre: '2A0 vertical',
+    parametros: { hoja: '2A0', fecha: FECHA },
+    esperado: {
+      paginaMm: MEDIDAS['2A0'],
+      controles: { tamano: '2A0', orientacion: 'vertical' },
+      marcadas: ['pieza-leyenda'],
+      desmarcadas: [],
     },
   },
   /* Fase 6: el ámbito viaja en la URL y tiene que llegar al PDF igual que lo demás. */
