@@ -53,7 +53,7 @@ export function componerHojaDeIconos({ iconos, centros, medidor }) {
     piezas.push(texto(`${String(t).replace('.', ',')} mm`, {
       x: colIconos + i * 13 + t / 2, y: yCabecera, 'text-anchor': 'middle', fill: color.tintaSuave,
       'font-family': eCab.familia, 'font-size': ptAmm(eCab.pt), 'font-weight': 600,
-    }));
+    }, { medidor, estilo: eCab }));
   });
   for (const [etiqueta, x] of [['Tipo de servicio', colNombre], ['Sigla', colSigla], ['Color', colColor]]) {
     piezas.push(texto(etiqueta, {

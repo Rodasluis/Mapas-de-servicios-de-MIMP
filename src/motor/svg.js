@@ -40,7 +40,55 @@ export function el(nombre, atributos = {}, hijos) {
 
 export const grupo = (atributos, hijos) => el('g', atributos, hijos);
 
-export const texto = (contenido, atributos) => el('text', atributos, escapar(contenido));
+/**
+ * Resuelve `text-anchor` con las métricas del TTF, en vez de dejárselo al navegador.
+ *
+ * svg2pdf centra y alinea a la derecha midiendo el texto con `measureText` del
+ * navegador, al cuerpo que lleve el SVG. Y este SVG va en milímetros: 10 pt son 3,53
+ * unidades, así que el navegador mide a 3,53 px. A ese tamaño Chromium sobre Linux
+ * devuelve los avances de cada glifo cuadriculados al píxel entero —las seis medidas
+ * salen números redondos— y el ancho se desvía hasta un 24 %. El texto centrado sale
+ * corrido, y cuánto depende de la configuración de renderizado del anfitrión.
+ *
+ * Así que el ancla no se delega: se calcula aquí la `x` ya desplazada y se emite el
+ * texto con el ancla por omisión, `start`, que es el único caso en el que svg2pdf no
+ * mide nada (getTextOffset devuelve 0 y se va). Con eso el PDF deja de depender del
+ * anfitrión, y de paso el centrado pasa a ser exacto: jsPDF DIBUJA el texto con las
+ * métricas del TTF incrustado, luego medir el ancla con esas mismas métricas es lo
+ * que centra de verdad. Midiéndolo con el navegador quedaba un descentrado pequeño
+ * —un 0,22 % del ancho en Windows— por el interletraje que el navegador aplica al
+ * medir y jsPDF no aplica al componer.
+ *
+ * La `x` de un texto girado se desplaza igual, porque el `transform` ya se compuso con
+ * la `x` original y sigue girando alrededor del mismo punto.
+ *
+ * @param {string} contenido
+ * @param {object} atributos  con `x` y, si procede, `text-anchor`
+ * @param {object} medida     {medidor, estilo} — estilo es {familia, variante, pt}
+ */
+export function anclar(contenido, atributos, { medidor, estilo }) {
+  const ancla = atributos['text-anchor'];
+  if (!ancla || ancla === 'start') return atributos;
+  const ancho = medidor.ancho(contenido, estilo);
+  const { 'text-anchor': _, ...resto } = atributos;
+  /* Sin `x` el ancla era el origen, que es lo que vale 0: así un texto sin x sigue
+     saliendo donde salía. */
+  const x = Number(atributos.x) || 0;
+  return { ...resto, x: x - (ancla === 'middle' ? ancho / 2 : ancho) };
+}
+
+/**
+ * Elemento `<text>`.
+ *
+ * Con `medida` —{medidor, estilo}— el ancla se resuelve aquí con las métricas del TTF;
+ * es obligatorio pasarla siempre que los atributos lleven `text-anchor`, porque si no
+ * el ancla la resolvería el navegador. Ver anclar().
+ */
+export const texto = (contenido, atributos, medida) => el(
+  'text',
+  medida ? anclar(contenido, atributos, medida) : atributos,
+  escapar(contenido),
+);
 
 /**
  * Texto con halo, dibujado en DOS pasadas: primero el contorno grueso del color del
@@ -51,9 +99,14 @@ export const texto = (contenido, atributos) => el('text', atributos, escapar(con
  * halo blanco BORRA la letra en el PDF aunque en pantalla se vea bien. Con dos
  * elementos el orden es explícito y sale igual en los dos medios.
  */
-export function textoConHalo(contenido, atributos, { colorHalo = '#ffffff', grosorMm = 0 } = {}) {
-  if (!(grosorMm > 0)) return texto(contenido, atributos);
-  const contorno = { ...atributos };
+export function textoConHalo(contenido, atributos, opciones = {}) {
+  const { colorHalo = '#ffffff', grosorMm = 0, medidor, estilo } = opciones;
+  /* El ancla se resuelve UNA vez, para que el contorno y el relleno caigan en la misma
+     x: si cada pasada la midiera por su cuenta, un redondeo distinto abriría un borde
+     de halo grueso a un lado y ninguno al otro. */
+  const anclados = medidor ? anclar(contenido, atributos, { medidor, estilo }) : atributos;
+  if (!(grosorMm > 0)) return texto(contenido, anclados);
+  const contorno = { ...anclados };
   delete contorno.fill;
   return grupo({}, [
     texto(contenido, {
@@ -64,7 +117,7 @@ export function textoConHalo(contenido, atributos, { colorHalo = '#ffffff', gros
       'stroke-linejoin': 'round',
       'stroke-linecap': 'round',
     }),
-    texto(contenido, atributos),
+    texto(contenido, anclados),
   ]);
 }
 

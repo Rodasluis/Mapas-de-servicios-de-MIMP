@@ -12,6 +12,7 @@
  * que alguien tomó.
  */
 import { ICONOS } from '../iconos/index.js';
+import { fechaDelMapa } from '../motor/fecha.js';
 import { CLASES_POR_DEFECTO } from '../motor/servicios.js';
 import { CAPAS_POR_DEFECTO, PIEZAS_POR_DEFECTO } from '../motor/render.js';
 
@@ -208,7 +209,7 @@ export function aLlamadasDelMotor(config) {
     pdf: {
       propiedades: { titulo: config.textos.titulo },
       // Con fecha fija el PDF sale reproducible byte a byte.
-      ...(config.fecha ? { fecha: new Date(config.fecha) } : {}),
+      ...(config.fecha ? { fecha: fechaDelMapa(config.fecha).fecha } : {}),
     },
   };
 }

@@ -46,6 +46,7 @@ import { crearIndice } from './colisiones.js';
 import { colocarEtiquetas, crearSolicitud } from './etiquetas.js';
 import { color, trazoMm, tipografia, layoutMm, rampaNaranjas, ptAmm } from '../estilo/tokens.js';
 import { el, grupo, texto, textoConHalo, rect, documento, num } from './svg.js';
+import { fechaDelMapa } from './fecha.js';
 
 /** Holgura entre el ámbito y el borde del marco, para que el país no toque el filo. */
 export const HOLGURA_MM = 3;
@@ -125,6 +126,12 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
 
   const medidor = crearMedidor(metricas);
   const factor = factorFormato(hoja);
+
+  /* La fecha del pie se resuelve aquí, una sola vez, y sale en el informe. Va al
+     informe porque es lo ÚNICO que el pie no deduce del mapa: quien compare dos
+     láminas necesita poder afirmar que la fecha estaba fija, o una diferencia de la
+     fecha del día se confundiría con un cambio del dibujo. */
+  const fechaPie = fechaDelMapa(textos.fecha);
 
   /* El pie es obligatorio en todo PDF y la retícula necesita una banda fuera del
      marco para sus números: los dos se descuentan antes de encajar el mapa. */
@@ -305,6 +312,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     ubicacion: elAmbito.nivel === 'nacional' ? null : mapaDeUbicacion({
       vistas: await vistasDeUbicacion({ ambito: elAmbito, cargador, plan }),
       factor,
+      medidor,
     }),
     /* La tabla sólo existe en el ámbito distrital, que es donde caben —y hacen falta—
        el nombre y la dirección de cada centro. */
@@ -472,7 +480,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       ...colocacion.colocadas.map((c) => c.pieza.dibujar(c.x, c.y)),
       ...recuadros.colocados.map((z) => z.svg),
     ]),
-    dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor }),
+    dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor, fechaPie }),
   ].join('\n');
 
   return {
@@ -556,6 +564,8 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
         })),
       },
       datosTag: version.datosTag,
+      fechaPie: fechaPie.iso,
+      fechaPieImpresa: fechaPie.texto,
       msComposicion: Date.now() - inicio,
     },
   };
@@ -888,7 +898,12 @@ function dibujarSimbolos({
         'font-family': eCifra.familia,
         'font-size': ptAmm(eCifra.pt),
         'font-weight': 600,
-      }, { colorHalo: color.halo, grosorMm: trazoMm.haloRotulo * factor * 0.7 }));
+      }, {
+        colorHalo: color.halo,
+        grosorMm: trazoMm.haloRotulo * factor * 0.7,
+        medidor,
+        estilo: eCifra,
+      }));
     });
 
     grupos.push({
@@ -1173,7 +1188,7 @@ function medidasDelPie(medidor, factor) {
  * aviso de que la escala sólo vale si se imprime sin reducir. Un mapa impreso sin esa
  * información no se puede auditar meses después.
  */
-function dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor }) {
+function dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor, fechaPie }) {
   const x = marco.x;
   const derecha = marco.x + marco.ancho;
   /* Por debajo del marco va primero la banda con los números de la retícula; el pie
@@ -1186,8 +1201,7 @@ function dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor
   const destacado = { ...comun, 'text-anchor': 'end', 'font-weight': 600, fill: color.tinta };
   const eFuerte = { ...pie.estilo, variante: 'SemiBold' };
 
-  const fecha = (textos.fecha ? new Date(textos.fecha) : new Date())
-    .toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const fecha = fechaPie.texto;
   const elaborado = textos.elaboradoPor || 'el Ministerio de la Mujer y Poblaciones Vulnerables';
 
   /* Dos columnas: la procedencia a la izquierda y, a la derecha, la escala y el aviso
@@ -1209,8 +1223,8 @@ function dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor
 
   return grupo({ id: 'capa-pie' }, [
     ...izquierda.map((t, i) => texto(t, { ...comun, x, y: base + pie.interlinea * i })),
-    texto(`Escala ${escala.texto}`, { ...destacado, x: derecha, y: base }),
-    texto(NOTA, { ...destacado, x: derecha, y: base + pie.interlinea * 2 }),
+    texto(`Escala ${escala.texto}`, { ...destacado, x: derecha, y: base }, { medidor, estilo: eFuerte }),
+    texto(NOTA, { ...destacado, x: derecha, y: base + pie.interlinea * 2 }, { medidor, estilo: eFuerte }),
     /* Rastro del nivel geométrico: permite explicar, ante un mapa impreso, por qué un
        contorno tiene el detalle que tiene. */
     el('metadata', { id: 'detalle-geometrico' }, `nivel=${nivel} escala=${num(escala.denominador, 0)}`),

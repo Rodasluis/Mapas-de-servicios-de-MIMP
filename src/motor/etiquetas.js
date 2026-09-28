@@ -248,6 +248,8 @@ function dibujar(lineas, cx, cy, s, medidor, factor) {
   const halo = {
     colorHalo: color.halo,
     grosorMm: (s.haloMm ?? trazoMm.haloRotulo) * Math.sqrt(factor),
+    medidor,
+    estilo: s.estilo,
   };
   return grupo({}, lineas.map((linea, i) => textoConHalo(linea, {
     x: num(cx),

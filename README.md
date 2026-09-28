@@ -86,7 +86,7 @@ apareciera uno, incluso dentro de un recuento agregado.
 | `npm run logos` | Normaliza los logotipos de `referencias/logos/` |
 | `npm run metricas` | Extrae las métricas de las tipografías |
 | `npm run muestras` | Genera y verifica los PDF de `muestras/`, y compara la descarga de la web con ellos |
-| `npm run qa` | Regresión visual, vectorialidad y rendimiento (`-- --aprobar` fija referencias) |
+| `npm run qa` | Que el dibujo no cambió, vectorialidad y rendimiento (`-- --aprobar` fija referencias) |
 
 ## Cómo está organizado
 
@@ -591,16 +591,26 @@ las hojas: son la cabecera del documento. Cuando el título no cabe ahí sin tap
 país no se muda de sitio, **encoge**: el motor prueba cuerpos cada vez menores hasta
 que deja de estorbar, y sólo el título lleva fondo blanco.
 
-### Dos comprobaciones que el propio motor hace
+### Tres comprobaciones que el propio motor hace
 
 - **La escala gráfica mide lo que dice.** El motor invierte los dos extremos de la
   barra por la proyección y mide la distancia real entre ellos: en las cinco muestras
   el error queda por debajo del 0,43 %.
-- **El navegador mide con las tipografías incrustadas.** svg2pdf coloca el texto con lo
-  que mide el navegador, no con las métricas del TTF que incrusta jsPDF; si el
-  navegador no tiene las familias cargadas, mide con una de reserva y todo lo centrado
-  sale corrido. Se comprueba contra una familia inexistente para confirmar que la
-  diferencia (≈1,8 %, que es el interletraje) no es la de una fuente equivocada (≈20 %).
+- **El centrado no se le pide al navegador.** svg2pdf resuelve `text-anchor` midiendo
+  el texto con `measureText`, al cuerpo que lleve el SVG —y este SVG va en milímetros,
+  así que 10 pt son 3,53 px—. A ese tamaño Chromium sobre Linux devuelve los avances
+  cuadriculados al píxel entero y el ancho se desvía hasta un 24 %: el texto centrado
+  saldría corrido, y cuánto dependería del renderizador del anfitrión. Así que el motor
+  calcula la `x` desplazada con las métricas del TTF y emite el texto anclado en
+  `start`, el único caso en el que svg2pdf no mide nada. El PDF deja de depender del
+  anfitrión y el centrado pasa a ser exacto, porque quien dibuja —jsPDF— usa esas
+  mismas métricas.
+- **Las familias correctas están cargadas.** Las métricas del TTF son con las que se
+  dimensiona cada caja y se resuelve el centrado, así que tienen que ser las de la
+  tipografía que se incrusta. Se mide el texto en el navegador a un cuerpo cien veces
+  mayor —para que el redondeo de avances no contamine la medida— y se compara con una
+  familia inexistente: la diferencia queda en ≈1,5 % (el interletraje) frente al ≈20 %
+  de una fuente equivocada.
 
 ## La interfaz
 
@@ -681,26 +691,37 @@ Los dos corren en cada pull request (`.github/workflows/pruebas.yml`) con **los 
 comandos** que en local: no hay una versión «de CI» del control que pudiera pasar
 mientras la de verdad falla.
 
-### Regresión visual
+Y corren **antes de publicar**: el despliegue a Pages llama a ese mismo workflow y no
+publica si no pasa, porque una lámina mal compuesta en la web no lleva ningún aviso de
+que no pasó el control. A cambio, publicar tarda lo que tarda comprobar.
 
-Se rasteriza el **PDF** —no el SVG del que salió— y se compara con una referencia
-aprobada. Rasterizarlo importa: entre el SVG y el papel está svg2pdf, que es justamente
-donde han aparecido los fallos más caros de este proyecto —el texto en Times, los halos
-sin `paint-order`, el interletraje—. Un control que mirara el SVG los habría dado todos
-por buenos.
+### Que el dibujo no cambie sin que nadie lo decida
 
-No se guardan las imágenes: un A0 a 150 ppp son 35 megapíxeles. Se guarda una **firma**
-—la lámina reducida a una rejilla de 64 × 64 grises— que ocupa unos kilobytes. Cuando
-una firma no cuadra, el control escribe la lámina en `muestras/regresion/` con las
-celdas que cambiaron marcadas en rojo, porque «la firma cambió» no es accionable.
+**Lo decide el hash del PDF.** Es la regla 4 dicha en una línea —la misma configuración
+produce el mismo PDF— y cualquier cambio del dibujo la rompe, porque el dibujo *es* el
+archivo. Se compara el archivo final y no el SVG del que salió: entre el SVG y el papel
+está svg2pdf, que es justamente donde han aparecido los fallos más caros de este
+proyecto —el texto en Times, los halos sin `paint-order`, el interletraje—. Un control
+que mirara el SVG los habría dado todos por buenos.
 
-**Las tolerancias están medidas, no supuestas.** El primer intento las puso generosas por
-miedo al ruido del antialiasing, y con esos números cambiar el azul del mar de `#d9f1ff`
-a `#d4eeff` **pasaba el control**. Medido, el ruido entre dos ejecuciones idénticas es
-exactamente cero en las quince muestras —el PDF es determinista con fecha fija y el
-rasterizado también—, así que el margen no es para el ruido sino para un cambio de
-versión del navegador; y si eso ocurre, lo correcto es volver a aprobar, no ensanchar el
-umbral. Con las tolerancias actuales, ese cambio de color se detecta en ocho láminas.
+**El rasterizado diagnostica, no juzga.** Cuando un hash no cuadra, la lámina se
+rasteriza y se compara con una **firma** aprobada —la lámina reducida a una rejilla de
+64 × 64 grises, unos kilobytes en vez de los 35 megapíxeles de un A0 a 150 ppp—, y se
+escribe en `muestras/regresion/` con las celdas que cambiaron en rojo. «El hash cambió»
+no es accionable sin poder mirar qué cambió.
+
+Antes el veredicto era de la firma, y era un error de diseño: afirmaba algo
+independiente de la máquina —el dibujo— midiéndolo con algo que no lo es. Las
+tolerancias se calibraron entre dos ejecuciones en la misma máquina, donde la diferencia
+es exactamente cero, y ninguna otra máquina podía cumplirlas: pdf.js sobre Linux suaviza
+y ajusta los glifos distinto que sobre Windows. Medido: los PDF que generó la
+integración continua, rasterizados en Windows, dan media 0,001 contra las firmas
+aprobadas en Windows; los mismos archivos rasterizados en Linux dan 0,40, con el umbral
+en 0,15. El archivo era idéntico y el control fallaba.
+
+Las tolerancias siguen siendo estrechas, ahora como umbrales del diagnóstico: un cambio
+pequeño y repartido es justo el que se escapa mirando. Con umbrales holgados —el primer
+intento— cambiar el azul del mar de `#d9f1ff` a `#d4eeff` no encendía ni una celda.
 
 ### Rendimiento
 

@@ -181,7 +181,12 @@ export function rotulosDeContexto({
     piezas.push(textoConHalo(nombre, {
       x: sitioPais.x, y: sitioPais.y, 'text-anchor': 'middle', fill: color.tintaSuave,
       'font-family': ePais.familia, 'font-size': ptAmm(ePais.pt), 'font-weight': 700,
-    }, { colorHalo: color.halo, grosorMm: trazoMm.haloRotulo * factor * 0.8 }));
+    }, {
+      colorHalo: color.halo,
+      grosorMm: trazoMm.haloRotulo * factor * 0.8,
+      medidor,
+      estilo: ePais,
+    }));
     ocupacion.marcarBloque(sitioPais.caja);
     cajas.push({ ...sitioPais.caja, etiqueta: nombre, nivel: 'pais' });
     colocados.push(nombre);
@@ -321,17 +326,20 @@ export function dibujarGrilla({ grilla, marco, medidor, factor, banda }) {
           y: borde === 'arriba'
             ? p[1] - largoMarca - hueco
             : p[1] + largoMarca + hueco + medidor.ascenso(eCifra) * 0.85,
-        }));
+        }, { medidor, estilo: eCifra }));
       } else {
         /* En los costados el número va girado, como en el mapa de referencia: de otro
            modo obligaría a una banda lateral mucho más ancha. */
         const x = borde === 'izquierda' ? p[0] - largoMarca - hueco : p[0] + largoMarca + hueco;
-        rotulos.push(el('text', {
+        /* El giro sigue anclado en la x ORIGINAL, no en la desplazada: la rotación se
+           compone aquí y el ancla la resuelve texto() después, así que el número gira
+           alrededor de su centro igual que antes. */
+        rotulos.push(texto(etiqueta, {
           x, y: p[1], fill: color.tintaSuave, 'font-family': eCifra.familia,
           'font-size': ptAmm(eCifra.pt), 'text-anchor': 'middle',
           transform: `rotate(-90 ${num(x)} ${num(p[1])})`,
           dy: medidor.ascenso(eCifra) * 0.36,
-        }, escapar(etiqueta)));
+        }, { medidor, estilo: eCifra }));
       }
     }
   }

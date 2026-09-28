@@ -155,9 +155,10 @@ await pagina.waitForFunction(() => typeof window.generarMapa === 'function', { t
 
 /* -------------------------------- generación ---------------------------- */
 
-/* svg2pdf coloca el texto con lo que mide el NAVEGADOR, no con las métricas del TTF
-   que incrusta jsPDF. Si las dos no coinciden, todo lo centrado o alineado a la
-   derecha sale corrido en el PDF. Se comprueba antes de generar nada. */
+/* Las métricas del TTF son con las que el motor dimensiona cada caja Y con las que
+   resuelve el centrado (ver anclar(), en motor/svg.js). Si no fueran las de la
+   tipografía que se incrusta —otra versión de Poppins, metricas.json sin regenerar—,
+   el layout entero mediría mal. Se comprueba antes de generar nada. */
 titulo('Métricas: TTF frente a navegador');
 const metricas = await pagina.evaluate(() => window.comprobarMetricas());
 let desvioMaximo = 0;
@@ -181,7 +182,12 @@ if (sinCargar.length) {
 /* Queda un desvío pequeño y esperado: al medir, el navegador aplica el interletraje
    de pares (kerning) y jsPDF no lo aplica al componer. Las métricas del TTF, que
    tampoco lo aplican, son por tanto las que predicen la anchura REAL del PDF, y por
-   eso las cajas se dimensionan con ellas. Un desvío grande sí delataría otra fuente. */
+   eso las cajas se dimensionan con ellas. Un desvío grande sí delataría otra fuente.
+
+   El límite es un límite de verdad porque la medida se toma a un cuerpo cien veces
+   mayor y se divide: al cuerpo real, el redondeo de avances de Chromium sobre Linux
+   metía hasta un 24 % de ruido y el control no distinguía una fuente equivocada de
+   una bien cargada. */
 const LIMITE_KERNING = 3;
 if (desvioMaximo > LIMITE_KERNING) {
   await cerrar();
@@ -206,7 +212,11 @@ for (const muestra of MUESTRAS) {
     salida = await pagina.evaluate((cfg) => window.generarMapa(cfg), {
       hoja: muestra.hoja,
       ambito: muestra.ambito,
-      textos: { ...TEXTOS, ...(muestra.textos || {}) },
+      /* La fecha fija va en los DOS sitios, igual que la pone la interfaz en
+         aLlamadasDelMotor(): en `textos` porque de ahí sale la del pie, y suelta porque
+         de ahí sale la de los metadatos del PDF. Pasándola sólo suelta, el pie seguía
+         imprimiendo la fecha del día y la firma de regresión cambiaba cada mañana. */
+      textos: { ...TEXTOS, ...(fechaFija ? { fecha: fechaFija } : {}), ...(muestra.textos || {}) },
       opciones: muestra.opciones,
       fecha: fechaFija,
     });
@@ -216,6 +226,26 @@ for (const muestra of MUESTRAS) {
     abortar(`Falló la generación de ${muestra.nombre}.`, `${err.message}\n${erroresPagina.join('\n')}`);
   }
   const msTotalNode = Date.now() - t0;
+
+  /* Con --fecha, el pie tiene que imprimir ESA fecha. Si se quedara con la del día, la
+     regresión visual fallaría cada mañana por una diferencia que no es del mapa, y el
+     aviso saldría a los veinte minutos en la integración continua, no aquí.
+
+     Se comprueba contra lo que se IMPRIME, reconstruido desde la cadena pedida. La
+     primera versión comparaba el ISO en UTC, y así se le escapó que el pie imprimía
+     «31/12/2025» en Lima y «01/01/2026» en el servidor de CI para la misma fecha fija:
+     el ISO en UTC era idéntico en las dos máquinas, y el papel no. */
+  const [anio, mes, dia] = fechaFija ? fechaFija.split('-') : [];
+  const esperada = fechaFija ? `${dia}/${mes}/${anio}` : null;
+  if (esperada && salida.meta.fechaPieImpresa !== esperada) {
+    console.log('ERROR');
+    await cerrar();
+    abortar(
+      `${muestra.nombre}: se pidió la fecha ${fechaFija} y el pie imprime`
+      + ` ${salida.meta.fechaPieImpresa}, no ${esperada}.`,
+      'La fecha fija va en `textos`, y el pie la formatea en el calendario del Perú.',
+    );
+  }
 
   const archivo = path.join(DESTINO, `${muestra.nombre}.pdf`);
   fs.writeFileSync(archivo, Buffer.from(salida.pdf, 'base64'));

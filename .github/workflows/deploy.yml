@@ -16,7 +16,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Publicar un mapa mal compuesto es peor que no publicar: cada push a main queda en
+  # la web, y quien la abra no tiene forma de saber que esa lámina no pasó el control.
+  # Así que el despliegue espera. Se llama al workflow de pruebas en vez de copiar sus
+  # pasos aquí, para que no puedan divergir. El coste es que publicar pasa a tardar lo
+  # que tarda comprobar, y lo paga también un despliegue lanzado a mano.
+  pruebas:
+    uses: ./.github/workflows/pruebas.yml
+
   construir:
+    needs: pruebas
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

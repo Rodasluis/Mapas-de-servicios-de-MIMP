@@ -1,7 +1,11 @@
-# Controles de calidad en cada pull request.
+# Controles de calidad en cada pull request, y antes de publicar en Pages.
 #
 # Lo que se comprueba aquí es lo mismo que en local, con los mismos comandos: no hay
 # una versión «de CI» del control que pudiera pasar mientras la de verdad falla.
+#
+# No se dispara en los empujones a main: ahí lo llama el despliegue (`workflow_call`),
+# que no publica si esto no pasa. Si se disparara además por su cuenta, el mismo empujón
+# descargaría dos veces los 95 MB para comprobar lo mismo.
 #
 # La preparación descarga unos 95 MB de cartografía y tipografías desde orígenes
 # anclados a una versión concreta. Se cachean por el contenido de package.json, que es
@@ -10,9 +14,11 @@ name: Pruebas
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_call:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 # Un pull request que recibe varios empujones seguidos sólo comprueba el último.
 concurrency:
@@ -25,9 +31,9 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -39,7 +45,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Cachear los datos preparados
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             .cache
@@ -66,7 +72,7 @@ jobs:
       # mirar: «la firma cambió» no es accionable sin ver qué cambió.
       - name: Guardar las láminas
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: muestras
           path: |

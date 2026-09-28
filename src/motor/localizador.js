@@ -39,7 +39,7 @@ const SEPARACION_MM = 1.2;
  *                                  {base, resaltar, ambito, titulo}
  * @param {number} opciones.factor  factor de formato de la hoja
  */
-export function mapaDeUbicacion({ vistas, factor }) {
+export function mapaDeUbicacion({ vistas, factor, medidor }) {
   const utiles = (vistas || []).filter((v) => v && v.base && v.base.features.length);
   if (!utiles.length) return null;
 
@@ -71,14 +71,14 @@ export function mapaDeUbicacion({ vistas, factor }) {
       const piezas = [];
       medidas.forEach((m, i) => {
         const x0 = x + i * (anchoCaja + SEPARACION_MM);
-        piezas.push(dibujarVista(m.vista, x0, y, anchoCaja, altoCaja, altoRotulo, eRotulo));
+        piezas.push(dibujarVista(m.vista, x0, y, anchoCaja, altoCaja, altoRotulo, eRotulo, medidor));
       });
       return grupo({ id: 'bloque-ubicacion' }, piezas);
     },
   };
 }
 
-function dibujarVista(vista, x, y, ancho, alto, altoRotulo, eRotulo) {
+function dibujarVista(vista, x, y, ancho, alto, altoRotulo, eRotulo, medidor) {
   const destacados = new Set(vista.resaltar || []);
   const proyeccion = geoTransverseMercator().rotate([-MERIDIANO_CENTRAL, 0])
     .fitExtent([
@@ -115,7 +115,7 @@ function dibujarVista(vista, x, y, ancho, alto, altoRotulo, eRotulo) {
     fill: color.tintaSuave,
     'font-family': eRotulo.familia,
     'font-size': ptAmm(eRotulo.pt),
-  })] : [];
+  }, { medidor, estilo: eRotulo })] : [];
 
   return grupo({}, [
     rect({ x, y, ancho, alto }, {
