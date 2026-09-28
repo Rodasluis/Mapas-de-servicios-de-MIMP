@@ -857,17 +857,19 @@ function dibujarRecuadro({
      principal no llega a nombrar —su grupo de íconos las llena por completo—, así que
      si el zoom tampoco las nombrara no aparecerían por ninguna parte. Aquí caben,
      porque a esta escala sobra sitio. */
+  /* Sólo se nombra la zona. Los nombres del entorno, aun atenuados por el velo,
+     competían con los de la zona y hacían dudar de qué se estaba ampliando: el
+     entorno se reconoce por su forma, y su nombre ya está en el mapa principal. */
+  const geometriaDeLaZona = new Map([...geometria].filter(([f]) => esDeLaZona(f.properties.ubigeo)));
   const rotulos = rotularMiembros({
-    geometria, cajasSimbolos, marcoInterno, medidor, factor,
+    geometria: geometriaDeLaZona, cajasSimbolos, marcoInterno, medidor, factor,
   });
 
   /* El velo: un rectángulo del tamaño del marco con la zona recortada como hueco
      (regla par-impar), blanco y semitransparente. Aclara el entorno sin borrarlo y deja
      la zona con su color. Es un trazado vectorial con opacidad, no un desenfoque: un
-     filtro de desenfoque acabaría rasterizado en el PDF.
-
-     Los rótulos van DEBAJO del velo: los de los vecinos se leen atenuados, como
-     contexto, y los de la zona quedan en el hueco, a plena tinta. */
+     filtro de desenfoque acabaría rasterizado en el PDF. Los rótulos, que ya son sólo
+     los de la zona, van encima, a plena tinta aunque rocen el borde del hueco. */
   const { x: mx, y: my, ancho: ma, alto: mh } = marcoInterno;
   const velo = el('path', {
     d: `M${num(mx)} ${num(my)}h${num(ma)}v${num(mh)}h${num(-ma)}Z${miembros.map((f) => ruta(f.geometry)).join('')}`,
@@ -891,7 +893,7 @@ function dibujarRecuadro({
     }),
     grupo({ 'clip-path': `url(#${idRecorte})` }, [
       rect(marcoInterno, { fill: color.oceano }),
-      ...paises, ...fuera, ...relleno, ...limites, rotulos, velo, ...resalte, ...simbolos,
+      ...paises, ...fuera, ...relleno, ...limites, velo, ...resalte, ...simbolos, rotulos,
     ]),
     rect(marcoInterno, {
       fill: 'none', stroke: color.marco, 'stroke-width': trazoMm.marcoInterior,
