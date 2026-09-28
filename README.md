@@ -591,16 +591,26 @@ las hojas: son la cabecera del documento. Cuando el título no cabe ahí sin tap
 país no se muda de sitio, **encoge**: el motor prueba cuerpos cada vez menores hasta
 que deja de estorbar, y sólo el título lleva fondo blanco.
 
-### Dos comprobaciones que el propio motor hace
+### Tres comprobaciones que el propio motor hace
 
 - **La escala gráfica mide lo que dice.** El motor invierte los dos extremos de la
   barra por la proyección y mide la distancia real entre ellos: en las cinco muestras
   el error queda por debajo del 0,43 %.
-- **El navegador mide con las tipografías incrustadas.** svg2pdf coloca el texto con lo
-  que mide el navegador, no con las métricas del TTF que incrusta jsPDF; si el
-  navegador no tiene las familias cargadas, mide con una de reserva y todo lo centrado
-  sale corrido. Se comprueba contra una familia inexistente para confirmar que la
-  diferencia (≈1,8 %, que es el interletraje) no es la de una fuente equivocada (≈20 %).
+- **El centrado no se le pide al navegador.** svg2pdf resuelve `text-anchor` midiendo
+  el texto con `measureText`, al cuerpo que lleve el SVG —y este SVG va en milímetros,
+  así que 10 pt son 3,53 px—. A ese tamaño Chromium sobre Linux devuelve los avances
+  cuadriculados al píxel entero y el ancho se desvía hasta un 24 %: el texto centrado
+  saldría corrido, y cuánto dependería del renderizador del anfitrión. Así que el motor
+  calcula la `x` desplazada con las métricas del TTF y emite el texto anclado en
+  `start`, el único caso en el que svg2pdf no mide nada. El PDF deja de depender del
+  anfitrión y el centrado pasa a ser exacto, porque quien dibuja —jsPDF— usa esas
+  mismas métricas.
+- **Las familias correctas están cargadas.** Las métricas del TTF son con las que se
+  dimensiona cada caja y se resuelve el centrado, así que tienen que ser las de la
+  tipografía que se incrusta. Se mide el texto en el navegador a un cuerpo cien veces
+  mayor —para que el redondeo de avances no contamine la medida— y se compara con una
+  familia inexistente: la diferencia queda en ≈1,5 % (el interletraje) frente al ≈20 %
+  de una fuente equivocada.
 
 ## La interfaz
 

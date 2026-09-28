@@ -47,7 +47,26 @@ async function fuentesListas() {
   await document.fonts.ready;
 }
 
-/** Compara las métricas del TTF con lo que mide el navegador, que es quien coloca. */
+/** Cuántas veces más grande se mide que el cuerpo real. Ver comprobarMetricas(). */
+const FACTOR_MEDIDA = 100;
+
+/**
+ * Compara las métricas del TTF con lo que mide el navegador.
+ *
+ * El navegador ya no COLOCA nada: desde que el motor resuelve `text-anchor` con las
+ * métricas del TTF (ver anclar(), en motor/svg.js), svg2pdf no mide el texto para
+ * nada. Lo que esta comprobación sigue guardando es que las familias correctas están
+ * cargadas y que las métricas que el motor usa para medir son las de la tipografía que
+ * el navegador tiene delante: si alguien cambiara la versión de Poppins sin regenerar
+ * metricas.json, todas las cajas del layout quedarían mal dimensionadas y esto es lo
+ * único que lo vería.
+ *
+ * Se mide a un cuerpo GRANDE y se divide, no al cuerpo real. Chromium sobre Linux
+ * devuelve los avances cuadriculados al píxel entero, y el cuerpo real son 3,53 px:
+ * a ese tamaño el redondeo llega al 24 % y la comprobación fallaba en Linux midiendo
+ * bien una tipografía correcta. Cien veces más grande, el mismo redondeo queda por
+ * debajo del 0,3 % y lo que se compara vuelve a ser la tipografía.
+ */
 window.comprobarMetricas = async function comprobarMetricas() {
   await fuentesListas();
   const { crearMedidor } = await import('./motor/texto.js');
@@ -65,16 +84,16 @@ window.comprobarMetricas = async function comprobarMetricas() {
   return pruebas.map(([familia, variante, peso, estilo, texto]) => {
     const pt = 10;
     const mm = medidor.ancho(texto, { familia, variante, pt });
-    /* svg2pdf mide con el cuerpo en unidades de usuario tratadas como px, así que se
-       compara en esas mismas unidades: lo que importa es la proporción. */
-    const px = (pt * 25.4) / 72;
+    /* El cuerpo en unidades de usuario del SVG son milímetros, así que se compara en
+       esas mismas unidades: lo que importa es la proporción. */
+    const px = ((pt * 25.4) / 72) * FACTOR_MEDIDA;
     lienzo.font = `${estilo} ${peso} ${px}px ${familia}`;
-    const navegador = lienzo.measureText(texto).width;
+    const navegador = lienzo.measureText(texto).width / FACTOR_MEDIDA;
     /* Control: con una familia que no existe el navegador cae en su tipografía de
        reserva. Si la medida buena se pareciera a ésta, la fuente no se habría cargado
        y el parecido con el TTF sería casualidad. */
     lienzo.font = `${estilo} ${peso} ${px}px __no_existe__`;
-    const reserva = lienzo.measureText(texto).width;
+    const reserva = lienzo.measureText(texto).width / FACTOR_MEDIDA;
     return {
       familia: `${familia} ${variante}`,
       texto: texto.length > 22 ? `${texto.slice(0, 22)}…` : texto,

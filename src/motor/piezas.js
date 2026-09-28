@@ -141,7 +141,7 @@ export function bloqueTitulo({ textos, medidor, factor, anchoMaximo, reduccion =
         ...lineas.map((l) => texto(l.t, {
           x: cx, y: y + relleno + l.base, 'text-anchor': 'middle', fill: l.color,
           'font-family': l.e.familia, 'font-size': ptAmm(l.e.pt), 'font-weight': l.peso,
-        })),
+        }, { medidor, estilo: l.e })),
       ]);
     },
   };
@@ -192,7 +192,7 @@ export function rosaDeLosVientos({ factor, anguloNorte, medidor }) {
           x: cx, y: cy - radio * 1.18 - medidor.alto(eLetra) * 0.18,
           'text-anchor': 'middle', fill: color.tinta,
           'font-family': eLetra.familia, 'font-size': ptAmm(eLetra.pt), 'font-weight': 700,
-        }),
+        }, { medidor, estilo: eLetra }),
       ]);
     },
   };
@@ -289,7 +289,7 @@ export function escalaGrafica({ denominador, factor, medidor }) {
         hijos.push(textoConHalo(etiquetas[i], {
           x: x0 + paso * i, y: yCifras, 'text-anchor': 'middle', fill: color.tinta,
           'font-family': eCifra.familia, 'font-size': ptAmm(eCifra.pt),
-        }, halo));
+        }, { ...halo, medidor, estilo: eCifra }));
       }
       /* El último número va centrado sobre el extremo de la barra, así que la unidad
          tiene que arrancar después de su mitad derecha o se montan. */

@@ -305,6 +305,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     ubicacion: elAmbito.nivel === 'nacional' ? null : mapaDeUbicacion({
       vistas: await vistasDeUbicacion({ ambito: elAmbito, cargador, plan }),
       factor,
+      medidor,
     }),
     /* La tabla sólo existe en el ámbito distrital, que es donde caben —y hacen falta—
        el nombre y la dirección de cada centro. */
@@ -888,7 +889,12 @@ function dibujarSimbolos({
         'font-family': eCifra.familia,
         'font-size': ptAmm(eCifra.pt),
         'font-weight': 600,
-      }, { colorHalo: color.halo, grosorMm: trazoMm.haloRotulo * factor * 0.7 }));
+      }, {
+        colorHalo: color.halo,
+        grosorMm: trazoMm.haloRotulo * factor * 0.7,
+        medidor,
+        estilo: eCifra,
+      }));
     });
 
     grupos.push({
@@ -1209,8 +1215,8 @@ function dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor
 
   return grupo({ id: 'capa-pie' }, [
     ...izquierda.map((t, i) => texto(t, { ...comun, x, y: base + pie.interlinea * i })),
-    texto(`Escala ${escala.texto}`, { ...destacado, x: derecha, y: base }),
-    texto(NOTA, { ...destacado, x: derecha, y: base + pie.interlinea * 2 }),
+    texto(`Escala ${escala.texto}`, { ...destacado, x: derecha, y: base }, { medidor, estilo: eFuerte }),
+    texto(NOTA, { ...destacado, x: derecha, y: base + pie.interlinea * 2 }, { medidor, estilo: eFuerte }),
     /* Rastro del nivel geométrico: permite explicar, ante un mapa impreso, por qué un
        contorno tiene el detalle que tiene. */
     el('metadata', { id: 'detalle-geometrico' }, `nivel=${nivel} escala=${num(escala.denominador, 0)}`),

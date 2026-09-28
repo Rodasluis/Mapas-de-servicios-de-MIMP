@@ -275,6 +275,6 @@ export function numeroDeCentro({ n, x, y, tamanoMm, medidor, estilo, dudosa }) {
       'font-family': estilo.familia,
       'font-size': ptAmm(estilo.pt),
       'font-weight': 700,
-    }),
+    }, { medidor, estilo }),
   ]);
 }

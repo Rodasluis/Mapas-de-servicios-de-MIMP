@@ -155,9 +155,10 @@ await pagina.waitForFunction(() => typeof window.generarMapa === 'function', { t
 
 /* -------------------------------- generación ---------------------------- */
 
-/* svg2pdf coloca el texto con lo que mide el NAVEGADOR, no con las métricas del TTF
-   que incrusta jsPDF. Si las dos no coinciden, todo lo centrado o alineado a la
-   derecha sale corrido en el PDF. Se comprueba antes de generar nada. */
+/* Las métricas del TTF son con las que el motor dimensiona cada caja Y con las que
+   resuelve el centrado (ver anclar(), en motor/svg.js). Si no fueran las de la
+   tipografía que se incrusta —otra versión de Poppins, metricas.json sin regenerar—,
+   el layout entero mediría mal. Se comprueba antes de generar nada. */
 titulo('Métricas: TTF frente a navegador');
 const metricas = await pagina.evaluate(() => window.comprobarMetricas());
 let desvioMaximo = 0;
@@ -181,7 +182,12 @@ if (sinCargar.length) {
 /* Queda un desvío pequeño y esperado: al medir, el navegador aplica el interletraje
    de pares (kerning) y jsPDF no lo aplica al componer. Las métricas del TTF, que
    tampoco lo aplican, son por tanto las que predicen la anchura REAL del PDF, y por
-   eso las cajas se dimensionan con ellas. Un desvío grande sí delataría otra fuente. */
+   eso las cajas se dimensionan con ellas. Un desvío grande sí delataría otra fuente.
+
+   El límite es un límite de verdad porque la medida se toma a un cuerpo cien veces
+   mayor y se divide: al cuerpo real, el redondeo de avances de Chromium sobre Linux
+   metía hasta un 24 % de ruido y el control no distinguía una fuente equivocada de
+   una bien cargada. */
 const LIMITE_KERNING = 3;
 if (desvioMaximo > LIMITE_KERNING) {
   await cerrar();

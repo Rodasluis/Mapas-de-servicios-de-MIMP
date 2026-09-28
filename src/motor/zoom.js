@@ -827,7 +827,12 @@ function dibujarRecuadro({
         'font-family': eCifra.familia,
         'font-size': ptAmm(eCifra.pt),
         'font-weight': 600,
-      }, { colorHalo: color.halo, grosorMm: trazoMm.haloRotulo * factor * 0.7 }));
+      }, {
+        colorHalo: color.halo,
+        grosorMm: trazoMm.haloRotulo * factor * 0.7,
+        medidor,
+        estilo: eCifra,
+      }));
     });
   }
   }
