@@ -5,7 +5,8 @@
  * superposiciones, escala, vectorialidad—. Aquí se añade lo que sólo se ve mirando el
  * ARCHIVO terminado:
  *
- *   1. que el dibujo no ha cambiado sin que nadie lo decidiera (regresión visual);
+ *   1. que el dibujo no ha cambiado sin que nadie lo decidiera (hash del PDF, y el
+ *      rasterizado para poder mirar qué cambió cuando cambia);
  *   2. que ninguna lámina lleva una imagen de mapa de bits;
  *   3. que los tiempos de generación siguen dentro del presupuesto.
  *
@@ -21,7 +22,7 @@ import { RAIZ, abortar, titulo, peso } from './lib/comun.mjs';
 import { verificarArchivo } from '../tests/verificar-pdf.mjs';
 import {
   prepararRenderizador, firmarPdf, compararFirmas, leerReferencias, escribirReferencias,
-  escribirDiferencia, LADO_FIRMA, PPP, TOLERANCIA_MEDIA, TOLERANCIA_CELDA,
+  escribirDiferencia, hashPdf, TOLERANCIA_MEDIA, TOLERANCIA_CELDA,
 } from '../tests/regresion-visual.mjs';
 
 const MUESTRAS = path.join(RAIZ, 'muestras');
@@ -54,9 +55,9 @@ if (generar) {
 
 const informe = JSON.parse(fs.readFileSync(INFORME, 'utf8'));
 
-/* --------------------------- 1. regresión visual ------------------------ */
+/* ------------------- 1. el dibujo no cambió: hash del PDF ---------------- */
 
-titulo(`Regresión visual (${PPP} ppp, firma de ${LADO_FIRMA}×${LADO_FIRMA})`);
+titulo('El dibujo no cambió (hash del PDF)');
 
 const referencias = leerReferencias();
 const navegador = await chromium.launch();
@@ -65,9 +66,13 @@ const erroresPagina = [];
 pagina.on('pageerror', (e) => erroresPagina.push(e.message));
 await prepararRenderizador(pagina);
 
-const firmas = {};
+const laminas = {};
 const fallosVisuales = [];
 const nuevas = [];
+/* Sólo se rasteriza lo que hay que diagnosticar; firmar quince láminas cuesta minutos
+   y, si los hashes cuadran, no hay nada que mirar. En la aprobación sí se firman todas,
+   porque la firma es lo que permitirá diagnosticar el día que un hash se mueva. */
+const firmar = async (rutaPdf) => (await firmarPdf(pagina, rutaPdf)).firma;
 
 for (const m of informe.muestras) {
   const rutaPdf = path.join(MUESTRAS, `${m.nombre}.pdf`);
@@ -75,39 +80,45 @@ for (const m of informe.muestras) {
     fallosVisuales.push({ nombre: m.nombre, motivo: 'el PDF no existe' });
     continue;
   }
-  process.stdout.write(`  · ${m.nombre.padEnd(32)}`);
-  const { firma, anchoPx, altoPx, pppReal } = await firmarPdf(pagina, rutaPdf);
-  firmas[m.nombre] = firma;
+  process.stdout.write(`  · ${m.nombre.padEnd(34)}`);
+  const hash = hashPdf(rutaPdf);
+  const previa = referencias.laminas?.[m.nombre];
+  laminas[m.nombre] = { hash, firma: aprobar ? await firmar(rutaPdf) : previa?.firma };
 
-  const previa = referencias.firmas?.[m.nombre];
-  const c = compararFirmas(previa, firma);
-  const medidas = `${anchoPx}×${altoPx} px a ${pppReal} ppp`;
-
-  if (!previa) {
+  if (!previa?.hash) {
     nuevas.push(m.nombre);
-    console.log(`${medidas}  · sin referencia`);
-  } else if (c.pasa) {
-    console.log(`${medidas}  · media ${c.media.toFixed(2)}  ✓`);
-  } else {
-    console.log(`${medidas}  · media ${c.media.toFixed(2)}, máx ${c.maxima}, `
-      + `${c.celdas} celda(s) fuera de tolerancia  ✗`);
-    const imagen = await escribirDiferencia({
-      pagina, rutaPdf, nombre: m.nombre, referencia: previa, destino: DIFERENCIAS,
-    });
-    fallosVisuales.push({
-      nombre: m.nombre,
-      motivo: `media ${c.media.toFixed(2)} (tolerada ${TOLERANCIA_MEDIA}),`
-        + ` máxima ${c.maxima} (tolerada ${TOLERANCIA_CELDA})`,
-      imagen: path.relative(RAIZ, imagen),
-    });
+    console.log(`${hash.slice(0, 12)}  · sin referencia`);
+    continue;
   }
+  if (previa.hash === hash) {
+    console.log(`${hash.slice(0, 12)}  ✓`);
+    continue;
+  }
+
+  /* El hash cambió: ahora sí se rasteriza, para decir cuánto y dónde. */
+  const { firma } = await firmarPdf(pagina, rutaPdf);
+  laminas[m.nombre].firma = firma;
+  const c = compararFirmas(previa.firma, firma);
+  const cuanto = c.comparable
+    ? `media ${c.media.toFixed(2)}, máx ${c.maxima}, ${c.celdas} celda(s) por encima de ${TOLERANCIA_CELDA}`
+    : 'sin firma previa con la que medir el cambio';
+  console.log(`${hash.slice(0, 12)} ≠ ${previa.hash.slice(0, 12)}  ✗`);
+  const imagen = await escribirDiferencia({
+    pagina, rutaPdf, nombre: m.nombre, referencia: previa.firma, destino: DIFERENCIAS,
+  });
+  fallosVisuales.push({
+    nombre: m.nombre,
+    motivo: `el PDF cambió · ${cuanto}`,
+    imagen: path.relative(RAIZ, imagen),
+    apreciable: c.comparable && c.media > TOLERANCIA_MEDIA,
+  });
 }
 
 await navegador.close();
 
 if (aprobar) {
-  const archivo = escribirReferencias(firmas, { datosTag: informe.datosTag });
-  console.log(`\n  ✓ ${Object.keys(firmas).length} firmas aprobadas en ${path.relative(RAIZ, archivo)}`);
+  const archivo = escribirReferencias(laminas, { datosTag: informe.datosTag });
+  console.log(`\n  ✓ ${Object.keys(laminas).length} láminas aprobadas en ${path.relative(RAIZ, archivo)}`);
   console.log('    Revisa el diff antes de confirmarlo: aprobar una regresión la vuelve invisible.');
 } else if (nuevas.length) {
   console.log(`\n  ! ${nuevas.length} muestra(s) sin referencia: ${nuevas.join(', ')}.`);
@@ -116,6 +127,11 @@ if (aprobar) {
 if (referencias.datosTag && informe.datosTag && referencias.datosTag !== informe.datosTag) {
   console.log(`\n  ! Las referencias se aprobaron con DATOS_TAG ${referencias.datosTag}`
     + ` y estas muestras son de ${informe.datosTag}: las diferencias son esperables.`);
+}
+if (fallosVisuales.length && referencias.plataforma && referencias.plataforma !== process.platform) {
+  console.log(`\n  ! Las firmas se aprobaron en ${referencias.plataforma} y esto corre en`
+    + ` ${process.platform}. El veredicto es del hash y no le afecta, pero en el mapa de`
+    + ' diferencias se encenderán celdas por cómo rasteriza cada sistema, no por el dibujo.');
 }
 
 /* ------------------------- 2. nada de mapas de bits --------------------- */
@@ -175,6 +191,11 @@ for (const f of fallosVisuales) {
   console.log(`  ✗ ${f.nombre}: ${f.motivo}`);
   if (f.imagen) console.log(`      mira ${f.imagen} (en rojo, las celdas que cambiaron)`);
 }
+if (fallosVisuales.length && !fallosVisuales.some((f) => f.apreciable)) {
+  console.log('    Ningún cambio llega a ser apreciable en la imagen: si esto viene de una');
+  console.log('    versión nueva de jsPDF o svg2pdf, o de otra fecha, es esperable y hay que');
+  console.log('    aprobarlo; si no se cambió nada, no lo es y hay que averiguar por qué.');
+}
 if (erroresPagina.length) {
   console.log(`  ! errores del renderizador: ${erroresPagina.slice(0, 3).join(' | ')}`);
 }
@@ -182,6 +203,6 @@ if (erroresPagina.length) {
 if (problemas) {
   abortar(`${problemas} problema(s) de control de calidad.`);
 }
-console.log(`  ✓ sin regresiones visuales, sin mapas de bits`
+console.log(`  ✓ el dibujo no cambió, sin mapas de bits`
   + `${lentas.length ? `, ${lentas.length} lámina(s) por encima del presupuesto` : ''}.`);
 console.log('');

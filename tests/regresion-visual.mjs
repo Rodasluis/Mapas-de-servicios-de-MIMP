@@ -1,31 +1,39 @@
 /**
- * Regresión visual de los PDF.
+ * Que el dibujo no cambie sin que nadie lo decidiera.
  *
  * Los demás controles miran la ESTRUCTURA: que los totales cuadren, que nada se
  * superponga, que la barra mida lo que dice. Ninguno vería que una capa dejó de
  * dibujarse, que un relleno cambió de color o que el mapa entero se desplazó tres
  * milímetros, porque todas esas cosas pasan las comprobaciones estructurales sin
- * inmutarse. Lo único que las detecta es mirar el papel.
+ * inmutarse.
  *
- * Así que se rasteriza el PDF —el archivo final, no el SVG del que salió— y se compara
- * con una referencia aprobada. Rasterizarlo importa: entre el SVG y el papel está
- * svg2pdf, que es justamente donde han aparecido los fallos más caros de este proyecto
- * (el texto en Times, los halos sin `paint-order`, el interletraje). Un control que
- * mirara el SVG los habría dado todos por buenos.
+ * QUÉ DECIDE. El hash del PDF. Es la regla 4 del proyecto dicha en una línea —la misma
+ * configuración produce el mismo PDF—, y cualquier cambio del dibujo la rompe, porque
+ * el dibujo ES el archivo. Se compara el archivo final y no el SVG del que salió, que
+ * es lo que importa: entre el SVG y el papel está svg2pdf, justamente donde han
+ * aparecido los fallos más caros de este proyecto (el texto en Times, los halos sin
+ * `paint-order`, el interletraje). Un control que mirara el SVG los habría dado todos
+ * por buenos.
  *
- * QUÉ SE GUARDA. No las imágenes: un A0 a 150 ppp son 35 megapíxeles y quince de esos
- * archivos no caben en un repositorio. Se guarda una FIRMA —el mapa reducido a una
- * rejilla de 64 × 64 grises— que ocupa unos kilobytes y cambia en cuanto algo se mueve
- * de sitio. Cuando una firma no cuadra, el control escribe la imagen completa y el mapa
- * de diferencias en `muestras/regresion/` para poder mirarlas.
+ * POR QUÉ NO LO DECIDE EL RASTERIZADO. Antes sí, comparando una firma —el papel
+ * reducido a una rejilla de 64 × 64 grises— con una tolerancia muy estrecha. La
+ * tolerancia se midió entre dos ejecuciones en la MISMA máquina, donde la diferencia es
+ * exactamente cero, y de ahí salieron unos umbrales que ninguna otra máquina puede
+ * cumplir: pdf.js sobre Linux suaviza y ajusta los glifos distinto que sobre Windows, y
+ * eso solo da media 0,09 a 0,40 y hasta 13 de diferencia por celda. Medido: los PDF que
+ * generó la integración continua, rasterizados en Windows, dan media 0,001 contra las
+ * firmas aprobadas en Windows; los mismos archivos rasterizados en Linux dan 0,40. El
+ * archivo era idéntico y el control fallaba, que es la peor clase de control.
  *
- * QUÉ TOLERA. Casi nada, y eso es deliberado. Entre dos ejecuciones idénticas la
- * diferencia medida es EXACTAMENTE cero en las quince muestras —el PDF es determinista
- * con fecha fija y el rasterizado también—, así que el margen que queda no es para el
- * ruido, que no existe, sino para un cambio de versión del navegador o de pdf.js.
+ * Así que el rasterizado se queda, pero en su sitio: cuando un hash no cuadra, dice
+ * CUÁNTO y DÓNDE cambió el dibujo, y escribe la lámina y el mapa de diferencias en
+ * `muestras/regresion/`. «El hash de nacional_A1_vertical cambió» no es accionable sin
+ * poder mirar qué cambió. Como medida de diagnóstico, que se haya rasterizado en otra
+ * máquina que la aprobación solo añade ruido a la imagen, no un veredicto falso.
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { RAIZ } from '../scripts/lib/comun.mjs';
 
 /** Lado de la rejilla de la firma. 64 × 64 = 4096 celdas por lámina. */
@@ -46,22 +54,22 @@ export const PPP = 150;
 export const MAXIMO_PIXELES = 12e6;
 
 /**
- * Tolerancias, medidas y no supuestas.
+ * Umbrales del DIAGNÓSTICO, no del veredicto.
  *
- * El primer intento las puso generosas —media 1,2, celda 24— por miedo al ruido del
- * antialiasing. Con esos números, cambiar el azul del mar de #d9f1ff a #d4eeff pasaba
- * el control: un cambio de color en un tercio de la lámina daba una media de 0,5 y el
- * umbral era del doble. Un control que no ve eso no sirve para nada.
+ * Ya no deciden si el control pasa —eso lo decide el hash—, sino qué celdas se pintan
+ * de rojo en el mapa de diferencias y a partir de qué medida se dice que el cambio es
+ * apreciable. Siguen siendo estrechos a propósito: un cambio pequeño y repartido es
+ * justo el que se escapa mirando. Con umbrales holgados —media 1,2, celda 24, que fue el
+ * primer intento— cambiar el azul del mar de #d9f1ff a #d4eeff no pintaba ni una celda.
  *
- * Medido: el ruido entre dos ejecuciones idénticas es EXACTAMENTE cero en las quince
- * muestras, porque el PDF es determinista con fecha fija y el rasterizado también. Así
- * que el margen no es para el ruido, que no existe, sino para un cambio de versión del
- * navegador o de pdf.js; y si eso pasa, lo correcto es volver a aprobar las referencias,
- * no ensanchar el umbral. Con estos números el cambio del mar se detecta.
+ * Como referencia de escala: en la misma máquina, dos ejecuciones dan exactamente cero;
+ * entre Windows y Linux, el mismo archivo da media 0,09 a 0,40. Si el hash cambió y la
+ * media queda por debajo de eso, el cambio del dibujo es menor que el ruido de
+ * rasterizar y hay que mirar la lámina, no la cifra.
  */
 export const TOLERANCIA_MEDIA = 0.15;
 
-/** Diferencia máxima tolerada en una sola celda. */
+/** Diferencia por celda a partir de la cual se pinta de rojo en el mapa de diferencias. */
 export const TOLERANCIA_CELDA = 6;
 
 const CARPETA = path.join(RAIZ, 'tests', 'referencias');
@@ -78,14 +86,26 @@ const ARCHIVO = path.join(CARPETA, 'firmas.json');
 const aTexto = (firma) => Buffer.from(Uint8Array.from(firma)).toString('base64');
 const aFirma = (texto) => Array.from(Buffer.from(texto, 'base64'));
 
+/** Hash del PDF: es lo que decide si el dibujo cambió. */
+export const hashPdf = (ruta) => crypto
+  .createHash('sha256').update(fs.readFileSync(ruta)).digest('hex');
+
+export const VERSION_REFERENCIAS = 2;
+
 export function leerReferencias() {
-  if (!fs.existsSync(ARCHIVO)) return { version: 1, firmas: {} };
+  if (!fs.existsSync(ARCHIVO)) return { version: VERSION_REFERENCIAS, laminas: {} };
   const crudo = JSON.parse(fs.readFileSync(ARCHIVO, 'utf8'));
+  /* La versión 1 guardaba `firmas: {nombre: base64}` y no guardaba hashes: se lee para
+     poder seguir enseñando el mapa de diferencias, pero sin hash no hay veredicto y el
+     control pedirá aprobar de nuevo. */
+  const laminas = crudo.laminas
+    || Object.fromEntries(Object.entries(crudo.firmas || {}).map(([k, v]) => [k, { firma: v }]));
   return {
     ...crudo,
-    firmas: Object.fromEntries(
-      Object.entries(crudo.firmas || {}).map(([k, v]) => [k, typeof v === 'string' ? aFirma(v) : v]),
-    ),
+    laminas: Object.fromEntries(Object.entries(laminas).map(([k, v]) => [k, {
+      hash: v.hash,
+      firma: typeof v.firma === 'string' ? aFirma(v.firma) : v.firma,
+    }])),
   };
 }
 
@@ -176,18 +196,31 @@ export function compararFirmas(referencia, actual) {
   };
 }
 
-/** Guarda el conjunto de firmas aprobadas. */
-export function escribirReferencias(firmas, meta) {
+/**
+ * Guarda las láminas aprobadas: el hash que decide y la firma que diagnostica.
+ *
+ * @param {object} laminas  {nombre: {hash, firma}}
+ */
+export function escribirReferencias(laminas, meta) {
   fs.mkdirSync(CARPETA, { recursive: true });
   const contenido = {
-    version: 1,
+    version: VERSION_REFERENCIAS,
     generado: new Date().toISOString().slice(0, 10),
     datosTag: meta.datosTag,
+    /* Los hashes valen en cualquier máquina; las firmas, no —rasterizar depende del
+       sistema—, así que se anota dónde se aprobaron para que el diagnóstico pueda
+       advertir de que el ruido de la imagen no es un cambio del dibujo. */
+    plataforma: process.platform,
     lado: LADO_FIRMA,
     ppp: PPP,
     /* Se guarda para qué versión de los datos se aprobaron: si cambia DATOS_TAG, las
        diferencias son esperables y hay que volver a aprobarlas, no investigarlas. */
-    firmas: Object.fromEntries(Object.entries(firmas).map(([k, v]) => [k, aTexto(v)])),
+    /* La firma es opcional: el hash se calcula leyendo el archivo y la firma exige
+       rasterizarlo, que en una máquina con poca memoria no siempre se puede. Sin firma
+       hay veredicto igual —lo da el hash—, y lo que falta es el diagnóstico, que se
+       rellena la primera vez que se apruebe donde sí haya memoria. */
+    laminas: Object.fromEntries(Object.entries(laminas)
+      .map(([k, v]) => [k, v.firma ? { hash: v.hash, firma: aTexto(v.firma) } : { hash: v.hash }])),
   };
   fs.writeFileSync(ARCHIVO, `${JSON.stringify(contenido, null, 1)}\n`);
   return ARCHIVO;

@@ -229,13 +229,21 @@ for (const muestra of MUESTRAS) {
 
   /* Con --fecha, el pie tiene que imprimir ESA fecha. Si se quedara con la del día, la
      regresión visual fallaría cada mañana por una diferencia que no es del mapa, y el
-     aviso saldría a los veinte minutos en la integración continua, no aquí. */
-  if (fechaFija && salida.meta.fechaPie !== fechaFija) {
+     aviso saldría a los veinte minutos en la integración continua, no aquí.
+
+     Se comprueba contra lo que se IMPRIME, reconstruido desde la cadena pedida. La
+     primera versión comparaba el ISO en UTC, y así se le escapó que el pie imprimía
+     «31/12/2025» en Lima y «01/01/2026» en el servidor de CI para la misma fecha fija:
+     el ISO en UTC era idéntico en las dos máquinas, y el papel no. */
+  const [anio, mes, dia] = fechaFija ? fechaFija.split('-') : [];
+  const esperada = fechaFija ? `${dia}/${mes}/${anio}` : null;
+  if (esperada && salida.meta.fechaPieImpresa !== esperada) {
     console.log('ERROR');
     await cerrar();
     abortar(
-      `${muestra.nombre}: se pidió la fecha ${fechaFija} y el pie lleva ${salida.meta.fechaPie}.`,
-      'La fecha fija tiene que ir también en `textos`, que es de donde sale la del pie.',
+      `${muestra.nombre}: se pidió la fecha ${fechaFija} y el pie imprime`
+      + ` ${salida.meta.fechaPieImpresa}, no ${esperada}.`,
+      'La fecha fija va en `textos`, y el pie la formatea en el calendario del Perú.',
     );
   }
 

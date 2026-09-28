@@ -130,7 +130,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
      informe porque es lo ÚNICO que el pie no deduce del mapa: quien compare dos
      láminas necesita poder afirmar que la fecha estaba fija, o una diferencia de la
      fecha del día se confundiría con un cambio del dibujo. */
-  const fechaPie = textos.fecha ? new Date(textos.fecha) : new Date();
+  const fechaPie = fechaDelPie(textos.fecha);
 
   /* El pie es obligatorio en todo PDF y la retícula necesita una banda fuera del
      marco para sus números: los dos se descuentan antes de encajar el mapa. */
@@ -563,7 +563,8 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
         })),
       },
       datosTag: version.datosTag,
-      fechaPie: fechaPie.toISOString().slice(0, 10),
+      fechaPie: fechaPie.iso,
+      fechaPieImpresa: fechaPie.texto,
       msComposicion: Date.now() - inicio,
     },
   };
@@ -1175,6 +1176,34 @@ function dibujarMarco(marco) {
 
 /* -------------------------------- pie ----------------------------------- */
 
+/**
+ * La fecha del pie, siempre en el calendario del Perú.
+ *
+ * Dos trampas, y las dos daban PDF distintos según la máquina:
+ *
+ * `new Date('2026-01-01')` es medianoche UTC, no del Perú. Formateada en la zona del
+ * anfitrión, en Lima (UTC−5) sale «31/12/2025» y en un servidor en UTC «01/01/2026».
+ * Por eso se ancla la hora al mediodía de Lima: a esa hora ninguna zona razonable
+ * cambia de día.
+ *
+ * Y `toLocaleDateString` sin `timeZone` usa la del anfitrión. Este mapa lo firma un
+ * ministerio peruano, así que la fecha que le corresponde es la del Perú, tanto si lo
+ * genera una máquina en Lima como una en UTC. Se pide explícitamente.
+ *
+ * @param {string} [iso]  fecha fija en YYYY-MM-DD; sin ella, el momento actual
+ * @returns {{texto: string, iso: string}} lo que se imprime y su forma ordenable
+ */
+export function fechaDelPie(iso) {
+  const cuando = iso ? new Date(`${iso}T12:00:00-05:00`) : new Date();
+  const partes = new Intl.DateTimeFormat('es-PE', {
+    timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric',
+  }).formatToParts(cuando).reduce((o, p) => Object.assign(o, { [p.type]: p.value }), {});
+  return {
+    texto: `${partes.day}/${partes.month}/${partes.year}`,
+    iso: `${partes.year}-${partes.month}-${partes.day}`,
+  };
+}
+
 function medidasDelPie(medidor, factor) {
   const estilo = { familia: 'Poppins', variante: 'Regular', pt: tipografia.pie.pt * factor };
   const interlinea = medidor.alto(estilo) * 1.18;
@@ -1199,8 +1228,7 @@ function dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor
   const destacado = { ...comun, 'text-anchor': 'end', 'font-weight': 600, fill: color.tinta };
   const eFuerte = { ...pie.estilo, variante: 'SemiBold' };
 
-  const fecha = fechaPie
-    .toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const fecha = fechaPie.texto;
   const elaborado = textos.elaboradoPor || 'el Ministerio de la Mujer y Poblaciones Vulnerables';
 
   /* Dos columnas: la procedencia a la izquierda y, a la derecha, la escala y el aviso
