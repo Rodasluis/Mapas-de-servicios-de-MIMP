@@ -222,18 +222,37 @@ le estorba a nadie, y prohibirlo dejaría la lámina sin ningún sitio donde col
 Un mapa de la provincia de Yungay no dice dónde está Yungay: el encuadre ha eliminado
 justamente la referencia que haría falta.
 
-Debajo del departamento hacen falta **dos** miniaturas. Con sólo el Perú, una provincia
-es una mancha de dos milímetros y un distrito ni se ve; con sólo el departamento, se
-sabe en qué parte cae pero no en qué departamento.
+Una provincia se sitúa con **una** miniatura del Perú: el departamento teñido de un rojo
+suave dice en qué departamento está, y la provincia en rojo intenso encima dice dónde.
+La miniatura se dibuja algo más ancha que la del departamental para que la provincia no
+quede en una mota.
 
-## Lo que este proyecto no decide
+Un distrito necesita **dos**. En la miniatura del país no se ve; con sólo el
+departamento, se sabe en qué parte cae pero no en qué departamento.
 
-El criterio de publicación lo fija el buscador, con una tabla de clasificación auditada.
-Aquí **no se reclasifica nada**: si un tipo no está en `centros.json`, no existe para el
-mapa. Los **Hogares de Refugio Temporal** quedan fuera en origen —su dirección está
-reservada para proteger a las víctimas— y `npm run datos` se detiene si alguna vez
-apareciera uno, incluso dentro de un recuento agregado.
+## Qué se publica
 
-Las coordenadas tampoco se corrigen. De los 704 centros publicados, 43 tienen la
-coordenada en otro distrito y 2 son referenciales; en el ámbito distrital se marcan con
-un asterisco en el mapa y en la tabla, y se dice lo que significa.
+La única fuente es el Directorio Nacional de Servicios del MIMP. Qué entra en el mapa lo
+decide un criterio propio, escrito en `scripts/lib/criterios.mjs` con el motivo de cada
+decisión: entran los servicios con local de atención al público y dos casos
+particulares, los Educadores de Calle (se dibuja su sede) y los Hogares de Refugio
+Temporal. Un tipo que el MIMP añada y nadie haya decidido queda fuera, y el build avisa.
+
+Los **Hogares de Refugio Temporal** se muestran sólo por distrito. El directorio
+reserva su dirección para proteger a las víctimas y publica únicamente el ubigeo, así
+que el ícono va en el polo de inaccesibilidad del distrito —el punto interior más
+alejado del borde—, no en el centroide, que en un distrito cóncavo puede caer fuera. No
+se intenta acercarlo a nada: dice «en este distrito» y la leyenda y la tabla lo
+explican.
+
+Los CAR Especializados con dirección reservada —seis de doce— reciben el mismo trato: se
+sitúan en su distrito, y la leyenda dice «CAR E con dirección reservada» para no hacer
+dudar de los otros seis, que van en su coordenada. Cualquier otro registro con
+dirección reservada queda fuera: mostrarlo, aunque sea por distrito, es una decisión
+que el criterio tiene que tomar expresamente, tipo a tipo.
+
+Las coordenadas se comprueban contra el polígono de su distrito. Junto al límite (menos
+de 2 km) se conservan: lo más probable es que la sede esté donde dice el punto y el
+ubigeo sea el del vecino. Más lejos —hay casos a cientos de kilómetros, en otro
+departamento— la coordenada es de otro sitio, y el centro se sitúa dentro de su
+distrito. En los dos casos lleva asterisco en el mapa y en la tabla.

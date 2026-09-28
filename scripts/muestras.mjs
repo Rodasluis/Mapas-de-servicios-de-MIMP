@@ -119,6 +119,24 @@ const MUESTRAS = [
     hoja: { tamano: 'A4', orientacion: 'vertical' },
     textos: { subtitulo: undefined },
   },
+
+  /* Fase 9. Los dos tipos que publica este proyecto y el buscador no. El mapa nacional con sólo
+     ellos comprueba íconos, colores y la nota de la leyenda; Carabayllo, que tiene un
+     hogar de refugio, comprueba que en la tabla sale con asterisco, con la dirección
+     que publica el directorio («No se registra por confidencialidad») y con el aviso
+     de que el punto es el distrito y no la sede. */
+  {
+    nombre: 'nacional_A2_EC_y_HRT',
+    hoja: { tamano: 'A2', orientacion: 'vertical' },
+    opciones: { tipos: ['Educadores de Calle', 'Hogares de Refugio Temporal - HRT'] },
+    textos: { subtitulo: 'Educadores de Calle y Hogares de Refugio Temporal' },
+  },
+  {
+    nombre: 'distrito_Carabayllo_A4',
+    ambito: '150106',
+    hoja: { tamano: 'A4', orientacion: 'vertical' },
+    textos: { subtitulo: undefined },
+  },
 ];
 
 const TEXTOS = {

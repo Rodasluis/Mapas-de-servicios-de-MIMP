@@ -165,6 +165,49 @@ button.generar:disabled { background: var(--tinta-3); cursor: progress; }
 .progreso { margin: .4rem 0 0; font-size: .82rem; color: var(--tinta-2); min-height: 1.2em; }
 .nota { margin: .3rem 0 0; font-size: .78rem; color: var(--tinta-2); }
 
+/* ------------------------------ zoom --------------------------------- */
+
+/* Grupo de botones de opción: sin el marco de los grupos del panel, que anidado
+   dentro de otro se vería como una caja dentro de una caja. */
+fieldset.opciones { border: 0; margin: .2rem 0 .4rem; padding: 0; min-width: 0; }
+fieldset.opciones legend {
+  padding: 0;
+  font-size: .82rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--tinta-2);
+  margin-bottom: .15rem;
+}
+
+.zonas { margin-top: .2rem; }
+.zonas[hidden] { display: none; }
+
+button.secundario {
+  font: inherit;
+  font-size: .85rem;
+  font-weight: 600;
+  padding: .35rem .7rem;
+  margin: .25rem 0 .35rem;
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  background: var(--superficie);
+  color: inherit;
+  cursor: pointer;
+}
+button.secundario:disabled { color: var(--tinta-3); cursor: not-allowed; }
+
+.zonas-elegidas { list-style: none; margin: .2rem 0 0; padding: 0; }
+.zonas-elegidas li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .5rem;
+  padding: .25rem 0;
+  border-bottom: 1px solid var(--borde);
+  font-size: .85rem;
+}
+
 /* ------------------------------- vista --------------------------------- */
 
 .area-vista {

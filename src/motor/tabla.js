@@ -22,11 +22,24 @@ const REDUCCIONES = [1, 0.9, 0.82, 0.75, 0.68];
 /** Proporción del ancho de la tabla que se lleva cada columna. */
 const COLUMNAS = { numero: 0.06, nombre: 0.4, tipo: 0.2, direccion: 0.34 };
 
-/** Coordenadas que el buscador no da por verificadas. */
+/**
+ * Coordenadas que no señalan la sede con exactitud. Las marca la preparación de los
+ * datos (scripts/fetch-datos.mjs):
+ *  - otro_distrito: la coordenada cae a menos de 2 km de su distrito, pero fuera;
+ *  - referencial: ya no se produce; se conserva por si una versión antigua la trae;
+ *  - reubicada: la coordenada caía lejos de su distrito y se situó dentro de él;
+ *  - por_distrito: sólo se conoce el distrito. Es el caso de los Hogares de Refugio
+ *    Temporal, cuya dirección es reservada.
+ */
 export const CALIDAD_DUDOSA = {
   otro_distrito: 'la coordenada cae en otro distrito',
   referencial: 'coordenada referencial, no exacta',
+  reubicada: 'coordenada errónea en el directorio; se sitúa en su distrito',
+  por_distrito: 'ubicado en su distrito; la dirección es reservada',
 };
+
+/** Las que sólo dicen el distrito, frente a las coordenadas sin verificar. */
+const SOLO_DISTRITO = new Set(['reubicada', 'por_distrito']);
 
 export const esDudosa = (centro) => Boolean(CALIDAD_DUDOSA[centro.calidad]);
 
@@ -173,7 +186,7 @@ function componer({
           }));
         });
 
-        /* Un asterisco tras el número marca las coordenadas que el buscador no da por
+        /* Un asterisco tras el número marca las coordenadas que no se pueden dar por
            verificadas. No es un adorno: quien vaya a esa dirección tiene que saber que
            el punto del mapa puede no ser exacto. */
         if (esDudosa(fila.centro)) {
@@ -195,8 +208,16 @@ function componer({
       const fuera = enElMapa ? filas.filter((f) => !enElMapa.has(f.centro.id)).length : 0;
       if (fuera === filas.length) avisos.push('Ninguno cae dentro del encuadre.');
       else if (fuera) avisos.push(`${fuera} quedan fuera del encuadre.`);
-      if (filas.some((f) => esDudosa(f.centro))) {
-        avisos.push('* Coordenada no verificada por el directorio.');
+      /* El asterisco dice cosas distintas según el caso, y la nota tiene que decir
+         cuál: coordenada junto al límite, o punto situado en el distrito. */
+      const noVerificada = filas.some((f) => esDudosa(f.centro) && !SOLO_DISTRITO.has(f.centro.calidad));
+      const enSuDistrito = filas.some((f) => SOLO_DISTRITO.has(f.centro.calidad));
+      if (noVerificada && enSuDistrito) {
+        avisos.push('* Coordenada junto al límite de otro distrito, o punto situado en su distrito y no en su dirección.');
+      } else if (noVerificada) {
+        avisos.push('* Coordenada junto al límite, fuera de su distrito.');
+      } else if (enSuDistrito) {
+        avisos.push('* Punto situado en su distrito, no en su dirección.');
       }
       if (filas.length < total) {
         avisos.push(`Se listan ${filas.length} de ${total}; usa una hoja mayor.`);

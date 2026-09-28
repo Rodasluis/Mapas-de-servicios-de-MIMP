@@ -125,7 +125,7 @@ if (aprobar) {
   console.log('    Míralas y, si son correctas, apruébalas con «npm run qa -- --aprobar».');
 }
 if (referencias.datosTag && informe.datosTag && referencias.datosTag !== informe.datosTag) {
-  console.log(`\n  ! Las referencias se aprobaron con DATOS_TAG ${referencias.datosTag}`
+  console.log(`\n  ! Las referencias se aprobaron con el directorio ${referencias.datosTag.slice(0, 12)}`
     + ` y estas muestras son de ${informe.datosTag}: las diferencias son esperables.`);
 }
 if (fallosVisuales.length && referencias.plataforma && referencias.plataforma !== process.platform) {

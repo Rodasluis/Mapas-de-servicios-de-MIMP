@@ -213,7 +213,7 @@ export function escribirReferencias(laminas, meta) {
     plataforma: process.platform,
     lado: LADO_FIRMA,
     ppp: PPP,
-    /* Se guarda para qué versión de los datos se aprobaron: si cambia DATOS_TAG, las
+    /* Se guarda para qué versión de los datos se aprobaron: si cambia el directorio (DIRECTORIO_SHA256), las
        diferencias son esperables y hay que volver a aprobarlas, no investigarlas. */
     /* La firma es opcional: el hash se calcula leyendo el archivo y la firma exige
        rasterizarlo, que en una máquina con poca memoria no siempre se puede. Sin firma

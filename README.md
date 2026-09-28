@@ -44,34 +44,86 @@ exactamente el mismo mapa.
 
 | Variable | Origen | Qué aporta |
 |---|---|---|
-| `DATOS_TAG` | [Distancia-al-centro-de-atencion](https://github.com/Rodasluis/Distancia-al-centro-de-atencion) | `centros.json`, `iconos.json` y los PNG de los íconos |
+| `DIRECTORIO_URL` + `DIRECTORIO_SHA256` + `DIRECTORIO_FECHA` | [Directorio Nacional de Servicios del MIMP](https://www.mimp.gob.pe/omep/Consolidado_Directorio_Nacional_2026.xlsx) (publicación abierta) | todos los servicios: `centros.json` |
 | `GEO_TAG` | [Peru-maps](https://github.com/Rodasluis/Peru-maps) | límites de departamento, provincia y distrito (INEI) |
 | `NATURAL_EARTH_TAG` | [natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) | países vecinos, océano y lagos |
 | `POPPINS_TAG` | [google/fonts](https://github.com/google/fonts) | Poppins (SIL OFL 1.1) |
 | `SOURCE_SANS_TAG` | [adobe-fonts/source-sans](https://github.com/adobe-fonts/source-sans) | Source Sans 3 (SIL OFL 1.1) |
 
-`DATOS_TAG` y `GEO_TAG` admiten una etiqueta, una rama o un SHA de commit. Hoy apuntan
-a un commit porque esos repositorios todavía no publican etiquetas; en cuanto exista
-una, basta con poner su nombre.
+`GEO_TAG` admite una etiqueta, una rama o un SHA de commit.
+
+La única fuente de los servicios es el **Directorio Nacional de Servicios del MIMP**,
+que el ministerio publica en abierto. Este proyecto es independiente del buscador
+(Distancia-al-centro-de-atencion): no lee sus datos y no tiene por qué coincidir con él.
 
 ### Actualizar el directorio de servicios
 
-1. Cambia `DATOS_TAG` en `package.json` por la versión nueva del buscador.
-2. `npm run datos` — vuelve a descargarlo y **lo verifica**.
-3. Revisa el informe que imprime: total de centros, recuento por tipo y calidad de las
-   coordenadas. Debe cuadrar con lo que publique el buscador en esa versión.
-4. `npm run build`.
+La URL del directorio no cambia entre versiones, así que se ancla por el hash del
+archivo. Cuando el MIMP publica otra versión, `npm run datos` se detiene y muestra el
+hash recibido:
+
+1. `npm run datos` con el hash nuevo copiado en `DIRECTORIO_SHA256` y la fecha de
+   publicación en `DIRECTORIO_FECHA`.
+2. Lee el informe: total, recuento por tipo, calidad de las coordenadas, centros
+   reubicados, excluidos con su motivo y **tipos sin criterio** (un servicio nuevo del
+   MIMP queda fuera hasta que se decida en `scripts/lib/criterios.mjs`).
+3. `npm run build` y vuelve a aprobar las referencias visuales.
 
 La versión queda registrada en `public/data/version.json` y aparece en el pie de cada
 PDF, para que un mapa impreso siempre diga de qué corte de datos salió.
 
-### El criterio de publicación no se toca aquí
+### Criterio de publicación
 
-Qué centros se publican lo decide el buscador, con una tabla de clasificación auditada.
-Este proyecto **no reclasifica nada**: si un tipo no está en `centros.json`, no existe
-para el mapa. Los **Hogares de Refugio Temporal** quedan fuera en origen —su dirección
-está reservada para proteger a las víctimas— y `npm run datos` se detiene si alguna vez
-apareciera uno, incluso dentro de un recuento agregado.
+Qué se publica lo decide `scripts/lib/criterios.mjs`: cada valor de la columna CENTRO
+del directorio tiene su decisión y su motivo escritos. Un valor que no figure ahí se
+excluye y el build avisa. El resultado actual: 22 tipos publicados y 7 excluidos por no
+tener local de atención al público (Línea 100, Chat 100, Coordinación Territorial,
+SOUFCAT, Familias Igualitarias, Inabif en Acción y la Unidad de Asistencia Económica).
+
+Dos decisiones propias de este proyecto:
+
+- **Educadores de Calle** (23): intervienen en vía pública; se dibuja la sede desde la
+  que opera cada equipo.
+- **Hogares de Refugio Temporal** (29): el directorio no publica su dirección («No se
+  registra por confidencialidad») ni su coordenada, sólo el ubigeo. El ícono se pone en
+  el polo de inaccesibilidad de su distrito, con asterisco, y la leyenda y la tabla
+  dicen que el punto es el distrito y no la sede. Si el directorio llegara a publicar la
+  dirección de un hogar, `npm run datos` se detiene: la tabla la imprimiría.
+
+Los **CAR Especializados** con la dirección reservada (6 de 12) reciben el mismo trato
+que los hogares: se sitúan en su distrito, con asterisco. Los otros seis van en su
+coordenada. Es una decisión expresa del criterio (`siReservada: 'distrito'`): cualquier
+otro registro con la dirección reservada **queda fuera** mientras su tipo no la declare.
+
+### Coordenadas
+
+Cada coordenada se repara si viene mal escrita (coma decimal, punto decimal perdido) y
+se comprueba contra el polígono de su distrito:
+
+- a menos de 100 m fuera: es la simplificación de la cartografía; se da por buena;
+- a menos de 2 km: sede junto al límite; se conserva, con asterisco;
+- más lejos: la coordenada es de otro sitio; se sitúa en un punto interior de su
+  distrito, con asterisco, y la original queda en `coordenadaOriginal` para auditarla.
+
+Como esa comprobación usa los polígonos distritales, el paso de datos se ejecuta después
+de la cartografía.
+
+### Hoja de auditoría
+
+`npm run datos` escribe también `auditoria/auditoria_directorio_<fecha>.xlsx`: el
+directorio completo, con sus columnas originales, y a la derecha lo que este proyecto
+hizo con cada registro. Sirve para revisar las coordenadas y los ubigeos y, si procede,
+pedir la corrección al MIMP.
+
+| Hoja | Contenido |
+|---|---|
+| Directorio auditado | Una fila por registro. Columnas añadidas: tipo y nombre en el mapa, si se publica y por qué, **Hallazgos** (lo encontrado en el tipo, el ubigeo o la coordenada), **Cambio realizado** (lo que se hizo para subsanarlo), dónde se dibuja, a cuántos km de su distrito cae la coordenada y en qué distrito cae de verdad. Las filas con hallazgos van resaltadas y las que no se publican, en gris. |
+| Criterios | Cada valor de la columna CENTRO con su decisión, su motivo y cuántos registros tiene y se publican. |
+| Léeme | Versión del directorio, recuentos y las reglas aplicadas. |
+
+El directorio del MIMP no se modifica: los cambios sólo se aplican al mapa. La hoja es
+determinista —el mismo directorio produce el mismo archivo byte a byte— y sólo se
+conserva la de la versión vigente; las anteriores quedan en el historial de git.
 
 ## Comandos
 
@@ -299,6 +351,13 @@ departamento, un mapa de Yungay y otro de todo Áncash llevarían el mismo local
 con sólo la provincia, muchas son a ese tamaño una mancha de dos milímetros que no se
 encuentra. Los dos juntos dan la pieza del rompecabezas y, dentro de ella, el punto.
 
+Cuántas miniaturas lleva depende del ámbito. Un departamento o una provincia, una sola:
+el Perú con el departamento en un rojo suave y, en la provincial, la provincia en rojo
+intenso encima (la miniatura provincial es algo más ancha, para que la provincia se
+distinga). Un distrito, dos: el Perú con su departamento, y al lado el departamento con
+la provincia teñida y el distrito en rojo, porque en la miniatura del país un distrito
+no se ve.
+
 Se dibuja con su propia proyección y con el contorno más ligero: a cuatro centímetros de
 ancho la diferencia entre niveles de detalle no se ve, y el pesado multiplicaría por
 veinte el tamaño del PDF.
@@ -314,6 +373,12 @@ superior a la unidad que se dibuja.**
 | Perú | provincia | departamento | «Cusco» |
 | Departamento | distrito | provincia | «Calca» |
 | Provincia | distrito | el propio distrito | «San Miguel» |
+
+A mano se puede pedir cualquier nivel que el mapa dibuje: la selección son ubigeos de
+departamento, provincia o distrito, y una unidad del mapa entra en el recuadro si su
+ubigeo empieza por uno de ellos. En el panel se eligen con tres selectores encadenados
+y un botón «Añadir zona»; en el mapa del Perú, que dibuja provincias, el de distrito
+queda deshabilitado.
 
 Cada ámbito lo declara en una línea —cuántos dígitos del ubigeo forman la clave de la
 zona y cómo se llama cada una—, así que el módulo de recuadros no tiene que saber en
@@ -430,10 +495,11 @@ direcciones fuera, y sólo al final menos filas— y **en todos los casos lo dec
 tabla recortada en silencio obliga a contar los íconos del mapa para descubrir que
 faltan centros.
 
-### Coordenadas que el directorio no da por verificadas
+### Coordenadas que no señalan la sede con exactitud
 
-De los 704 centros publicados, 43 tienen la coordenada en otro distrito y 2 son
-referenciales. Un asterisco tras el número —en el mapa y en la tabla— los marca, y la
+De los 762 centros publicados, 16 tienen la coordenada junto al límite de otro distrito,
+29 se situaron en su distrito porque su coordenada caía lejos, y los 29 Hogares de
+Refugio Temporal y 6 CAR Especializados de dirección reservada se sitúan por distrito. Un asterisco tras el número —en el mapa y en la tabla— los marca, y la
 tabla explica al pie qué significa. No es un adorno: quien vaya a esa dirección tiene
 que saber que el punto del mapa puede no ser exacto.
 
@@ -449,8 +515,8 @@ Cuando esos centros quedan fuera del encuadre —lo normal: los más próximos a
 sin servicios suelen estar a veinte o treinta kilómetros y el encuadre mide diez—, la
 tabla lo dice. Un número de referencia que no está en el mapa es un cabo suelto.
 
-Los distritos se eligen desde la **cartografía**, no desde `centros.json`: el catálogo
-del buscador sólo lista los que tienen algún centro, y precisamente los que no lo tienen
+Los distritos se eligen desde la **cartografía**, no desde `centros.json`: su catálogo
+sólo lista los que tienen algún centro, y precisamente los que no lo tienen
 son los que necesitan este mapa. Se cargan por departamento y a demanda, porque los de
 los veinticinco departamentos juntos son varios megas que casi ninguna sesión necesita.
 
@@ -614,9 +680,9 @@ que deja de estorbar, y sólo el título lleva fondo blanco.
 
 ## La interfaz
 
-El panel construye sus controles a partir de los datos publicados: los veinte tipos de
+El panel construye sus controles a partir de los datos publicados: los veintidós tipos de
 servicio salen de `centros.json` con su recuento, no de una lista escrita a mano, así
-que al cambiar `DATOS_TAG` la interfaz se actualiza sola. Todo son controles nativos
+que al cambiar de versión del directorio la interfaz se actualiza sola. Todo son controles nativos
 —`select`, `input`, `fieldset`— porque un panel hecho de `div` con `role="button"`
 obliga a reimplementar el foco, las flechas y el anuncio del estado, y casi siempre se
 reimplementa peor.

@@ -61,7 +61,7 @@ export async function descargar(url, destino, { etiqueta, forzar = false } = {})
     console.log('ERROR');
     abortar(
       `No se pudo descargar ${nombre}: HTTP ${res.status} ${res.statusText}.`,
-      `${url}\n\nSi el origen cambió de versión, revisa DATOS_TAG / GEO_TAG en package.json.`,
+      `${url}\n\nSi el origen cambió de versión, revisa DIRECTORIO_URL / GEO_TAG en package.json.`,
     );
   }
   const buf = Buffer.from(await res.arrayBuffer());

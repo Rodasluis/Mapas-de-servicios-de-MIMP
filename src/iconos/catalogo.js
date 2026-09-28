@@ -27,10 +27,15 @@
  * ---------------------------------------------------------------------------
  * Correspondencia tipo → ícono
  * ---------------------------------------------------------------------------
- * La clave de ICONOS es EXACTAMENTE el valor del campo `tipo` de centros.json. No se
- * normaliza ni se interpreta: si el buscador publica un tipo nuevo, el build avisa en
- * vez de asignarle un ícono por parecido. El color no se define aquí: se lee de
- * iconos.json, que es la fuente del buscador.
+ * La clave de ICONOS es EXACTAMENTE el valor del campo `tipo` de centros.json, que es
+ * la columna CENTRO del directorio del MIMP. No se normaliza ni se interpreta: si el
+ * directorio trae un tipo nuevo, el build avisa en vez de asignarle un ícono por
+ * parecido.
+ *
+ * El color de cada tipo se define aquí, en COLORES, y en ningún otro sitio: el build
+ * lo publica en data/iconos.json, que es de donde lo lee el motor. Los veinte primeros
+ * se heredaron de la paleta del buscador (Icons para centros de atención.xlsx); los de
+ * Educadores de Calle y Hogares de Refugio Temporal son propios de este proyecto.
  */
 
 /** Silueta de la casa. Tejado a dos aguas y base con las esquinas redondeadas. */
@@ -177,12 +182,32 @@ export const GLIFOS = {
   mas: {
     d: 'M42 36h16v20h20v16H58v20H42V72H22V56h20z',
   },
+
+  /** Figura caminando: el servicio va a la calle, no espera en una sede. */
+  caminante: {
+    d: 'M54 32a8 8 0 1 1 0 16 8 8 0 0 1 0-16z',
+    trazos: [
+      [52, 52, 48, 70, 7],
+      [48, 70, 36, 88, 7], [48, 70, 60, 88, 7],
+      [51, 56, 64, 64, 7], [51, 56, 38, 64, 7],
+    ],
+  },
+
+  /**
+   * Paraguas: refugio, protección. La cúpula es un semicírculo cerrado por su cuerda;
+   * el mango, un trazo con el gancho abajo.
+   */
+  paraguas: {
+    d: 'M22 62 A28 28 0 0 1 78 62 Z',
+    trazos: [[50, 62, 50, 86, 6], [50, 86, 42, 86, 6], [42, 86, 40, 80, 6]],
+  },
 };
 
 /**
  * Tipo de servicio → pictograma y sigla.
  *
- * Las claves son los veinte valores de `tipo` que publica centros.json en DATOS_TAG.
+ * Las claves son los tipos que el criterio de publicación (scripts/lib/criterios.mjs)
+ * deja entrar, con el valor exacto de la columna CENTRO del directorio.
  * La sigla se usa en la leyenda cuando el nombre largo no cabe.
  */
 export const ICONOS = {
@@ -206,4 +231,39 @@ export const ICONOS = {
   SAIPD: { glifo: 'informacion', sigla: 'SAIPD' },
   'Centro de Recreación Familiar': { glifo: 'pelota', sigla: 'CRF' },
   'Mi60+': { glifo: 'mas', sigla: 'Mi60+' },
+  'Educadores de Calle': { glifo: 'caminante', sigla: 'EC' },
+  'Hogares de Refugio Temporal - HRT': { glifo: 'paraguas', sigla: 'HRT' },
+};
+
+/**
+ * Color de cada tipo. Es la única definición: el build la publica en iconos.json.
+ *
+ * Los veinte primeros vienen de la paleta del buscador, con la que se diseñaron los
+ * pictogramas. Los dos últimos son propios y se eligieron lejos de esos veinte —hay
+ * cinco rojos, dos verdes oscuros, un violeta y un magenta— y de la rampa de naranjas
+ * del coropletas, sobre la que se dibujan.
+ */
+export const COLORES = {
+  'Centro de Atención de Día - CAD': '#42a63a',
+  'Centro de Atencion Institucional - CAI': '#dc4649',
+  'Centro de Atención de Noche - CAN': '#ec8464',
+  'CAR Básico': '#0d6340',
+  'CAR Especializado': '#0d6340',
+  'CAR de Urgencia': '#1b64ab',
+  'Centro de Atención Residencial para Personas Adultas Mayores - CARPAM': '#e31e24',
+  'CAR PCD': '#21602c',
+  'Centro de Desarrollo Integral de La Familia - CEDIF': '#6e231c',
+  'Centro Emergencia Mujer y Familia': '#b62539',
+  'Mi60+': '#573624',
+  'Servicio de Atención Rural - SAR': '#ba0d15',
+  'Servicio de Atención Urgente - SAU': '#3d3c3b',
+  'Unidad de Adopción - UA': '#b93f4d',
+  'Unidad de Protección Especial - UPE': '#aa545a',
+  'Acercándonos': '#0f766e',
+  'Centro Comunal Familiar': '#7c3aed',
+  'Centro de Recreación Familiar': '#b45309',
+  'Plataforma de Atención': '#0369a1',
+  SAIPD: '#9d174d',
+  'Educadores de Calle': '#4338ca',
+  'Hogares de Refugio Temporal - HRT': '#86198f',
 };

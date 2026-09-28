@@ -75,48 +75,67 @@ export function colocarPiezas(solicitudes, marco, ocupacion) {
   } of solicitudes) {
     if (!pieza || !(pieza.ancho > 0) || !(pieza.alto > 0)) continue;
 
-    let elegida = null;
-    let respaldo = null;
-
-    /* Primero las posiciones que la pieza prefiere y, si ninguna sirve, TODAS las
-       demás. Sin este barrido final una pieza se resignaba a tapar el país porque sus
-       tres anclajes preferidos estaban ocupados, aunque quedara media hoja de océano
-       libre: en un A4 nacional la barra de escala acabó sobre el sur del Perú
-       teniendo el Pacífico al lado. Preferir un sitio no es renunciar al resto.
-
-       La excepción es `soloPreferidos`: hay sitios que no son negociables por mucho
-       que sobre océano en otra parte. El título va arriba aunque le toque tapar algo
-       de territorio, y por eso su caja se compone lo más apretada posible. */
-    const orden = !anclajes.length ? ANCLAJES
-      : soloPreferidos ? anclajes
-        : [...anclajes, ...ANCLAJES.filter((a) => !anclajes.includes(a))];
-
-    for (const anclaje of orden) {
-      for (const [dx, dy] of deslizamientos) {
-        const base = posicion(anclaje, marco, pieza.ancho, pieza.alto, margen);
-        const r = { ...base, x: base.x + dx, y: base.y + dy };
-        if (!rectangulo.contiene(marco, r)) continue;
-        if (ocupacion.chocaConBloque(rectangulo.expandir(r, SEPARACION_MM / 2))) continue;
-
-        const tapado = ocupacion.sobreTerritorio(r);
-        if (tapado <= TERRITORIO_TOLERADO) { elegida = { r, anclaje, tapado }; break; }
-        if (!respaldo || tapado < respaldo.tapado) respaldo = { r, anclaje, tapado };
-      }
-      if (elegida) break;
-    }
-
-    const sitio = elegida || respaldo;
+    const sitio = buscarSitio({
+      ancho: pieza.ancho, alto: pieza.alto, anclajes, soloPreferidos, margen, marco, ocupacion,
+      deslizamientos,
+    });
     if (!sitio) {
       if (obligatoria) omitidas.push(pieza.nombre);
       continue;
     }
-    if (!elegida) forzadas.push({ nombre: pieza.nombre, tapadoPct: Number((sitio.tapado * 100).toFixed(1)) });
+    if (sitio.forzada) forzadas.push({ nombre: pieza.nombre, tapadoPct: Number((sitio.tapado * 100).toFixed(1)) });
 
     ocupacion.marcarBloque(rectangulo.expandir(sitio.r, SEPARACION_MM / 2));
     colocadas.push({ pieza, ...sitio.r, anclaje: sitio.anclaje, tapado: sitio.tapado });
   }
 
   return { colocadas, omitidas, forzadas };
+}
+
+/**
+ * Busca sitio para una caja de un tamaño dado, sin colocarla.
+ *
+ * Es la búsqueda de colocarPiezas() separada para que una pieza que elige su propio
+ * tamaño —la leyenda— pueda preguntar «¿y con esta medida, entro?» antes de decidir.
+ * Sin eso la leyenda escogía el tamaño mirando sólo cuánto país tapaba, y en un A4
+ * nacional elegía una caja que chocaba en todas sus posiciones con los íconos de la
+ * costa: se quedaba fuera entera.
+ *
+ * @returns {{r, anclaje, tapado, forzada: boolean}|null}  null si no hay ningún sitio
+ *          que no pise otra pieza
+ */
+export function buscarSitio({
+  ancho, alto, anclajes = [], soloPreferidos = false, margen = SEPARACION_MM, marco, ocupacion,
+  deslizamientos = desplazamientos(marco),
+}) {
+  let respaldo = null;
+
+  /* Primero las posiciones que la pieza prefiere y, si ninguna sirve, TODAS las
+     demás. Sin este barrido final una pieza se resignaba a tapar el país porque sus
+     tres anclajes preferidos estaban ocupados, aunque quedara media hoja de océano
+     libre: en un A4 nacional la barra de escala acabó sobre el sur del Perú
+     teniendo el Pacífico al lado. Preferir un sitio no es renunciar al resto.
+
+     La excepción es `soloPreferidos`: hay sitios que no son negociables por mucho
+     que sobre océano en otra parte. El título va arriba aunque le toque tapar algo
+     de territorio, y por eso su caja se compone lo más apretada posible. */
+  const orden = !anclajes.length ? ANCLAJES
+    : soloPreferidos ? anclajes
+      : [...anclajes, ...ANCLAJES.filter((a) => !anclajes.includes(a))];
+
+  for (const anclaje of orden) {
+    for (const [dx, dy] of deslizamientos) {
+      const base = posicion(anclaje, marco, ancho, alto, margen);
+      const r = { ...base, x: base.x + dx, y: base.y + dy };
+      if (!rectangulo.contiene(marco, r)) continue;
+      if (ocupacion.chocaConBloque(rectangulo.expandir(r, SEPARACION_MM / 2))) continue;
+
+      const tapado = ocupacion.sobreTerritorio(r);
+      if (tapado <= TERRITORIO_TOLERADO) return { r, anclaje, tapado, forzada: false };
+      if (!respaldo || tapado < respaldo.tapado) respaldo = { r, anclaje, tapado, forzada: true };
+    }
+  }
+  return respaldo;
 }
 
 /**

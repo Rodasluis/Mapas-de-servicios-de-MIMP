@@ -22,7 +22,15 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    texto que se va a usar («Distrito de Breña»). Escribe sólo si quieres otro.
 4. **Tipos de servicio.** Desmarcar tipos recalcula todo: los colores, la leyenda y los
    recuadros de zoom.
-5. **Generar PDF.**
+5. **Recuadros de zoom.** Tres opciones: *Automáticos* (el motor amplía donde los
+   símbolos no caben), *Elegir zonas* o *Ninguno*. Con *Elegir zonas* aparecen tres
+   selectores encadenados —departamento, provincia y distrito—: elige la zona y pulsa
+   **Añadir zona**; se amplía el nivel más fino que hayas elegido. Repite para pedir
+   varios recuadros y quítalos de la lista con **Quitar**. Lo que se puede elegir
+   depende del ámbito: en el mapa del Perú, departamentos o provincias; en el de un
+   departamento, sus provincias o distritos; en el de una provincia, sus distritos. Un
+   mapa distrital no tiene zonas que ampliar.
+6. **Generar PDF.**
 
 ### Los cuatro ámbitos responden preguntas distintas
 
@@ -79,14 +87,17 @@ que se aprobó.
 
 ## Actualizar el directorio de servicios
 
-Cuando el buscador publique una versión nueva:
+Cuando el MIMP publique una versión nueva del directorio, `npm run datos` se detiene y
+muestra el hash del archivo nuevo:
 
-1. Cambia `DATOS_TAG` en `package.json` por el nuevo commit o etiqueta.
-2. `npm run datos` — lo descarga y **lo verifica**. Se detiene si el recuento no cuadra,
-   si falta un ubigeo, si una coordenada cae fuera del Perú o si aparece un Hogar de
-   Refugio Temporal, que nunca debe publicarse.
-3. Lee el informe que imprime: total de centros, recuento por tipo y calidad de las
-   coordenadas. Tiene que cuadrar con lo que anuncie el buscador para esa versión.
+1. Copia ese hash en `DIRECTORIO_SHA256` y la fecha de publicación en
+   `DIRECTORIO_FECHA`, en `package.json`.
+2. `npm run datos` — lo descarga y **lo verifica**. Se detiene si cambian las columnas,
+   si se repite un ORDEN, si un tipo publicado no tiene ícono o si el directorio publica
+   la dirección de un Hogar de Refugio Temporal.
+3. Lee el informe que imprime: recuento por tipo, calidad de las coordenadas, centros
+   reubicados, excluidos con su motivo y, sobre todo, los **tipos sin criterio**: un
+   servicio nuevo queda fuera hasta que se decida en `scripts/lib/criterios.mjs`.
 4. `npm run build`.
 5. **Vuelve a aprobar las referencias visuales** (ver abajo): con datos nuevos el dibujo
    cambia, y esas diferencias son esperadas, no regresiones.
@@ -123,9 +134,9 @@ las celdas que cambiaron marcadas en rojo. Míralas antes de aprobar: **aprobar 
 regresión la vuelve invisible**, y el siguiente que la encuentre será quien reciba el
 mapa impreso.
 
-Hay que volver a aprobar también al cambiar `DATOS_TAG` o la versión del navegador con
-que se rasteriza. El archivo de referencias anota con qué `DATOS_TAG` se aprobó, y el
-control avisa si no coincide.
+Hay que volver a aprobar también al cambiar de versión del directorio o del navegador
+con que se rasteriza. El archivo de referencias anota con qué versión del directorio se
+aprobó, y el control avisa si no coincide.
 
 ## Qué hacer si algo sale mal
 

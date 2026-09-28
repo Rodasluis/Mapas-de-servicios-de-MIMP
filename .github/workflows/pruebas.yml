@@ -51,7 +51,7 @@ jobs:
             .cache
             public/data
             public/fonts
-          key: datos-${{ hashFiles('package.json', 'scripts/fetch-*.mjs', 'scripts/build-geo.mjs') }}
+          key: datos-${{ hashFiles('package.json', 'scripts/fetch-*.mjs', 'scripts/build-geo.mjs', 'scripts/lib/*.mjs', 'src/iconos/catalogo.js') }}
 
       - name: Preparar los datos
         run: npm run preparar

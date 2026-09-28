@@ -28,7 +28,7 @@ import {
   factorFormato, bloqueInstitucional, bloqueTitulo, rosaDeLosVientos, escalaGrafica,
 } from './piezas.js';
 import {
-  colocarPiezas, posicionEnAnclaje, PLANTILLAS, PRIORIDAD, CABECERA, ANTES_DE_ROTULOS,
+  colocarPiezas, buscarSitio, posicionEnAnclaje, PLANTILLAS, PRIORIDAD, CABECERA, ANTES_DE_ROTULOS,
   SITIO_FIJO,
 } from './layout.js';
 import {
@@ -621,7 +621,8 @@ function ajustarTitulo({ textos, medidor, factor, marco, ocupacion, margen, anch
  */
 function ajustarLeyenda({ marco, ocupacion, ...resto }) {
   let mejor = null;
-  for (const ceñido of [1, 0.85, 0.72, 0.6, 0.5, 0.42]) {
+  let primera = null;
+  for (const ceñido of [1, 0.85, 0.72, 0.6, 0.5, 0.42, 0.36, 0.3]) {
     const pieza = bloqueLeyenda({
       ...resto,
       /* Acotada en las dos dimensiones: sin el límite de ancho, los nombres largos
@@ -631,18 +632,30 @@ function ajustarLeyenda({ marco, ocupacion, ...resto }) {
       anchoMaximoMm: marco.ancho * 0.33 * ceñido,
     });
     if (!pieza) return null;
-    const r = posicionEnAnclaje('abajo-izquierda', marco, pieza.ancho, pieza.alto);
-    const tapado = ocupacion.sobreTerritorio(r);
-    const tapadoMm2 = tapado * pieza.ancho * pieza.alto;
-    if (!mejor || tapadoMm2 < mejor.tapadoMm2 - 1e-6) mejor = { pieza, tapado, tapadoMm2 };
+    primera = primera || pieza;
+    /* El tamaño sólo vale si la caja tiene dónde ir. Se busca sitio igual que lo
+       buscará después colocarPiezas() —en su esquina, deslizándose por el borde, sin
+       pisar los grupos de íconos—, y un tamaño sin sitio se descarta aunque no tape
+       nada de país. Antes sólo se medía el territorio tapado en la esquina exacta, y
+       en un A4 nacional ganaba una caja que chocaba con los íconos de la costa en
+       todas sus posiciones: la lámina salía sin leyenda. */
+    const sitio = buscarSitio({
+      ancho: pieza.ancho, alto: pieza.alto, anclajes: ['abajo-izquierda'], soloPreferidos: true,
+      marco, ocupacion,
+    });
+    if (!sitio) continue;
+    const tapadoMm2 = sitio.tapado * pieza.ancho * pieza.alto;
+    if (!mejor || tapadoMm2 < mejor.tapadoMm2 - 1e-6) mejor = { pieza, tapadoMm2 };
     /* Se acepta que la leyenda pise algo de territorio antes que encogerla hasta
        hacerla ilegible. En el nacional su esquina cae sobre el Pacífico y no tapa
        nada, pero en un ámbito departamental puede tocar tierra, y exigir cero dejaría
        una leyenda diminuta con media hoja libre al lado. Lleva fondo opaco, así que
        lo que tapa se entiende como bloque y no como un hueco en el mapa. */
-    if (tapado <= TERRITORIO_TOLERADO_LEYENDA) break;
+    if (sitio.tapado <= TERRITORIO_TOLERADO_LEYENDA) break;
   }
-  return mejor.pieza;
+  /* Si ningún tamaño encuentra sitio se devuelve el mayor y colocarPiezas() lo
+     declarará omitido: el informe tiene que decirlo, no esconderlo. */
+  return (mejor || { pieza: primera }).pieza;
 }
 
 /**
@@ -685,6 +698,16 @@ async function vistasDeUbicacion({ ambito, cargador, plan }) {
 
   if (ambito.nivel === 'departamento') {
     return [{ base: departamentos, ambito: plan.contorno, titulo: 'Perú' }];
+  }
+
+  /* Una provincia se sitúa con una sola miniatura del país: su departamento teñido y
+     ella en rojo encima. El tinte hace el papel de la segunda miniatura —dice en qué
+     departamento está— sin ocupar otra caja, y la miniatura se dibuja más ancha para
+     que la provincia no quede en una mota. */
+  if (ambito.nivel === 'provincia') {
+    return [{
+      base: departamentos, resaltar: [ccdd], ambito: plan.contorno, titulo: 'Perú', ampliacion: 1.45,
+    }];
   }
 
   return [
@@ -1213,9 +1236,12 @@ function dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor
   );
   const anchoIzquierda = marco.ancho - anchoDerecha - 6;
 
+  /* La versión es la fecha de publicación del directorio y el comienzo de su hash:
+     la URL del MIMP no cambia entre versiones, así que el hash es lo único que
+     identifica de qué archivo salió una lámina impresa. */
   const izquierda = [
-    `Fuente: ${version.fuente} · Versión de datos ${version.datosTagCorto}`
-    + ` (${version.generado}) · ${version.totalCentros} centros publicados`,
+    `Fuente: ${version.fuente} · Versión ${version.generado} (${version.datosTagCorto})`
+    + ` · ${version.totalCentros} centros publicados`,
     'Límites: INEI · Contexto: Natural Earth 1:10 m'
     + ' · Proyección: Mercator transversa 75° O (UTM 18S) · Retícula UTM 18S',
     `Elaborado por ${elaborado} · Generado el ${fecha}`,

@@ -1,7 +1,8 @@
 /**
  * Capa temática: qué servicios hay y cómo se reparten.
  *
- * Aquí no se clasifica nada. El criterio de publicación lo aplica el buscador y este
+ * Aquí no se clasifica nada. El criterio de publicación se aplica al preparar los datos
+ * (scripts/lib/criterios.mjs) y este
  * módulo se limita a CONTAR lo que centros.json trae: cuántos centros de cada tipo
  * caen en cada provincia y cuántos tipos distintos tiene cada una. Si un tipo no está
  * en los datos, no existe para el mapa; si aparece uno nuevo, el conteo lo refleja y
@@ -32,7 +33,7 @@ export const CLASES_POR_DEFECTO = [
  * los totales ni en la leyenda. Sin ese filtro, el pie diría 704 centros en un mapa que
  * dibuja treinta.
  *
- * @param {object} centrosJson  el archivo completo del buscador
+ * @param {object} centrosJson  el centros.json publicado
  * @param {object} opciones
  * @param {(centro) => string} opciones.clave  de qué unidad es cada centro
  * @param {Set<string>|null} [opciones.tiposActivos]  filtro de tipos; null es «todos»
