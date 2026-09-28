@@ -16,6 +16,37 @@ import { el, grupo, texto, rect, num } from './svg.js';
 import { dibujarIcono, ICONOS } from '../iconos/index.js';
 import { CLASES_POR_DEFECTO } from './servicios.js';
 
+/**
+ * Nota sobre los centros que se dibujan en su distrito y no en su sede.
+ *
+ * Se deduce de los centros del mapa, no del tipo: de los CAR Especializados sólo los
+ * de dirección reservada van por distrito, y una nota que dijera «CAR E: ubicado en su
+ * distrito» haría dudar de todos los demás. Si un tipo va entero por distrito se le
+ * nombra por su sigla; si sólo en parte, se dice cuáles. Sin ninguno, no hay nota:
+ * una nota sobre algo que no se dibuja es ruido.
+ */
+function notasDeUbicacion(centros) {
+  const porTipo = new Map();
+  for (const c of centros) {
+    const t = porTipo.get(c.tipo) || { total: 0, porDistrito: 0 };
+    t.total++;
+    if (c.calidad === 'por_distrito') t.porDistrito++;
+    porTipo.set(c.tipo, t);
+  }
+  const partes = [...porTipo]
+    .filter(([, t]) => t.porDistrito)
+    .sort((a, b) => a[0].localeCompare(b[0], 'es'))
+    .map(([tipo, t]) => {
+      const sigla = ICONOS[tipo]?.sigla || tipo;
+      return t.porDistrito === t.total ? sigla : `${sigla} con dirección reservada`;
+    });
+  if (!partes.length) return [];
+  const varios = partes.length > 1 || /con dirección reservada/.test(partes[0]);
+  return [varios
+    ? `${partes.join(' y ')}: ubicados en su distrito, no en su dirección.`
+    : `${partes[0]}: ubicado en su distrito; la dirección es reservada.`];
+}
+
 export function bloqueLeyenda({
   agregado, clasesUsadas, clases = CLASES_POR_DEFECTO, iconos, medidor, factor,
   rampa, tamanoIconoMm, altoMaximoMm, anchoMaximoMm, unidad = 'provincia',
@@ -26,6 +57,7 @@ export function bloqueLeyenda({
   const tituloClases = `Presencia de servicios por ${unidad}`;
   const tipos = agregado.tipos;
   if (!tipos.length) return null;
+  const notas = notasDeUbicacion(agregado.centros || []);
 
   /**
    * Se busca la composición MENOS agresiva que quepa en la caja disponible. Para cada
@@ -69,6 +101,9 @@ export function bloqueLeyenda({
       ...clasesUsadas.map((i) => medidor.ancho(clases[i].etiqueta, eItem)),
       medidor.ancho(tituloClases, eSub),
     );
+    const eNota = { ...eItem, pt: eItem.pt * 0.88 };
+    const altoNota = medidor.alto(eNota) * 1.3;
+    const anchoNotas = Math.max(0, ...notas.map((n) => medidor.ancho(n, eNota)));
 
     return {
       columnas,
@@ -87,9 +122,12 @@ export function bloqueLeyenda({
       filasTipos,
       etiquetaDe,
       anchoColumna,
-      ancho: relleno * 2 + Math.max(anchoColumna * columnas, anchoClases),
+      eNota,
+      altoNota,
+      ancho: relleno * 2 + Math.max(anchoColumna * columnas, anchoClases, anchoNotas),
       alto: relleno * 2 + altoTituloBloque + filasTipos * altoFila
-        + (clasesUsadas.length ? altoSubBloque + clasesUsadas.length * altoFilaClase : 0),
+        + (clasesUsadas.length ? altoSubBloque + clasesUsadas.length * altoFilaClase : 0)
+        + (notas.length ? altoNota * (notas.length + 0.3) : 0),
     };
   };
 
@@ -106,7 +144,7 @@ export function bloqueLeyenda({
 
   const {
     relleno, eTitulo, eItem, eSub, icono, altoFila, altoTituloBloque, altoSubBloque,
-    altoMuestra, altoFilaClase, filasTipos, etiquetaDe, anchoColumna, ancho,
+    altoMuestra, altoFilaClase, filasTipos, etiquetaDe, anchoColumna, ancho, eNota, altoNota,
   } = elegido;
   const tamanoIcono = icono;
 
@@ -171,6 +209,15 @@ export function bloqueLeyenda({
           x: x + relleno + altoMuestra * 2.4,
           y: cy + altoFilaClase / 2 + medidor.alto(eItem) * 0.32,
           fill: color.tinta, 'font-family': eItem.familia, 'font-size': ptAmm(eItem.pt),
+        }));
+      });
+
+      cursor += clasesUsadas.length * altoFilaClase + altoNota * 0.3;
+      notas.forEach((nota, k) => {
+        piezas.push(texto(nota, {
+          x: x + relleno,
+          y: cursor + altoNota * k + medidor.ascenso(eNota),
+          fill: color.tintaSuave, 'font-family': eNota.familia, 'font-size': ptAmm(eNota.pt),
         }));
       });
 

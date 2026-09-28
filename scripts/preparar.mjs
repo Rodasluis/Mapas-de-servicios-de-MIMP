@@ -12,16 +12,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { RAIZ, PUBLICO, abortar, titulo } from './lib/comun.mjs';
+import { RAIZ, PUBLICO, abortar, titulo, paquete } from './lib/comun.mjs';
 
 const forzar = process.argv.includes('--forzar');
 
 const PASOS = [
-  {
-    nombre: 'directorio de servicios',
-    script: 'fetch-datos.mjs',
-    listo: () => existe('data/centros.json') && existe('data/version.json') && existe('data/iconos.json'),
-  },
   {
     nombre: 'tipografías',
     script: 'fetch-fuentes.mjs',
@@ -49,7 +44,21 @@ const PASOS = [
     nodeArgs: ['--max-old-space-size=8192'],
     listo: () => existe('data/geo/indice.json'),
   },
+  /* El directorio va DESPUÉS de la cartografía: comprueba cada coordenada contra el
+     polígono de su distrito y sitúa en él los servicios de dirección reservada.
+     Se da por listo sólo si la versión publicada corresponde al directorio
+     anclado ahora, para que una copia antigua de public/data no pase por buena. */
+  {
+    nombre: 'directorio de servicios',
+    script: 'fetch-datos.mjs',
+    listo: () => existe('data/centros.json') && existe('data/iconos.json') && existe('data/version.json')
+      && leer('data/version.json').datosTag === paquete().DIRECTORIO_SHA256
+      && leer('data/version.json').generado === paquete().DIRECTORIO_FECHA
+      && fs.existsSync(path.join(RAIZ, 'auditoria', `auditoria_directorio_${paquete().DIRECTORIO_FECHA}.xlsx`)),
+  },
 ];
+
+const leer = (relativo) => JSON.parse(fs.readFileSync(path.join(PUBLICO, relativo), 'utf8'));
 
 const existe = (relativo) => {
   const f = path.join(PUBLICO, relativo);

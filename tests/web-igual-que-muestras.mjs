@@ -144,7 +144,10 @@ export async function comprobarWebIgualQueMuestras({ navegador, pagina, urlBase 
           mientras el mapa sale en A2, quien lo usa no puede confiar en lo que ve. */
     const vistos = await web.evaluate((ids) => Object.fromEntries(ids.map((id) => {
       const n = document.getElementById(id);
-      return [id, n ? (n.type === 'checkbox' ? n.checked : n.value) : null];
+      if (!n) return [id, null];
+      /* Un grupo de botones de opción (el modo de zoom) vale lo que valga el marcado. */
+      if (n.tagName === 'FIELDSET') return [id, n.querySelector('input:checked')?.value ?? null];
+      return [id, n.type === 'checkbox' ? n.checked : n.value];
     })), [
       ...Object.keys(caso.esperado.controles),
       ...caso.esperado.marcadas, ...caso.esperado.desmarcadas,

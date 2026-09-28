@@ -64,7 +64,7 @@ async function arrancar() {
     /**
      * Distritos de una provincia, leídos de la CARTOGRAFÍA.
      *
-     * Para elegir el ámbito no sirve el catálogo del buscador, que sólo lista los que
+     * Para elegir el ámbito no sirve el catálogo de centros.json, que sólo lista los que
      * tienen algún centro: un distrito sin servicios también se puede imprimir, y su
      * mapa es justamente el que dice que no hay ninguno y ofrece los más cercanos. Se
      * cargan por departamento y se recuerdan, porque el selector los vuelve a pedir

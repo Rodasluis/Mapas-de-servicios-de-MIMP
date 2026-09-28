@@ -7,11 +7,14 @@
  * reducido lleve un localizador, y de que aquí no sea opcional salvo en el nacional,
  * donde no tendría nada que localizar.
  *
- * Debajo del departamento hacen falta DOS miniaturas, no una. Con sólo el Perú, una
- * provincia es una mancha de dos milímetros y un distrito ni se ve; con sólo el
- * departamento, se sabe en qué parte del departamento cae pero no en qué departamento.
- * Las dos juntas van de lo general a lo particular: el país con su departamento en
- * rojo, y al lado el departamento con la provincia o el distrito en rojo.
+ * Un departamento se sitúa con una miniatura del país. Una provincia, también: el país
+ * con su departamento teñido de un rojo suave y la provincia en rojo intenso encima; la
+ * miniatura se dibuja algo más ancha para que la provincia no sea una mota.
+ *
+ * Un distrito necesita DOS: con sólo el Perú ni se ve, y con sólo el departamento se
+ * sabe en qué parte del departamento cae pero no en qué departamento. Van de lo general
+ * a lo particular: el país con su departamento en rojo, y al lado el departamento con
+ * la provincia teñida y el distrito en rojo.
  *
  * Cada una se dibuja con su propia proyección, independiente de la del mapa principal:
  * tiene que caber en unos centímetros y mostrar su ámbito entero, no un trozo ampliado
@@ -36,14 +39,16 @@ const SEPARACION_MM = 1.2;
 /**
  * @param {object} opciones
  * @param {Array}  opciones.vistas  una o dos miniaturas, de lo general a lo particular:
- *                                  {base, resaltar, ambito, titulo}
+ *                                  {base, resaltar, ambito, titulo, ampliacion}
+ *                                  ampliacion: cuánto más ancha que la base se dibuja
  * @param {number} opciones.factor  factor de formato de la hoja
  */
 export function mapaDeUbicacion({ vistas, factor, medidor }) {
   const utiles = (vistas || []).filter((v) => v && v.base && v.base.features.length);
   if (!utiles.length) return null;
 
-  const anchoInterior = ANCHO_BASE_MM * factor;
+  /* Una sola miniatura puede pedir más ancho: ocupa el sitio que dejaría la segunda. */
+  const anchoInterior = ANCHO_BASE_MM * factor * (utiles.length === 1 ? (utiles[0].ampliacion || 1) : 1);
   const eRotulo = { familia: 'Poppins', variante: 'Regular', pt: tipografia.pie.pt * factor * 0.8 };
   const altoRotulo = utiles.some((v) => v.titulo) ? ptAmm(eRotulo.pt) * 1.5 : 0;
 
@@ -130,11 +135,12 @@ function dibujarVista(vista, x, y, ancho, alto, altoRotulo, eRotulo, medidor) {
 }
 
 /**
- * Qué se tiñe de contexto en la miniatura del departamento.
+ * Qué se tiñe de contexto en la miniatura del departamento de un mapa distrital.
  *
  * El tinte marca la pieza que CONTIENE al ámbito; el ámbito exacto va encima en rojo.
- * Para una provincia no hace falta —ella misma es la pieza—, y para un distrito es su
- * provincia, que a ese tamaño sí se distingue mientras que el distrito es una mota.
+ * Para un distrito es su provincia, que a ese tamaño sí se distingue mientras que el
+ * distrito es una mota. (La provincia se sitúa con una sola miniatura del país; ver
+ * vistasDeUbicacion en render.js.)
  */
 export function resaltePara(ambito) {
   if (ambito.nivel === 'distrito') return [ambito.id.slice(0, 4)];

@@ -296,12 +296,19 @@ function cajaDelNucleo(zona, anillos, margenMm) {
  *
  * Se agrupan por la MISMA regla que en automático —una zona por departamento, con Lima
  * partida en metrópoli y provincias—, para que elegir a mano no dé un recuadro con otra
- * lógica que el que habría salido solo. Admite ubigeos de provincia o de departamento;
- * seleccionar «08» y seleccionar sus catorce provincias dan lo mismo.
+ * lógica que el que habría salido solo. Admite ubigeos de departamento, provincia o
+ * distrito: una unidad del mapa entra si su ubigeo EMPIEZA por uno de los pedidos, así
+ * que seleccionar «08» y seleccionar sus catorce provincias dan lo mismo, y en un mapa
+ * departamental «0801» amplía los distritos de esa provincia. Un código más fino que las
+ * unidades del mapa —un distrito en el nacional, que dibuja provincias— no coincide con
+ * ninguna y no produce recuadro; la interfaz no lo ofrece.
+ *
+ * Antes sólo se reconocían el ubigeo exacto de la unidad y el de dos dígitos, y en un
+ * mapa departamental elegir una provincia no ampliaba nada: sus unidades son distritos.
  */
 function regionesManuales({ seleccion, agregado, unidades, anillos, zonas: def, margenMm }) {
-  const pedidas = new Set(seleccion.map(String));
-  const coincide = (ubigeo) => pedidas.has(ubigeo) || pedidas.has(ubigeo.slice(0, 2));
+  const pedidas = [...new Set(seleccion.map(String))];
+  const coincide = (ubigeo) => pedidas.some((p) => ubigeo.startsWith(p));
   const elegidas = unidades.features.filter((f) => coincide(f.properties.ubigeo));
   if (!elegidas.length) return [];
 
