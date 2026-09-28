@@ -7,13 +7,18 @@
  * A puntos sólo se pasa al escribir el PDF.
  */
 
-/** Series ISO 216, lado corto × lado largo en milímetros. */
+/**
+ * Series ISO 216, lado corto × lado largo en milímetros. 2A0 y 4A0 son los múltiplos
+ * del A0 que define la misma norma (el doble y el cuádruple de su área); no hay 3A0.
+ */
 export const TAMANOS = {
   A4: [210, 297],
   A3: [297, 420],
   A2: [420, 594],
   A1: [594, 841],
   A0: [841, 1189],
+  '2A0': [1189, 1682],
+  '4A0': [1682, 2378],
 };
 
 export const ORIENTACIONES = ['vertical', 'horizontal'];

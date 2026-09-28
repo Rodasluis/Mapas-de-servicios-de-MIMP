@@ -18,7 +18,7 @@
  * para que las fases siguientes se limiten a rellenarlas sin recolocar nada.
  */
 import { geoPath, geoDistance, geoBounds as geoBoundsDe } from 'd3-geo';
-import { marcoDelMapa } from './hoja.js';
+import { marcoDelMapa, TAMANOS } from './hoja.js';
 import { crearProyeccion, medirEscala, nivelPara, crearRuta, RADIO_TERRESTRE_M } from './proyeccion.js';
 import { construirGrilla, anguloDelNorte } from './grilla.js';
 import { crearOcupacion, recolectorDeAnillos } from './ocupacion.js';
@@ -200,8 +200,13 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
   /* Tamaño del ícono. Crece algo con la hoja pero acotado: por debajo de 3 mm el
      pictograma deja de leerse y por encima de 6 mm los grupos se comen las provincias
      pequeñas. Lo que no cabe se refleja en el apiñamiento, que es lo que decide si
-     hace falta un recuadro de zoom. */
-  const tamanoIcono = Math.min(6, Math.max(3, 3.4 * Math.sqrt(factor)));
+     hace falta un recuadro de zoom.
+
+     Los 6 mm se midieron en A0. En 2A0 y 4A0 el mapa está a una escala mayor —las
+     provincias miden 1,4 y 2 veces más— y el tope se estira con la raíz de ese
+     crecimiento: 7 mm en 2A0 y 8 mm en 4A0. De A4 a A0 no cambia nada. */
+  const topeIcono = 6 * Math.sqrt(Math.max(1, factor / FACTOR_A0));
+  const tamanoIcono = Math.min(topeIcono, Math.max(3, 3.4 * Math.sqrt(factor)));
   const vacioSimbolos = { svg: '', grupos: [], apinados: [], apinamientoMaximoPct: 0 };
   /* En el ámbito distrital cada centro lleva además un número, que es lo que lo une
      con su fila de la tabla. La numeración se fija aquí, una sola vez, para que el
@@ -723,6 +728,9 @@ async function vistasDeUbicacion({ ambito, cargador, plan }) {
 
 /** Cuántos centros de fuera se ofrecen cuando el distrito no tiene ninguno. */
 const CERCANOS_A_LISTAR = 6;
+
+/** Factor de formato del A0: la hoja en la que se calibraron los topes de tamaño. */
+const FACTOR_A0 = factorFormato({ diagonalMm: Math.hypot(...TAMANOS.A0) });
 
 /**
  * Los centros más cercanos al ámbito, con su distancia en línea recta.

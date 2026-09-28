@@ -47,8 +47,8 @@ import {
 import { crearIndice } from './colisiones.js';
 import { colocarEtiquetas, crearSolicitud } from './etiquetas.js';
 import { tipografia } from '../estilo/tokens.js';
-import { color, trazoMm, ptAmm } from '../estilo/tokens.js';
-import { el, grupo, texto, textoConHalo, rect } from './svg.js';
+import { color, trazoMm, ptAmm, opacidad } from '../estilo/tokens.js';
+import { el, grupo, texto, textoConHalo, rect, num } from './svg.js';
 
 /** Por encima de esta fracción pisada, los íconos de una provincia se estorban. */
 export const UMBRAL_APINAMIENTO = 0.35;
@@ -766,6 +766,13 @@ function dibujarRecuadro({
     geometria.set(f, { anillos, polos });
   }
 
+  /* La ZONA del recuadro son sus miembros: el departamento, la provincia o el distrito
+     que se amplía. Sólo ellos llevan íconos, y todo lo demás queda bajo un velo. Antes
+     el recuadro dibujaba los íconos de todo lo que cayera en su marco y la zona sólo se
+     distinguía por un contorno algo más grueso: no se sabía qué parte era la ampliada. */
+  const claves = miembros.map((f) => f.properties.ubigeo);
+  const esDeLaZona = (ubigeo) => claves.some((k) => String(ubigeo).startsWith(k));
+
   const simbolos = [];
   const cajasSimbolos = [];
 
@@ -776,10 +783,11 @@ function dibujarRecuadro({
   if (modoSimbolos === 'individual') {
     const dentroDelRecuadro = (x, y) => x >= marcoInterno.x && x <= marcoInterno.x + marcoInterno.ancho
       && y >= marcoInterno.y && y <= marcoInterno.y + marcoInterno.alto;
-    /* Todos los centros que caigan dentro del marco, no sólo los del distrito que da
-       nombre al recuadro: lo que se amplía es un trozo del mapa, y un trozo en el que
-       faltaran los centros de la manzana de al lado diría algo falso. */
+    /* Sólo los centros de la zona, por su ubigeo, igual que en los recuentos. Los de
+       los distritos vecinos ya están en el mapa principal; repetirlos aquí mezclaba en
+       el recuadro lo que se amplía con lo que sólo lo rodea. */
     for (const c of centros) {
+      if (!esDeLaZona(c.ubigeo)) continue;
       if (!Number.isFinite(c.lat) || !Number.isFinite(c.lon)) continue;
       const punto = proy([c.lon, c.lat]);
       if (!punto || !dentroDelRecuadro(punto[0], punto[1])) continue;
@@ -800,6 +808,7 @@ function dibujarRecuadro({
     }
   } else {
   for (const f of visibles) {
+    if (!esDeLaZona(f.properties.ubigeo)) continue;
     const datos = agregado.porUnidad.get(f.properties.ubigeo);
     const geo = geometria.get(f);
     if (!datos || !geo) continue;
@@ -852,6 +861,21 @@ function dibujarRecuadro({
     geometria, cajasSimbolos, marcoInterno, medidor, factor,
   });
 
+  /* El velo: un rectángulo del tamaño del marco con la zona recortada como hueco
+     (regla par-impar), blanco y semitransparente. Aclara el entorno sin borrarlo y deja
+     la zona con su color. Es un trazado vectorial con opacidad, no un desenfoque: un
+     filtro de desenfoque acabaría rasterizado en el PDF.
+
+     Los rótulos van DEBAJO del velo: los de los vecinos se leen atenuados, como
+     contexto, y los de la zona quedan en el hueco, a plena tinta. */
+  const { x: mx, y: my, ancho: ma, alto: mh } = marcoInterno;
+  const velo = el('path', {
+    d: `M${num(mx)} ${num(my)}h${num(ma)}v${num(mh)}h${num(-ma)}Z${miembros.map((f) => ruta(f.geometry)).join('')}`,
+    fill: color.veloZoom,
+    'fill-opacity': opacidad.veloZoom,
+    'fill-rule': 'evenodd',
+  });
+
   return grupo({ id: `bloque-${etiqueta.replace(/\s+/g, '-').toLowerCase()}` }, [
     el('defs', {}, el('clipPath', { id: idRecorte }, rect(marcoInterno))),
     rect({ x, y, ancho, alto }, {
@@ -867,7 +891,7 @@ function dibujarRecuadro({
     }),
     grupo({ 'clip-path': `url(#${idRecorte})` }, [
       rect(marcoInterno, { fill: color.oceano }),
-      ...paises, ...fuera, ...relleno, ...limites, ...resalte, ...simbolos, rotulos,
+      ...paises, ...fuera, ...relleno, ...limites, rotulos, velo, ...resalte, ...simbolos,
     ]),
     rect(marcoInterno, {
       fill: 'none', stroke: color.marco, 'stroke-width': trazoMm.marcoInterior,

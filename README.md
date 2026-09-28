@@ -6,8 +6,8 @@ imprenta**, como PDF vectorial. El usuario elige tamaño de hoja, orientación, 
 aplicación compone el mapa y lo descarga.
 
 No es una captura de pantalla ampliada: el PDF se construye a partir de la geometría,
-con las fuentes incrustadas, de modo que se puede imprimir en A0 sin que aparezca un
-solo píxel.
+con las fuentes incrustadas, de modo que se puede imprimir en A0 —o en 2A0 y 4A0— sin
+que aparezca un solo píxel.
 
 > **Estado: Fase 8 — control de calidad y cierre.**
 > Los cuatro ámbitos funcionan y el repositorio se comprueba solo: regresión visual de
@@ -298,6 +298,7 @@ hueco se dejan de dibujar, y eso es el máximo dinámico: A4 admite uno, A0 hast
 | A2 | 2 | 89 × 137 mm |
 | A1 | 3 | 167 × 177 mm |
 | A0 | 4 | 337 × 351 mm |
+| 2A0, 4A0 | 4 | crece con el hueco libre |
 
 ## Ámbitos: el país, un departamento, una provincia
 
@@ -328,6 +329,16 @@ señala es el punto y no el dibujo.
 Los recuadros de zoom dibujan **lo mismo** que el mapa principal: si éste pinta cada
 centro en su sitio, el recuadro también. Un zoom que agregara lo que el mapa desagrega
 estaría contando dos cosas distintas del mismo lugar en la misma lámina.
+
+Dentro del recuadro sólo la **zona ampliada** —el departamento, la provincia o el
+distrito— lleva íconos. Lo que la rodea se sigue dibujando, para que el recorte no
+parezca una isla, pero bajo un velo blanco semitransparente: se lee como entorno, con
+los nombres de los vecinos atenuados, y la zona queda con su color. El velo es un
+trazado vectorial con opacidad (`opacidad.veloZoom` en los tokens), no un desenfoque,
+que acabaría rasterizado en el PDF.
+
+En la web los recuadros no se dibujan por omisión: se piden, automáticos
+(`?zoom=auto`) o eligiendo las zonas.
 
 ### Lo que rodea al ámbito
 
@@ -645,8 +656,21 @@ forzar el país a un solo huso, el extremo occidental cae por debajo del falso o
 
 El trazo del mapa y sus rótulos se mantienen en medidas reales de imprenta: un límite
 departamental mide 0,3 mm en A4 y en A0. Las piezas del layout sí crecen con la hoja
-—A4 1,0 · A3 1,37 · A2 1,87 · A1 2,56 · A0 3,50—, porque un cartel se mira de lejos y
-con el cuerpo de un A4 el título se perdería.
+—A4 1,0 · A3 1,37 · A2 1,87 · A1 2,56 · A0 3,50 · 2A0 4,76 · 4A0 6,50—, porque un
+cartel se mira de lejos y con el cuerpo de un A4 el título se perdería.
+
+### 2A0 y 4A0
+
+Son los múltiplos del A0 que define la norma ISO 216: 1189 × 1682 mm (el doble de área)
+y 1682 × 2378 mm (el cuádruple). No existe un «3A0». Se componen con el mismo nivel de
+detalle que el A0, así que cuestan casi lo mismo: unos 30 s y 12-13 MB de PDF, frente a
+los 28 s y 11 MB del A0 nacional vertical.
+
+Lo único que se ajustó es el tope del ícono. Los 6 mm se calibraron en A0; en 2A0 y 4A0
+el mapa está a una escala 1,4 y 2 veces mayor, y el tope crece con la raíz de ese
+factor: 7 mm en 2A0 y 8,2 mm en 4A0. De A4 a A0 no cambia nada.
+
+Para imprimirlos hace falta un plóter con rollo de al menos 1,2 m (2A0) o 1,7 m (4A0).
 
 La retícula sigue la misma lógica que el mapa de referencia: en vez de una separación
 fija en papel, que daba seis columnas en A4 y quince en A0 para el mismo mapa, se fija

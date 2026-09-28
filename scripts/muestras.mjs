@@ -43,6 +43,10 @@ const MUESTRAS = [
   { nombre: 'nacional_A3_vertical', hoja: { tamano: 'A3', orientacion: 'vertical' } },
   { nombre: 'nacional_A0_vertical', hoja: { tamano: 'A0', orientacion: 'vertical' } },
   { nombre: 'nacional_A0_horizontal', hoja: { tamano: 'A0', orientacion: 'horizontal' } },
+  /* Fase 10. Los múltiplos del A0: el doble y el cuádruple de su área. Uno en cada
+     orientación, para ver que el layout y el tope del ícono escalan más allá del A0. */
+  { nombre: 'nacional_2A0_horizontal', hoja: { tamano: '2A0', orientacion: 'horizontal' } },
+  { nombre: 'nacional_4A0_vertical', hoja: { tamano: '4A0', orientacion: 'vertical' } },
   /* Con un solo tipo activo se comprueba que el filtro llega hasta el final: el
      coropletas se recalcula, la leyenda pierde las diecinueve entradas que sobran y
      las clases altas desaparecen porque ninguna provincia llega a ellas. */

@@ -43,6 +43,11 @@ export const color = {
   localizadorBorde: '#9a968f',
   localizadorResalte: '#ec1c24',
 
+  /* Velo sobre lo que rodea a la zona ampliada en un recuadro de zoom: lo aclara sin
+     borrarlo, para que se vea qué es la zona y qué es su entorno. Su opacidad, en
+     `opacidad.veloZoom`. */
+  veloZoom: '#ffffff',
+
   /* Límites administrativos.
 
      El salto entre el departamental y el provincial es deliberado y grande, en color y
@@ -174,3 +179,13 @@ export const PT_POR_PULGADA = 72;
 /** Milímetros a puntos PostScript; sólo se usa al exportar el PDF. */
 export const mmApt = (mm) => (mm * PT_POR_PULGADA) / MM_POR_PULGADA;
 export const ptAmm = (pt) => (pt * MM_POR_PULGADA) / PT_POR_PULGADA;
+
+/**
+ * Opacidades. Son pocas y deliberadas: el PDF es vectorial y una transparencia se
+ * imprime como mezcla de tintas, sin rasterizar nada.
+ */
+export const opacidad = {
+  /* Lo bastante para que el entorno se lea como fondo, no tanto como para que
+     desaparezca: los nombres de los vecinos tienen que seguir leyéndose. */
+  veloZoom: 0.62,
+};
