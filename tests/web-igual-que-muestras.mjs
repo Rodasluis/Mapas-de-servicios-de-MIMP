@@ -78,6 +78,17 @@ export const CASOS = [
       desmarcadas: [],
     },
   },
+  /* Fase 12: el estilo de íconos se elige en la web y llega al PDF. */
+  {
+    nombre: 'íconos en círculo, A3',
+    parametros: { hoja: 'A3', iconos: 'circulo', fecha: FECHA },
+    esperado: {
+      paginaMm: MEDIDAS.A3,
+      controles: { tamano: 'A3', 'iconos-estilo': 'circulo' },
+      marcadas: ['pieza-leyenda'],
+      desmarcadas: [],
+    },
+  },
   /* Fase 6: el ámbito viaja en la URL y tiene que llegar al PDF igual que lo demás. */
   {
     nombre: 'departamento de Cusco en A3',

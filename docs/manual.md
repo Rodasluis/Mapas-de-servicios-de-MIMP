@@ -22,8 +22,10 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    departamento entero; sin departamento, el Perú—.
 3. **Textos.** El subtítulo vacío significa *automático*: el campo muestra en gris el
    texto que se va a usar («Distrito de Breña»). Escribe sólo si quieres otro.
-4. **Tipos de servicio.** Desmarcar tipos recalcula todo: los colores, la leyenda y los
-   recuadros de zoom.
+4. **Tipos de servicio.** Arriba se elige el **estilo de íconos**: *Casa* (por
+   omisión), que señala cada centro con la punta como un alfiler, o *Círculo*, que se
+   centra en él. Cada tipo de la lista muestra su ícono en el estilo elegido.
+   Desmarcar tipos recalcula todo: los colores, la leyenda y los recuadros de zoom.
 5. **Recuadros de zoom.** Por omisión, *Ninguno*. Tres opciones: *Automáticos* (el motor amplía donde los
    símbolos no caben), *Elegir zonas* o *Ninguno*. Con *Elegir zonas* aparecen tres
    selectores encadenados —departamento, provincia y distrito—: elige la zona y pulsa
@@ -72,10 +74,10 @@ Los dos que más suelen aparecer:
 
 Toda la configuración vive en la barra de direcciones. **Copiar enlace de esta
 configuración** da una URL que reproduce el mapa exacto: hoja, ámbito, textos, tipos,
-capas y zonas ampliadas.
+estilo de íconos, capas y zonas ampliadas.
 
 ```
-…/?ambito=1501&hoja=A2&tipos=CEM&sinCapas=grilla
+…/?ambito=1501&hoja=A2&tipos=CEM&iconos=circulo&sinCapas=grilla
 ```
 
 Se puede corregir a mano. El ubigeo dice solo de qué nivel es por su longitud: dos

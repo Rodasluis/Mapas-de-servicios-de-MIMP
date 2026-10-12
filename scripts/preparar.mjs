@@ -51,7 +51,7 @@ const PASOS = [
   {
     nombre: 'directorio de servicios',
     script: 'fetch-datos.mjs',
-    listo: () => existe('data/centros.json') && existe('data/iconos.json') && existe('data/version.json')
+    listo: () => existe('data/centros.json') && existe('data/version.json')
       && leer('data/version.json').datosTag === paquete().DIRECTORIO_SHA256
       && leer('data/version.json').generado === paquete().DIRECTORIO_FECHA
       && fs.existsSync(path.join(RAIZ, 'auditoria', `auditoria_directorio_${paquete().DIRECTORIO_FECHA}.xlsx`)),

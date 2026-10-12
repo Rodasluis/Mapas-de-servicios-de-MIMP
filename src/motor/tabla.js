@@ -26,14 +26,12 @@ const COLUMNAS = { numero: 0.06, nombre: 0.4, tipo: 0.2, direccion: 0.34 };
  * Coordenadas que no señalan la sede con exactitud. Las marca la preparación de los
  * datos (scripts/fetch-datos.mjs):
  *  - otro_distrito: la coordenada cae a menos de 2 km de su distrito, pero fuera;
- *  - referencial: ya no se produce; se conserva por si una versión antigua la trae;
  *  - reubicada: la coordenada caía lejos de su distrito y se situó dentro de él;
  *  - por_distrito: sólo se conoce el distrito. Es el caso de los Hogares de Refugio
  *    Temporal, cuya dirección es reservada.
  */
 export const CALIDAD_DUDOSA = {
   otro_distrito: 'la coordenada cae en otro distrito',
-  referencial: 'coordenada referencial, no exacta',
   reubicada: 'coordenada errónea en el directorio; se sitúa en su distrito',
   por_distrito: 'ubicado en su distrito; la dirección es reservada',
 };

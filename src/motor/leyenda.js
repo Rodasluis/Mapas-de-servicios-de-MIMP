@@ -48,7 +48,7 @@ function notasDeUbicacion(centros) {
 }
 
 export function bloqueLeyenda({
-  agregado, clasesUsadas, clases = CLASES_POR_DEFECTO, iconos, medidor, factor,
+  agregado, clasesUsadas, clases = CLASES_POR_DEFECTO, estiloIconos, medidor, factor,
   rampa, tamanoIconoMm, altoMaximoMm, anchoMaximoMm, unidad = 'provincia',
 }) {
   /* El coropletas no siempre cuenta por provincia: en un mapa departamental la unidad
@@ -177,7 +177,7 @@ export function bloqueLeyenda({
           x: cx + tamanoIcono * 0.6,
           y: cy + altoFila * 0.85,
           tamanoMm: tamanoIcono,
-          color: iconos.tipos[tipo]?.color || color.tintaSuave,
+          estilo: estiloIconos,
         }));
         piezas.push(texto(`${etiquetaDe(tipo)} (${agregado.porTipo.get(tipo)})`, {
           x: cx + tamanoIcono * 1.4,

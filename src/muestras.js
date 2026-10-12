@@ -109,12 +109,8 @@ window.comprobarMetricas = async function comprobarMetricas() {
 /** Hoja de referencia de los íconos: documenta tipo → pictograma a tamaño real. */
 window.generarHojaIconos = async function generarHojaIconos(config = {}) {
   await fuentesListas();
-  const [iconos, centros, metricas] = await Promise.all([
-    cargador.iconos(), cargador.centros(), cargador.metricas(),
-  ]);
-  const { hoja, svg } = componerHojaDeIconos({
-    iconos, centros, medidor: crearMedidor(metricas),
-  });
+  const [centros, metricas] = await Promise.all([cargador.centros(), cargador.metricas()]);
+  const { hoja, svg } = componerHojaDeIconos({ centros, medidor: crearMedidor(metricas) });
   const { bytes, fuentes } = await aPdf({
     svg, hoja, leerTtf, fecha: config.fecha ? fechaDelMapa(config.fecha).fecha : undefined,
     propiedades: { titulo: 'Íconos de los servicios del MIMP' },

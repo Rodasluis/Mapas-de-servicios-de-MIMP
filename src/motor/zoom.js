@@ -35,19 +35,19 @@
  * y estrecho, y una alargada en horizontal sobre Brasil, que es ancho. Cuando ya no
  * queda hueco se dejan de dibujar, y ése es el máximo dinámico.
  */
-import { geoBounds } from 'd3-geo';
+import { geoBounds, geoPath } from 'd3-geo';
 import { crearProyeccion, crearRuta } from './proyeccion.js';
 import { claseDe, repartirIconos } from './servicios.js';
-import { dibujarIcono } from '../iconos/index.js';
-import { geoPath } from 'd3-geo';
+import { dibujarIcono, cajaEnPunto } from '../iconos/index.js';
 import {
   mayorRectanguloLibre, rectangulo, recolectorDeAnillos, polosDeInaccesibilidad,
   puntoEnAnillos,
 } from './ocupacion.js';
 import { crearIndice } from './colisiones.js';
 import { colocarEtiquetas, crearSolicitud } from './etiquetas.js';
-import { tipografia } from '../estilo/tokens.js';
-import { color, trazoMm, ptAmm, opacidad } from '../estilo/tokens.js';
+import {
+  color, trazoMm, ptAmm, opacidad, tipografia,
+} from '../estilo/tokens.js';
 import { el, grupo, texto, textoConHalo, rect, num } from './svg.js';
 
 /** Por encima de esta fracción pisada, los íconos de una provincia se estorban. */
@@ -360,7 +360,7 @@ function regionesManuales({ seleccion, agregado, unidades, anillos, zonas: def, 
  */
 export function construirRecuadros({
   modo = 'auto', seleccion = [], grupos, umbral, unidades, zonas, anillos, agregado,
-  clases, rampa, iconos, medidor, factor, tamanoIcono, marco, ocupacion, maximo,
+  clases, rampa, estiloIconos, medidor, factor, tamanoIcono, marco, ocupacion, maximo,
   modoSimbolos = 'agregado', centros = [], entorno = null, trazos = null,
 }) {
   const tope = maximo ?? maximoPorFormato(factor);
@@ -600,7 +600,7 @@ export function construirRecuadros({
         agregado,
         clases,
         rampa,
-        iconos,
+        estiloIconos,
         tamanoIcono,
         altoCifra,
         eTitulo,
@@ -666,7 +666,7 @@ export function construirRecuadros({
 /** Dibuja un recuadro ya dimensionado. */
 function dibujarRecuadro({
   x, y, ancho, alto, anchoMapa, altoMapa, cabecera, borde, etiqueta,
-  sub, miembros, protagonistas, agregado, clases, rampa, iconos, tamanoIcono, altoCifra,
+  sub, miembros, protagonistas, agregado, clases, rampa, estiloIconos, tamanoIcono, altoCifra,
   eTitulo, eCifra, medidor, factor, modoSimbolos = 'agregado', centros = [],
   entorno = null, trazos = null,
 }) {
@@ -791,16 +791,17 @@ function dibujarRecuadro({
       if (!Number.isFinite(c.lat) || !Number.isFinite(c.lon)) continue;
       const punto = proy([c.lon, c.lat]);
       if (!punto || !dentroDelRecuadro(punto[0], punto[1])) continue;
+      const base = cajaEnPunto(estiloIconos, punto[1], tamanoIcono);
       simbolos.push(dibujarIcono({
         tipo: c.tipo,
         x: punto[0],
-        y: punto[1],
+        y: base,
         tamanoMm: tamanoIcono,
-        color: iconos.tipos[c.tipo]?.color || color.tintaSuave,
+        estilo: estiloIconos,
       }));
       cajasSimbolos.push({
         x: punto[0] - tamanoIcono / 2,
-        y: punto[1] - tamanoIcono,
+        y: base - tamanoIcono,
         ancho: tamanoIcono,
         alto: tamanoIcono,
         etiqueta: `símbolos ${c.nombre}`,
@@ -833,7 +834,7 @@ function dibujarRecuadro({
         x: posiciones[i].x,
         y: posiciones[i].y,
         tamanoMm: tamanoIcono,
-        color: iconos.tipos[tipo]?.color || color.tintaSuave,
+        estilo: estiloIconos,
       }));
       simbolos.push(textoConHalo(String(datos.tipos.get(tipo)), {
         x: posiciones[i].x,

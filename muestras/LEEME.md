@@ -1,2 +1,3 @@
-PDF de prueba que genera cada fase (npm run muestras, Fase 1).
-No se versionan: son salida reproducible del motor.
+PDF de prueba que genera `npm run muestras`, y la hoja de íconos (iconos.pdf).
+No se versionan: son salida reproducible del motor. `npm run qa` los compara con
+las referencias aprobadas en tests/referencias/.
