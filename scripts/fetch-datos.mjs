@@ -17,7 +17,7 @@
  *     Los registros de dirección reservada (Hogares de Refugio Temporal y los CAR
  *     Especializados sin dirección) no usan nunca una coordenada: se sitúan en su
  *     distrito, marcados «por_distrito».
- *  4. Publica centros.json, iconos.json y version.json en public/data, y escribe en
+ *  4. Publica centros.json y version.json en public/data, y escribe en
  *     auditoria/ una hoja de cálculo con el directorio completo, los hallazgos de cada
  *     registro y el cambio que se hizo para subsanarlos.
  *
@@ -39,7 +39,7 @@ import { leerHoja } from './lib/xlsx.mjs';
 import { escribirLibro } from './lib/xlsx-escribir.mjs';
 import { crearUbicador } from './lib/ubicar.mjs';
 import { CRITERIOS, VARIANTES, CONFIDENCIAL } from './lib/criterios.mjs';
-import { ICONOS, COLORES } from '../src/iconos/catalogo.js';
+import { tieneIcono } from '../src/iconos/index.js';
 
 const { DIRECTORIO_URL, DIRECTORIO_SHA256, DIRECTORIO_FECHA } = paquete();
 if (!DIRECTORIO_URL || !DIRECTORIO_SHA256 || !DIRECTORIO_FECHA) {
@@ -313,8 +313,7 @@ for (const a of auditoria) {
 const conteoTipo = new Map();
 for (const c of centros) conteoTipo.set(c.tipo, (conteoTipo.get(c.tipo) || 0) + 1);
 for (const t of conteoTipo.keys()) {
-  if (!ICONOS[t]) errores.push(`«${t}» se publica pero no tiene ícono en src/iconos/catalogo.js.`);
-  if (!COLORES[t]) errores.push(`«${t}» se publica pero no tiene color en COLORES (src/iconos/catalogo.js).`);
+  if (!tieneIcono(t)) errores.push(`«${t}» se publica pero no tiene ícono en todos los estilos de src/iconos/estilos.js.`);
 }
 for (const t of Object.keys(CRITERIOS).filter((k) => CRITERIOS[k].publica)) {
   if (!conteoTipo.has(t)) errores.push(`El criterio publica «${t}», pero el directorio no trae ningún registro publicable.`);
@@ -409,14 +408,12 @@ total += escribirJson(path.join(DEST_PUB, 'centros.json'), {
   catalogo,
   centros: centros.sort((a, b) => a.id - b.id),
 });
-total += escribirJson(path.join(DEST_PUB, 'iconos.json'), {
-  fuente: 'src/iconos/catalogo.js',
-  tipos: Object.fromEntries(porTipo.map(([t]) => [t, { color: COLORES[t], etiqueta: t }])),
-});
 total += escribirJson(path.join(DEST_PUB, 'version.json'), version);
-/* Restos de cuando los datos venían del repositorio del buscador. */
+/* Restos de versiones anteriores: los PNG del buscador y el iconos.json que llevaba el
+   color de cada tipo, que ahora vive en src/iconos/estilos.js. */
 fs.rmSync(path.join(DEST_PUB, 'iconos-png'), { recursive: true, force: true });
-for (const f of ['centros.json', 'iconos.json', 'version.json']) {
+fs.rmSync(path.join(DEST_PUB, 'iconos.json'), { force: true });
+for (const f of ['centros.json', 'version.json']) {
   console.log(`  ✓ ${f.padEnd(13)} ${peso(fs.statSync(path.join(DEST_PUB, f)).size)}`);
 }
 

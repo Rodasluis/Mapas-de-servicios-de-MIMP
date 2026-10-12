@@ -11,6 +11,7 @@
  * y casi siempre se reimplementa peor.
  */
 import { TAMANOS, ORIENTACIONES, siglaDe, subtituloDe } from './config.js';
+import { dibujarIcono, ESTILOS, NOMBRES_ESTILO } from '../iconos/index.js';
 
 const el = (etiqueta, atributos = {}, hijos = []) => {
   const nodo = document.createElement(etiqueta);
@@ -32,6 +33,19 @@ const campoTexto = (id, etiqueta, valor, alCambiar) => {
   const input = el('input', { type: 'text', id, value: valor ?? '' });
   input.addEventListener('input', () => alCambiar(input.value));
   return el('p', { clase: 'campo' }, [el('label', { for: id, texto: etiqueta }), input]);
+};
+
+/**
+ * Muestra de un ícono para el panel: el mismo SVG que va al mapa, a 18 px. La caja
+ * se amplía un poco porque algunos pictogramas salen de la insignia (las ondas del
+ * SAU en el estilo círculo).
+ */
+const muestraIcono = (tipo, estilo) => {
+  const span = el('span', { clase: 'muestra-icono', 'aria-hidden': 'true' });
+  span.innerHTML = `<svg viewBox="-1 -1 12 12" width="18" height="18">${dibujarIcono({
+    tipo, estilo, x: 5, y: 10, tamanoMm: 10,
+  })}</svg>`;
+  return span;
 };
 
 const casilla = (id, etiqueta, activa, alCambiar) => {
@@ -178,6 +192,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   const activos = () => [...casillasTipo.entries()].filter(([, c]) => c.checked).map(([t]) => t);
 
   const listaTipos = el('div', { clase: 'lista-tipos' });
+  const muestrasTipo = new Map();
   for (const tipo of catalogo.tipos) {
     const id = `tipo-${siglaDe(tipo).replace(/\W/g, '')}`;
     const input = el('input', { type: 'checkbox', id });
@@ -192,9 +207,40 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
       emitir();
     });
     casillasTipo.set(tipo, input);
+    const muestra = muestraIcono(tipo, config.iconos);
+    muestrasTipo.set(tipo, muestra);
     listaTipos.appendChild(el('label', { clase: 'casilla', for: id }, [
       input,
+      muestra,
       el('span', { texto: `${tipo} (${catalogo.conteo.get(tipo) || 0})` }),
+    ]));
+  }
+
+  /* Estilo de los íconos. Botones de opción, como el modo de zoom, cada uno con una
+     muestra del ícono del CEM en ese estilo: se elige viendo lo que se elige. */
+  const grupoEstilo = el('fieldset', { clase: 'opciones', id: 'iconos-estilo' }, [
+    el('legend', { texto: 'Estilo de íconos' }),
+  ]);
+  for (const nombre of NOMBRES_ESTILO) {
+    const input = el('input', {
+      type: 'radio', name: 'iconos-estilo', id: `iconos-estilo-${nombre}`, value: nombre,
+    });
+    input.checked = config.iconos === nombre;
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      config.iconos = nombre;
+      /* Las muestras de la lista de tipos pasan al estilo nuevo. */
+      for (const [tipo, anterior] of muestrasTipo) {
+        const nueva = muestraIcono(tipo, nombre);
+        anterior.replaceWith(nueva);
+        muestrasTipo.set(tipo, nueva);
+      }
+      emitir();
+    });
+    grupoEstilo.appendChild(el('label', { clase: 'casilla', for: input.id }, [
+      input,
+      muestraIcono('Centro Emergencia Mujer y Familia', nombre),
+      el('span', { texto: ESTILOS[nombre].nombre }),
     ]));
   }
 
@@ -204,6 +250,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     emitir();
   };
   const bloqueTipos = grupo('Tipos de servicio', [
+    grupoEstilo,
     el('p', { clase: 'acciones-linea' }, [
       botón('Todos', () => marcarTodos(true)),
       botón('Ninguno', () => marcarTodos(false)),

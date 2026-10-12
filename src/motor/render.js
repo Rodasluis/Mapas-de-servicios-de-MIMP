@@ -40,7 +40,9 @@ import { mapaDeUbicacion, resaltePara } from './localizador.js';
 import { bloqueLeyenda } from './leyenda.js';
 import { bloqueTabla, numeroDeCentro, esDudosa } from './tabla.js';
 import { construirRecuadros, maximoPorFormato, UMBRAL_APINAMIENTO } from './zoom.js';
-import { dibujarIcono, comprobarCobertura } from '../iconos/index.js';
+import {
+  dibujarIcono, comprobarCobertura, cajaEnPunto, ESTILOS, ESTILO_POR_DEFECTO, TAMANO_MINIMO_MM,
+} from '../iconos/index.js';
 import { poloDeInaccesibilidad, polosDeInaccesibilidad, puntoEnAnillos } from './ocupacion.js';
 import { crearIndice } from './colisiones.js';
 import { colocarEtiquetas, crearSolicitud } from './etiquetas.js';
@@ -108,10 +110,13 @@ export function componerNacional(opciones) {
 export async function componer({ hoja, cargador, ambito, textos = {}, opciones = {} }) {
   const inicio = Date.now();
   const elAmbito = normalizarAmbito(ambito);
-  const [indice, version, logos, metricas, centrosJson, iconos] = await Promise.all([
+  const [indice, version, logos, metricas, centrosJson] = await Promise.all([
     cargador.indice(), cargador.version(), cargador.logos(), cargador.metricas(),
-    cargador.centros(), cargador.iconos(),
+    cargador.centros(),
   ]);
+  /* Estilo de los íconos (casa o círculo). Uno desconocido cae en el de por defecto
+     en vez de romper la lámina: viene de la URL, que cualquiera puede escribir. */
+  const estiloIconos = ESTILOS[opciones.iconos] ? opciones.iconos : ESTILO_POR_DEFECTO;
 
   /* Filtro de tipos. null es «todos»; un conjunto vacío no dibujaría nada, así que se
      trata como todos y se anota, en vez de devolver un mapa en blanco sin explicación. */
@@ -173,7 +178,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
   const cobertura = comprobarCobertura(agregado.tipos);
   if (cobertura.sinIcono.length) {
     throw new Error(
-      `Sin ícono para: ${cobertura.sinIcono.join(', ')}. Añádelos a src/iconos/catalogo.js.`,
+      `Sin ícono para: ${cobertura.sinIcono.join(', ')}. Añádelos a src/iconos/estilos.js.`,
     );
   }
 
@@ -206,7 +211,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
      provincias miden 1,4 y 2 veces más— y el tope se estira con la raíz de ese
      crecimiento: 7 mm en 2A0 y 8 mm en 4A0. De A4 a A0 no cambia nada. */
   const topeIcono = 6 * Math.sqrt(Math.max(1, factor / FACTOR_A0));
-  const tamanoIcono = Math.min(topeIcono, Math.max(3, 3.4 * Math.sqrt(factor)));
+  const tamanoIcono = Math.min(topeIcono, Math.max(TAMANO_MINIMO_MM, 3.4 * Math.sqrt(factor)));
   const vacioSimbolos = { svg: '', grupos: [], apinados: [], apinamientoMaximoPct: 0 };
   /* En el ámbito distrital cada centro lleva además un número, que es lo que lo une
      con su fila de la tabla. La numeración se fija aquí, una sola vez, para que el
@@ -234,16 +239,16 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
   if (capasVisibles.simbolos) {
     if (plan.simbolos === 'numerado') {
       simbolos = dibujarCentros({
-        centros: listados, proyeccion, iconos, marco, medidor, factor, tamanoIcono,
+        centros: listados, proyeccion, estiloIconos, marco, medidor, factor, tamanoIcono,
         numeros: new Map(numerados.map((f) => [f.centro.id, f.n])),
       });
     } else if (plan.simbolos === 'individual') {
       simbolos = dibujarCentros({
-        centros: agregado.centros, proyeccion, iconos, marco, medidor, factor, tamanoIcono,
+        centros: agregado.centros, proyeccion, estiloIconos, marco, medidor, factor, tamanoIcono,
       });
     } else {
       simbolos = dibujarSimbolos({
-        unidades: plan.unidades, agregado, anillos, iconos, marco, medidor, factor, tamanoIcono,
+        unidades: plan.unidades, agregado, anillos, estiloIconos, marco, medidor, factor, tamanoIcono,
       });
     }
   }
@@ -304,7 +309,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
          de servicio y no anuncia una comparación que este mapa no hace. */
       clasesUsadas: plan.coropleta === false ? [] : clasesVisibles,
       clases,
-      iconos,
+      estiloIconos,
       medidor,
       factor,
       rampa: opciones.rampa || rampaNaranjas,
@@ -386,7 +391,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     agregado,
     clases,
     rampa: opciones.rampa || rampaNaranjas,
-    iconos,
+    estiloIconos,
     medidor,
     factor,
     tamanoIcono,
@@ -884,7 +889,7 @@ function solicitudesDeRotulos({ niveles, anillos, simbolos, factor, marco }) {
  * dibujaría sobre la vecina.
  */
 function dibujarSimbolos({
-  unidades, agregado, anillos, iconos, marco, medidor, factor, tamanoIcono,
+  unidades, agregado, anillos, estiloIconos, marco, medidor, factor, tamanoIcono,
 }) {
   const eCifra = { familia: 'SourceSans3', variante: 'Semibold', pt: 5.2 * Math.sqrt(factor) };
   const altoCifra = medidor.alto(eCifra) * 0.95;
@@ -919,7 +924,7 @@ function dibujarSimbolos({
         x: p.x,
         y: p.y,
         tamanoMm: tamanoIcono,
-        color: iconos.tipos[tipo]?.color || color.tintaSuave,
+        estilo: estiloIconos,
       }));
       piezas.push(textoConHalo(String(datos.tipos.get(tipo)), {
         x: p.x,
@@ -983,7 +988,7 @@ function dibujarSimbolos({
  * identificación uno a uno es la tabla numerada de la Fase 7.
  */
 function dibujarCentros({
-  centros, proyeccion, iconos, marco, medidor, factor, tamanoIcono, numeros = null,
+  centros, proyeccion, estiloIconos, marco, medidor, factor, tamanoIcono, numeros = null,
 }) {
   const piezas = [];
   const grupos = [];
@@ -1003,19 +1008,22 @@ function dibujarCentros({
        el símbolo al pie de la lámina en vez de quedarse sobre el mapa. */
     if (x < marco.x || x > marco.x + marco.ancho || y < marco.y || y > marco.y + marco.alto) continue;
 
+    /* Base de la caja del ícono: el punto mismo para la casa, que lo señala como un
+       alfiler; medio ícono más abajo para el círculo, que se centra en él. */
+    const base = cajaEnPunto(estiloIconos, y, tamanoIcono);
     piezas.push(dibujarIcono({
       tipo: c.tipo,
       x,
-      y,
+      y: base,
       tamanoMm: tamanoIcono,
-      color: iconos.tipos[c.tipo]?.color || color.tintaSuave,
+      estilo: estiloIconos,
     }));
     dibujados.add(c.id);
     if (numeros && numeros.has(c.id)) {
       piezas.push(numeroDeCentro({
         n: numeros.get(c.id),
         x,
-        y,
+        y: base,
         tamanoMm: tamanoIcono,
         medidor,
         estilo: eNumero,
@@ -1027,11 +1035,11 @@ function dibujarCentros({
       unidad: c.ubigeo,
       nombre: c.dist,
       x: x - tamanoIcono / 2,
-      y: y - tamanoIcono,
+      y: base - tamanoIcono,
       ancho: tamanoIcono,
       alto: tamanoIcono,
-      polo: { x, y: y - tamanoIcono / 2, radioMm: tamanoIcono / 2 },
-      polos: [{ x, y: y - tamanoIcono / 2, radioMm: tamanoIcono / 2 }],
+      polo: { x, y: base - tamanoIcono / 2, radioMm: tamanoIcono / 2 },
+      polos: [{ x, y: base - tamanoIcono / 2, radioMm: tamanoIcono / 2 }],
       tipos: 1,
       centros: 1,
     });

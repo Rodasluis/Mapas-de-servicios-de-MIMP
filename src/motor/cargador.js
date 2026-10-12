@@ -31,7 +31,6 @@ export function crearCargador(leerJson) {
     indice: () => unaVez('indice', () => leerJson('data/geo/indice.json')),
     version: () => unaVez('version', () => leerJson('data/version.json')),
     centros: () => unaVez('centros', () => leerJson('data/centros.json')),
-    iconos: () => unaVez('iconos', () => leerJson('data/iconos.json')),
     logos: () => unaVez('logos', () => leerJson('data/logos.json')),
     metricas: () => unaVez('metricas', () => leerJson('data/metricas.json')),
 

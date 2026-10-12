@@ -102,10 +102,16 @@ En el ámbito nacional, dibujar un símbolo por centro pondría ciento y pico al
 sobre los pocos milímetros de Lima. Lo que el mapa de referencia comunica —y lo que se
 reproduce— es **qué servicios llegan** a cada provincia y cuántas sedes hay de cada uno.
 
-Los PNG que publica el buscador son de 22 × 22 px y a ese tamaño sólo distinguen por el
-color; de los veinte tipos, **cinco son rojos casi idénticos** (CEM, UA, CAI, CARPAM y
-SAR). A 3 mm serían el mismo punto. Se conservan la forma y el color de `iconos.json` y
-se redibuja el interior con un pictograma propio por tipo.
+Los íconos vienen del archivo de diseño del MIMP, en dos estilos que se eligen en la
+interfaz: **casa** (insignia con contorno, que señala el punto con la base, como un
+alfiler) y **círculo** (que se centra en él). Cada tipo tiene su pictograma y su color en
+cada estilo, transcritos sin redibujar a `src/iconos/estilos.js`. El estilo no cambia
+nada más del mapa: la leyenda, los grupos, los recuadros y la tabla son los mismos.
+
+Educadores de Calle no está en el archivo de diseño y lleva un ícono **provisional**
+adaptado a cada estilo. En el estilo círculo, CAR Básico, CAR de Urgencia y Plataforma
+de Atención comparten casi el mismo azul y sólo los distingue el pictograma: es una
+decisión del diseño que conviene revisar con quien lo hizo.
 
 El grupo se ancla en el **polo de inaccesibilidad** de la unidad y no en su centroide:
 en una forma cóncava o partida en islas el centroide cae fuera y el grupo se dibujaría

@@ -9,10 +9,10 @@ No es una captura de pantalla ampliada: el PDF se construye a partir de la geome
 con las fuentes incrustadas, de modo que se puede imprimir en A0 —o en 2A0 y 4A0— sin
 que aparezca un solo píxel.
 
-> **Estado: Fase 8 — control de calidad y cierre.**
-> Los cuatro ámbitos funcionan y el repositorio se comprueba solo: regresión visual de
-> los PDF, integridad de los totales, vectorialidad, rendimiento y un flujo de
-> integración continua en cada pull request.
+> **En producción** en **https://rodasluis.github.io/Mapas-de-servicios-de-MIMP/**.
+> Cuatro ámbitos, hojas de A4 a 4A0 y dos estilos de íconos. El repositorio se comprueba
+> solo: regresión visual de los PDF, integridad de los totales, vectorialidad y
+> rendimiento, en cada pull request y antes de cada despliegue.
 
 Documentación: **[manual de uso](docs/manual.md)** para quien produce mapas y
 **[decisiones cartográficas](docs/decisiones-cartograficas.md)** para quien necesita
@@ -144,12 +144,14 @@ conserva la de la versión vigente; las anteriores quedan en el historial de git
 
 ```
 scripts/      build: descarga, verificación y construcción de la cartografía
-src/motor/    composición del mapa y exportación a PDF (Fase 1)
+src/motor/    composición del mapa y exportación a PDF
+src/iconos/   estilos de íconos (estilos.js) y siglas de cada tipo de servicio
 src/ui/       interfaz: configuración, panel y vista previa
 src/estilo/   tokens.js — única definición de colores, tipografías y grosores
 public/       lo que se sirve tal cual (datos y tipografías, generados)
 referencias/  mapa de 2020 y logotipos que sirven de referencia
-muestras/     PDF de prueba que genera cada fase
+muestras/     PDF de prueba que genera `npm run muestras` (no se versionan)
+auditoria/    hoja de auditoría del directorio del MIMP, regenerada por `npm run datos`
 tests/        verificación de los PDF, regresión visual y la web frente a las muestras
 docs/         manual de uso y registro de decisiones cartográficas
 ```
@@ -233,17 +235,31 @@ grande.
 
 ### Los íconos
 
-El mapa de 2020 usa insignias con forma de casa, color por tipo y un pictograma
-dentro. Los PNG que publica el buscador son esa misma familia, pero de 22 × 22 px: a
-ese tamaño sólo distinguen por el color, y el color no basta, porque de los veinte
-tipos **cinco son rojos casi idénticos** (CEM, UA, CAI, CARPAM y SAR). A 3 mm serían el
-mismo punto.
+Hay **dos estilos**, y quien prepara el mapa elige uno en el panel (o con `?iconos=circulo`
+en la URL):
 
-Se conserva la forma y el color de `iconos.json`, y se redibuja el interior: cada tipo
-lleva un pictograma propio trazado con la geometría más simple que lo haga
-reconocible. `muestras/iconos.pdf` los imprime a 3, 4,5 y 6 mm junto a su tipo, sigla
-y color: es a la vez la documentación de la correspondencia y la comprobación de que
-a tamaño real siguen distinguiéndose.
+| Estilo | Forma | Cómo marca un punto |
+|---|---|---|
+| **Casa** (por omisión) | insignia con forma de casa, contorno oscuro y pictograma blanco | con la base, como un alfiler |
+| **Círculo** | círculo de color con pictograma blanco | centrado en el punto |
+
+Los dos salen del archivo de diseño entregado por el MIMP («iconos de servicios.ai»):
+la geometría y los colores se extrajeron de sus dos mesas de trabajo y se transcribieron
+a `src/iconos/estilos.js`, que es la **única definición** de la forma y el color de cada
+tipo. No se redibujó nada salvo dos excepciones, anotadas allí: el «!» del SAU en el
+estilo casa venía como un carácter de texto y se convirtió en trazado, y **Educadores de
+Calle**, que no está en el archivo, se adaptó a los dos estilos como ícono
+**provisional** hasta que diseño entregue el suyo.
+
+El tamaño se fija en milímetros reales de impresión, con un mínimo de 3 mm, y ningún
+trazo baja de 0,1 mm, que es lo que una imprenta offset garantiza.
+`muestras/iconos.pdf` imprime los dos estilos a 3, 4,5 y 6 mm junto a su tipo, sigla y
+color: es a la vez la documentación de la correspondencia y la comprobación de que a
+tamaño real siguen distinguiéndose.
+
+Un aviso sobre la paleta del estilo círculo, que es la del diseño: CAR Básico, CAR de
+Urgencia y Plataforma de Atención llevan tres azules casi iguales (#0066c5, #0069cc y
+#0067c7) y se distinguen sólo por el pictograma.
 
 ### Los recuadros de zoom
 
@@ -323,8 +339,8 @@ todo lo demás, y es de lectura, no de implementación.
 En ámbito provincial ya no se agrega nada. El mapa nacional responde «qué servicios
 llegan a esta provincia»; a escala de provincia esa pregunta ya está contestada y la que
 queda es «dónde está cada uno», que sólo se responde poniendo cada centro en su
-coordenada real. El ícono se ancla por su punta, como un alfiler, de modo que lo que
-señala es el punto y no el dibujo.
+coordenada real. La casa se ancla por su punta, como un alfiler, y el círculo por su
+centro: en los dos casos lo que señala el punto es el ícono, no un borde del dibujo.
 
 Los recuadros de zoom dibujan **lo mismo** que el mapa principal: si éste pinta cada
 centro en su sitio, el recuadro también. Un zoom que agregara lo que el mapa desagrega
@@ -718,7 +734,7 @@ son una transformación CSS por encima, así que mirar el mapa de cerca no puede
 lo que se exporta.
 
 **La configuración vive en la URL.** Cada ajuste que se aparta de lo normal se escribe
-en la barra de direcciones con nombres legibles —`?hoja=A2&tipos=CEM&sinCapas=grilla`—,
+en la barra de direcciones con nombres legibles —`?hoja=A2&tipos=CEM&iconos=circulo`—,
 nunca con índices que se desplacen al añadir un tipo ni con JSON en base64. Una
 configuración por omisión deja la dirección limpia, de modo que cada parámetro que
 aparece señala una decisión que alguien tomó, y el enlace se puede corregir a mano,

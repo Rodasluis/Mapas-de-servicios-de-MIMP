@@ -31,7 +31,9 @@ No es una captura de pantalla: el PDF se construye a partir de geometría vector
    npm run datos escribe en auditoria/ la hoja de auditoría del directorio (hallazgos y
    cambios por registro); se regenera con cada versión y no se edita a mano.
 2. Salida 100 % vectorial: ninguna imagen raster en el PDF (ni teselas, ni PNG).
-   Fuentes incrustadas. Colores definidos una sola vez en tokens.
+   Fuentes incrustadas. Colores definidos una sola vez: los del mapa en
+   src/estilo/tokens.js; los de los servicios, con su forma, en src/iconos/estilos.js
+   (dos estilos, casa y círculo, transcritos del archivo de diseño del MIMP).
 3. Todo PDF lleva en el pie: fuente de datos, versión del directorio (fecha de
    publicación y comienzo del hash), fecha de generación y la nota
    "Escala válida al imprimir al 100 %".
