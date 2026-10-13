@@ -91,14 +91,16 @@ que se aprobó.
 
 ## Actualizar el directorio de servicios
 
-Cuando el MIMP publique una versión nueva del directorio, `npm run datos` se detiene y
-muestra el hash del archivo nuevo:
+El mapa trabaja con una copia fija del directorio, guardada en el repositorio, así que
+no cambia solo cuando el MIMP publica otra versión. Para pasar a la nueva:
 
-1. Copia ese hash en `DIRECTORIO_SHA256` y la fecha de publicación en
-   `DIRECTORIO_FECHA`, en `package.json`.
-2. `npm run datos` — lo descarga y **lo verifica**. Se detiene si cambian las columnas,
-   si se repite un ORDEN, si un tipo publicado no tiene ícono o si el directorio publica
-   la dirección de un Hogar de Refugio Temporal.
+1. `npm run datos -- --comprobar` dice si el MIMP publicó otra versión y, si es así, qué
+   hash y qué fecha copiar en `DIRECTORIO_SHA256` y `DIRECTORIO_FECHA`, en
+   `package.json`.
+2. `npm run datos` — la descarga, **la verifica** y la guarda en `origenes/directorio/`
+   en lugar de la anterior. Se detiene si cambian las columnas, si se repite un ORDEN, si
+   un tipo publicado no tiene ícono o si el directorio publica la dirección de un Hogar
+   de Refugio Temporal. Confirma en git la copia nueva junto con `package.json`.
 3. Lee el informe que imprime: recuento por tipo, calidad de las coordenadas, centros
    reubicados, excluidos con su motivo y, sobre todo, los **tipos sin criterio**: un
    servicio nuevo queda fuera hasta que se decida en `scripts/lib/criterios.mjs`.

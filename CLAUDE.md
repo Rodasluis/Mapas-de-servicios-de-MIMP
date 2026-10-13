@@ -10,7 +10,10 @@ No es una captura de pantalla: el PDF se construye a partir de geometría vector
 ## Fuentes
 - Directorio Nacional de Servicios del MIMP (DIRECTORIO_URL en package.json): fuente
   ÚNICA y oficial de los servicios. Su URL no cambia entre versiones, así que se ancla por
-  DIRECTORIO_SHA256 (hash del archivo) y DIRECTORIO_FECHA (fecha de publicación).
+  DIRECTORIO_SHA256 (hash del archivo) y DIRECTORIO_FECHA (fecha de publicación). La
+  versión anclada se versiona en origenes/directorio/ y el build la lee de ahí: publicar
+  no depende de que mimp.gob.pe responda. Sólo se descarga al pasar a una versión nueva
+  (npm run datos -- --comprobar dice si la hay).
 - Rodasluis/Peru-maps (solo lectura): límites departamentales, provinciales y
   distritales (INEI).
 - Este proyecto es INDEPENDIENTE del buscador (Rodasluis/Distancia-al-centro-de-atencion):
