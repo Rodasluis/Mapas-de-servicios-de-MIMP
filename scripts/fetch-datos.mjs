@@ -4,8 +4,9 @@
  * package.json).
  *
  * Qué hace, en orden:
- *  1. Descarga el .xlsx y comprueba que es la versión anclada (DIRECTORIO_SHA256): la
- *     URL no cambia entre versiones, así que el hash es lo único que la fija.
+ *  1. Lee la versión anclada del .xlsx (DIRECTORIO_SHA256) de su copia versionada en
+ *     origenes/directorio/, o la descarga si es una versión nueva, y comprueba el hash:
+ *     la URL no cambia entre versiones, así que el hash es lo único que la fija.
  *  2. Decide qué registros se publican con el criterio propio de este proyecto
  *     (scripts/lib/criterios.mjs). Un tipo sin criterio se excluye y se avisa.
  *  3. Repara las coordenadas mal escritas (coma decimal, punto decimal perdido) y las
@@ -52,6 +53,8 @@ const DEST_PUB = path.join(PUBLICO, 'data');
 const GEO = path.join(DEST_PUB, 'geo');
 /** La hoja de auditoría es para revisar el directorio: va a la vista, no a public/. */
 const CARPETA_AUDITORIA = path.join(RAIZ, 'auditoria');
+/** Copia versionada del directorio anclado: el build no depende de que mimp.gob.pe responda. */
+const CARPETA_ORIGENES = path.join(RAIZ, 'origenes', 'directorio');
 
 /** Hoja con los datos y columnas que se leen. Si cambian, el build lo dice. */
 const HOJA = 'SERVICIOS MIMP';
@@ -79,25 +82,81 @@ const MENORES = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'e', 'el', 'en', 
 /* ------------------------------- descarga ------------------------------- */
 
 titulo(`${FUENTE} · ${DIRECTORIO_FECHA} · ${DIRECTORIO_SHA256.slice(0, 12)}`);
-console.log(`  origen: ${DIRECTORIO_URL}`);
 
-/* La caché se nombra por el hash esperado: al actualizar DIRECTORIO_SHA256 se vuelve a
-   descargar, y mientras no cambie se trabaja siempre con el mismo archivo. */
-const crudo = await descargar(
-  DIRECTORIO_URL,
-  path.join(DEST_CACHE, 'directorio', `${DIRECTORIO_SHA256.slice(0, 16)}.xlsx`),
-  { etiqueta: 'directorio (.xlsx)' },
-);
-const hash = createHash('sha256').update(crudo).digest('hex');
-if (hash !== DIRECTORIO_SHA256) {
-  abortar(
-    'El directorio descargado no es la versión anclada en package.json.',
-    `esperado  ${DIRECTORIO_SHA256}\nrecibido  ${hash}\n\n`
-    + 'El MIMP publicó otra versión. Revisa el informe que imprime este script con la nueva\n'
-    + 'y, si está en orden, copia el hash recibido en DIRECTORIO_SHA256 y la fecha de\n'
-    + 'publicación en DIRECTORIO_FECHA.',
-  );
+/* La versión anclada se versiona en el repositorio (origenes/directorio/), así que el
+   build no depende de que el sitio del MIMP esté en línea: sólo se descarga al pasar a
+   una versión nueva. Antes cada vez que la caché del CI se invalidaba había que volver
+   a pedirlo, y el día en que mimp.gob.pe no respondió no se pudo publicar nada. */
+const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
+
+/* npm run datos -- --comprobar: ¿ha publicado el MIMP otra versión? Como el build lee
+   la copia versionada, no se entera solo; esto descarga lo que hay hoy en la URL y lo
+   compara con la versión anclada, sin tocar nada. */
+if (process.argv.includes('--comprobar')) {
+  let res;
+  try {
+    res = await fetch(DIRECTORIO_URL, { redirect: 'follow' });
+  } catch (err) {
+    abortar('No se pudo contactar con el sitio del MIMP.', `${DIRECTORIO_URL}\n${err.message}`);
+  }
+  if (!res.ok) abortar(`El sitio del MIMP respondió HTTP ${res.status}.`, DIRECTORIO_URL);
+  const publicado = sha256(Buffer.from(await res.arrayBuffer()));
+  const modificado = res.headers.get('last-modified');
+  const fecha = modificado ? new Date(modificado).toISOString().slice(0, 10) : '(sin fecha)';
+  if (publicado === DIRECTORIO_SHA256) {
+    console.log(`  ✓ El MIMP sigue publicando la versión anclada (${DIRECTORIO_FECHA}).\n`);
+  } else {
+    console.log('  ! El MIMP publicó otra versión. Para pasar a ella, en package.json:');
+    console.log(`      "DIRECTORIO_SHA256": "${publicado}",`);
+    console.log(`      "DIRECTORIO_FECHA": "${fecha}",`);
+    console.log('    y vuelve a ejecutar npm run datos.\n');
+  }
+  process.exit(0);
 }
+
+const copiaVersionada = path.join(
+  CARPETA_ORIGENES, `directorio_${DIRECTORIO_FECHA}_${DIRECTORIO_SHA256.slice(0, 7)}.xlsx`,
+);
+
+let crudo;
+if (fs.existsSync(copiaVersionada)) {
+  crudo = fs.readFileSync(copiaVersionada);
+  if (sha256(crudo) !== DIRECTORIO_SHA256) {
+    abortar(
+      `La copia versionada ${path.relative(RAIZ, copiaVersionada)} no tiene el hash anclado.`,
+      'Se ha modificado o está dañada. Recupérala de git o bórrala para que se descargue de nuevo.',
+    );
+  }
+  console.log(`  · copia versionada: ${path.relative(RAIZ, copiaVersionada)} (${peso(crudo.length)})`);
+} else {
+  /* Versión nueva: se descarga, se verifica y se deja versionada en su lugar, que es lo
+     que hay que confirmar en git junto con el hash. La caché se nombra por el hash
+     esperado, así que un reintento no vuelve a pedir lo ya descargado. */
+  console.log(`  origen: ${DIRECTORIO_URL}`);
+  crudo = await descargar(
+    DIRECTORIO_URL,
+    path.join(DEST_CACHE, 'directorio', `${DIRECTORIO_SHA256.slice(0, 16)}.xlsx`),
+    { etiqueta: 'directorio (.xlsx)' },
+  );
+  const recibido = sha256(crudo);
+  if (recibido !== DIRECTORIO_SHA256) {
+    abortar(
+      'El directorio descargado no es la versión anclada en package.json.',
+      `esperado  ${DIRECTORIO_SHA256}\nrecibido  ${recibido}\n\n`
+      + 'El MIMP publicó otra versión. Revisa el informe que imprime este script con la nueva\n'
+      + 'y, si está en orden, copia el hash recibido en DIRECTORIO_SHA256 y la fecha de\n'
+      + 'publicación en DIRECTORIO_FECHA.',
+    );
+  }
+  asegurarCarpeta(CARPETA_ORIGENES);
+  /* Sólo la versión vigente: el historial de las anteriores queda en git. */
+  for (const f of fs.readdirSync(CARPETA_ORIGENES)) {
+    if (/^directorio_.*\.xlsx$/.test(f)) fs.rmSync(path.join(CARPETA_ORIGENES, f));
+  }
+  fs.writeFileSync(copiaVersionada, crudo);
+  console.log(`  ✓ versionada en ${path.relative(RAIZ, copiaVersionada)}: confírmala en git junto con el hash.`);
+}
+const hash = sha256(crudo);
 
 let hoja;
 try {

@@ -56,18 +56,25 @@ La única fuente de los servicios es el **Directorio Nacional de Servicios del M
 que el ministerio publica en abierto. Este proyecto es independiente del buscador
 (Distancia-al-centro-de-atencion): no lee sus datos y no tiene por qué coincidir con él.
 
+A diferencia del resto de orígenes, la versión anclada del directorio **se versiona en
+el repositorio**, en `origenes/directorio/` (234 KB). El build la lee de ahí y no
+depende de que mimp.gob.pe esté en línea: el 12 de octubre de 2026 el sitio no
+respondía y, mientras el directorio se descargaba en cada build, no se pudo publicar.
+
 ### Actualizar el directorio de servicios
 
 La URL del directorio no cambia entre versiones, así que se ancla por el hash del
-archivo. Cuando el MIMP publica otra versión, `npm run datos` se detiene y muestra el
-hash recibido:
+archivo. Para saber si el MIMP publicó otra versión:
 
-1. `npm run datos` con el hash nuevo copiado en `DIRECTORIO_SHA256` y la fecha de
-   publicación en `DIRECTORIO_FECHA`.
-2. Lee el informe: total, recuento por tipo, calidad de las coordenadas, centros
+1. `npm run datos -- --comprobar` descarga lo que hay hoy en la URL y dice si es la
+   versión anclada o, si no, qué hash y qué fecha poner en `package.json`.
+2. Con `DIRECTORIO_SHA256` y `DIRECTORIO_FECHA` actualizados, `npm run datos`
+   descarga la versión nueva, la verifica y la deja en `origenes/directorio/` en lugar
+   de la anterior. Confírmala en git junto con `package.json`.
+3. Lee el informe: total, recuento por tipo, calidad de las coordenadas, centros
    reubicados, excluidos con su motivo y **tipos sin criterio** (un servicio nuevo del
    MIMP queda fuera hasta que se decida en `scripts/lib/criterios.mjs`).
-3. `npm run build` y vuelve a aprobar las referencias visuales.
+4. `npm run build` y vuelve a aprobar las referencias visuales.
 
 La versión queda registrada en `public/data/version.json` y aparece en el pie de cada
 PDF, para que un mapa impreso siempre diga de qué corte de datos salió.
@@ -129,7 +136,7 @@ conserva la de la versión vigente; las anteriores quedan en el historial de git
 
 | Comando | Qué hace |
 |---|---|
-| `npm run datos` | Descarga y **verifica** el directorio de servicios |
+| `npm run datos` | Construye y **verifica** el directorio de servicios (`-- --comprobar` mira si el MIMP publicó otra versión) |
 | `npm run fuentes` | Descarga Poppins y Source Sans 3 con sus licencias |
 | `npm run geo` | Descarga la cartografía y construye el TopoJSON |
 | `npm run preparar` | Ejecuta los pasos anteriores que falten (`-- --forzar` rehace todo) |
@@ -151,6 +158,7 @@ src/estilo/   tokens.js — única definición de colores, tipografías y grosor
 public/       lo que se sirve tal cual (datos y tipografías, generados)
 referencias/  mapa de 2020 y logotipos que sirven de referencia
 muestras/     PDF de prueba que genera `npm run muestras` (no se versionan)
+origenes/     copia versionada del directorio del MIMP anclado (DIRECTORIO_SHA256)
 auditoria/    hoja de auditoría del directorio del MIMP, regenerada por `npm run datos`
 tests/        verificación de los PDF, regresión visual y la web frente a las muestras
 docs/         manual de uso y registro de decisiones cartográficas

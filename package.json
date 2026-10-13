@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Generador de mapas imprimibles (PDF vectorial) de los servicios del MIMP.",
-  "comentarioDirectorio": "Única fuente de los servicios: el Directorio Nacional de Servicios del MIMP, publicado en abierto. Su URL no cambia entre versiones, así que se ancla por el SHA-256 del archivo; DIRECTORIO_FECHA es la fecha de publicación de esa versión y se imprime en el pie. Si el MIMP publica otra versión, el build se detiene hasta que se revise y se actualicen los dos valores.",
+  "comentarioDirectorio": "Única fuente de los servicios: el Directorio Nacional de Servicios del MIMP, publicado en abierto. Su URL no cambia entre versiones, así que se ancla por el SHA-256 del archivo; DIRECTORIO_FECHA es la fecha de publicación de esa versión y se imprime en el pie. La versión anclada se versiona en origenes/directorio/ y el build la lee de ahí; para pasar a otra, npm run datos -- --comprobar da el hash y la fecha nuevos.",
   "DIRECTORIO_URL": "https://www.mimp.gob.pe/omep/Consolidado_Directorio_Nacional_2026.xlsx",
   "DIRECTORIO_SHA256": "bcd9d51a1008c2986e3b8eaf5b28ed6302133203785816f777a662328d7c3ca5",
   "DIRECTORIO_FECHA": "2026-09-25",
