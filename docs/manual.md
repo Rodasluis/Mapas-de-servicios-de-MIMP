@@ -22,11 +22,16 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    departamento entero; sin departamento, el Perú—.
 3. **Textos.** El subtítulo vacío significa *automático*: el campo muestra en gris el
    texto que se va a usar («Distrito de Breña»). Escribe sólo si quieres otro.
-4. **Tipos de servicio.** Arriba se elige el **estilo de íconos**: *Casa* (por
-   omisión), que señala cada centro con la punta como un alfiler, o *Círculo*, que se
-   centra en él. Cada tipo de la lista muestra su ícono en el estilo elegido.
-   Desmarcar tipos recalcula todo: los colores, la leyenda y los recuadros de zoom.
-5. **Recuadros de zoom.** Por omisión, *Ninguno*. Tres opciones: *Automáticos* (el motor amplía donde los
+4. **Estilo de íconos.** *Casa* (por omisión), que señala cada centro con la punta
+   como un alfiler, o *Círculo*, que se centra en él.
+5. **Tipos de servicio.** Las dos primeras casillas marcan o desmarcan de una vez los
+   servicios de un viceministerio: *Servicios del Viceministerio de la Mujer* y
+   *Servicios del Viceministerio de Poblaciones Vulnerables*. Debajo, la lista de los
+   tipos uno a uno, primero los de la Mujer y luego los de Poblaciones Vulnerables,
+   cada uno con su ícono en el estilo elegido. Si sólo hay marcados algunos tipos de un
+   viceministerio, su casilla queda a medias. Desmarcar tipos recalcula todo: los
+   colores, la leyenda y los recuadros de zoom.
+6. **Recuadros de zoom.** Por omisión, *Ninguno*. Tres opciones: *Automáticos* (el motor amplía donde los
    símbolos no caben), *Elegir zonas* o *Ninguno*. Con *Elegir zonas* aparecen tres
    selectores encadenados —departamento, provincia y distrito—: elige la zona y pulsa
    **Añadir zona**; se amplía el nivel más fino que hayas elegido. Repite para pedir
@@ -34,7 +39,7 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    depende del ámbito: en el mapa del Perú, departamentos o provincias; en el de un
    departamento, sus provincias o distritos; en el de una provincia, sus distritos. Un
    mapa distrital no tiene zonas que ampliar.
-6. **Generar PDF.**
+7. **Generar PDF.**
 
 ### Los cuatro ámbitos responden preguntas distintas
 

@@ -17,6 +17,7 @@ import { chromium } from 'playwright';
 import { RAIZ, abortar, titulo, peso, asegurarCarpeta } from './lib/comun.mjs';
 import { verificarArchivo, ptAmm } from '../tests/verificar-pdf.mjs';
 import { buscarSolapes } from '../src/motor/colisiones.js';
+import { ICONOS, VICEMINISTERIOS } from '../src/iconos/index.js';
 import { comprobarWebIgualQueMuestras } from '../tests/web-igual-que-muestras.mjs';
 
 const DESTINO = path.join(RAIZ, 'muestras');
@@ -155,6 +156,14 @@ const MUESTRAS = [
     hoja: { tamano: 'A4', orientacion: 'vertical' },
     textos: { subtitulo: undefined },
   },
+  /* Fase 14. Lo que marca cada casilla de viceministerio de la interfaz: sus tipos,
+     sacados del mismo catálogo que usa ella. */
+  ...Object.entries(VICEMINISTERIOS).map(([vm, nombre]) => ({
+    nombre: `nacional_A3_${vm}`,
+    hoja: { tamano: 'A3', orientacion: 'vertical' },
+    opciones: { tipos: Object.keys(ICONOS).filter((t) => ICONOS[t].viceministerio === vm) },
+    textos: { subtitulo: `Servicios del ${nombre}` },
+  })),
 ];
 
 const TEXTOS = {

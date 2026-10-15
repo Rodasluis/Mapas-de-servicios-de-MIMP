@@ -40,7 +40,7 @@ import { leerHoja } from './lib/xlsx.mjs';
 import { escribirLibro } from './lib/xlsx-escribir.mjs';
 import { crearUbicador } from './lib/ubicar.mjs';
 import { CRITERIOS, VARIANTES, CONFIDENCIAL } from './lib/criterios.mjs';
-import { tieneIcono } from '../src/iconos/index.js';
+import { tieneIcono, ICONOS, VICEMINISTERIOS } from '../src/iconos/index.js';
 
 const { DIRECTORIO_URL, DIRECTORIO_SHA256, DIRECTORIO_FECHA } = paquete();
 if (!DIRECTORIO_URL || !DIRECTORIO_SHA256 || !DIRECTORIO_FECHA) {
@@ -368,11 +368,15 @@ for (const a of auditoria) {
 }
 
 /* Todo tipo publicado necesita ícono y color: sin ellos no hay forma de dibujarlo ni
-   de ponerlo en la leyenda. */
+   de ponerlo en la leyenda. Y su viceministerio: sin él, la casilla de grupo de la
+   interfaz lo dejaría fuera sin que nadie lo note. */
 const conteoTipo = new Map();
 for (const c of centros) conteoTipo.set(c.tipo, (conteoTipo.get(c.tipo) || 0) + 1);
 for (const t of conteoTipo.keys()) {
   if (!tieneIcono(t)) errores.push(`«${t}» se publica pero no tiene ícono en todos los estilos de src/iconos/estilos.js.`);
+  if (!VICEMINISTERIOS[ICONOS[t]?.viceministerio]) {
+    errores.push(`«${t}» se publica pero no tiene viceministerio en src/iconos/catalogo.js.`);
+  }
 }
 for (const t of Object.keys(CRITERIOS).filter((k) => CRITERIOS[k].publica)) {
   if (!conteoTipo.has(t)) errores.push(`El criterio publica «${t}», pero el directorio no trae ningún registro publicable.`);
