@@ -11,7 +11,9 @@
  * y casi siempre se reimplementa peor.
  */
 import { TAMANOS, ORIENTACIONES, siglaDe, subtituloDe } from './config.js';
-import { dibujarIcono, ESTILOS, NOMBRES_ESTILO } from '../iconos/index.js';
+import {
+  dibujarIcono, ESTILOS, NOMBRES_ESTILO, ICONOS, VICEMINISTERIOS,
+} from '../iconos/index.js';
 
 const el = (etiqueta, atributos = {}, hijos = []) => {
   const nodo = document.createElement(etiqueta);
@@ -189,23 +191,71 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
 
   /* --------------------------- tipos de servicio ----------------------- */
   const casillasTipo = new Map();
-  const activos = () => [...casillasTipo.entries()].filter(([, c]) => c.checked).map(([t]) => t);
+  /* En el orden del catálogo, no en el de la lista: así la URL y el motor reciben los
+     tipos igual que antes de agruparlos por viceministerio. */
+  const activos = () => catalogo.tipos.filter((t) => casillasTipo.get(t).checked);
+
+  const vmDe = (tipo) => ICONOS[tipo]?.viceministerio;
+  const tiposDeVm = (vm) => catalogo.tipos.filter((t) => vmDe(t) === vm);
+
+  /* Casillas de grupo, una por viceministerio. No guardan estado propio: valen lo que
+     valgan las de sus tipos —marcada si están todas, a medias si sólo algunas— y al
+     pulsarlas marcan o desmarcan todos sus tipos de una vez. */
+  const casillasGrupo = new Map();
+  const sincronizarGrupos = () => {
+    for (const [vm, input] of casillasGrupo) {
+      const propios = tiposDeVm(vm);
+      const marcados = propios.filter((t) => casillasTipo.get(t).checked).length;
+      input.checked = marcados === propios.length;
+      input.indeterminate = marcados > 0 && marcados < propios.length;
+    }
+  };
+
+  const leerCasillas = () => {
+    const marcados = activos();
+    /* Ningún tipo marcado no es un mapa vacío: es «todos». Un mapa en blanco sin
+       explicación parece un fallo, y desmarcar el último es casi siempre un
+       descuido, no una intención. */
+    config.tipos = marcados.length === 0 || marcados.length === catalogo.tipos.length
+      ? null : marcados;
+    sincronizarGrupos();
+    emitir();
+  };
+
+  const listaGrupos = el('div', { clase: 'grupos-tipo' });
+  for (const [vm, nombre] of Object.entries(VICEMINISTERIOS)) {
+    const propios = tiposDeVm(vm);
+    if (!propios.length) continue;
+    const id = `tipos-${vm.toLowerCase()}`;
+    const input = el('input', { type: 'checkbox', id });
+    input.addEventListener('change', () => {
+      for (const t of propios) casillasTipo.get(t).checked = input.checked;
+      leerCasillas();
+    });
+    casillasGrupo.set(vm, input);
+    const total = propios.reduce((n, t) => n + (catalogo.conteo.get(t) || 0), 0);
+    listaGrupos.appendChild(el('label', { clase: 'casilla', for: id }, [
+      input,
+      el('span', { texto: `Servicios del ${nombre} (${total})` }),
+    ]));
+  }
+
+  /* La lista sigue el orden de los grupos —primero los tipos de un viceministerio,
+     luego los del otro— para que se vea qué marca cada casilla de grupo. Dentro de
+     cada uno, el del catálogo: de más a menos servicios. */
+  const posicionVm = (tipo) => {
+    const i = Object.keys(VICEMINISTERIOS).indexOf(vmDe(tipo));
+    return i < 0 ? Infinity : i;
+  };
+  const tiposEnLista = [...catalogo.tipos].sort((a, b) => posicionVm(a) - posicionVm(b));
 
   const listaTipos = el('div', { clase: 'lista-tipos' });
   const muestrasTipo = new Map();
-  for (const tipo of catalogo.tipos) {
+  for (const tipo of tiposEnLista) {
     const id = `tipo-${siglaDe(tipo).replace(/\W/g, '')}`;
     const input = el('input', { type: 'checkbox', id });
     input.checked = !config.tipos || config.tipos.includes(tipo);
-    input.addEventListener('change', () => {
-      const marcados = activos();
-      /* Ningún tipo marcado no es un mapa vacío: es «todos». Un mapa en blanco sin
-         explicación parece un fallo, y desmarcar el último es casi siempre un
-         descuido, no una intención. */
-      config.tipos = marcados.length === 0 || marcados.length === catalogo.tipos.length
-        ? null : marcados;
-      emitir();
-    });
+    input.addEventListener('change', leerCasillas);
     casillasTipo.set(tipo, input);
     const muestra = muestraIcono(tipo, config.iconos);
     muestrasTipo.set(tipo, muestra);
@@ -216,9 +266,11 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     ]));
   }
 
-  /* Estilo de los íconos. Botones de opción, como el modo de zoom, cada uno con una
-     muestra del ícono del CEM en ese estilo: se elige viendo lo que se elige. */
-  const grupoEstilo = el('fieldset', { clase: 'opciones', id: 'iconos-estilo' }, [
+  /* Estilo de los íconos, en su propia sección encima de los tipos: cambia el aspecto
+     de todos los servicios, no cuáles se muestran. Botones de opción, como el modo de
+     zoom, cada uno con una muestra del ícono del CEM en ese estilo: se elige viendo lo
+     que se elige. */
+  const bloqueEstilo = el('fieldset', { clase: 'grupo', id: 'iconos-estilo' }, [
     el('legend', { texto: 'Estilo de íconos' }),
   ]);
   for (const nombre of NOMBRES_ESTILO) {
@@ -237,7 +289,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
       }
       emitir();
     });
-    grupoEstilo.appendChild(el('label', { clase: 'casilla', for: input.id }, [
+    bloqueEstilo.appendChild(el('label', { clase: 'casilla', for: input.id }, [
       input,
       muestraIcono('Centro Emergencia Mujer y Familia', nombre),
       el('span', { texto: ESTILOS[nombre].nombre }),
@@ -247,15 +299,16 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   const marcarTodos = (valor) => {
     for (const c of casillasTipo.values()) c.checked = valor;
     config.tipos = valor ? null : [];
+    sincronizarGrupos();
     emitir();
   };
+  sincronizarGrupos();
   const bloqueTipos = grupo('Tipos de servicio', [
-    grupoEstilo,
     el('p', { clase: 'acciones-linea' }, [
       botón('Todos', () => marcarTodos(true)),
       botón('Ninguno', () => marcarTodos(false)),
     ]),
-    listaTipos,
+    el('div', { clase: 'caja-tipos' }, [listaGrupos, listaTipos]),
   ]);
 
   /* ------------------------------- capas ------------------------------- */
@@ -489,7 +542,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   const progreso = el('p', { clase: 'progreso', id: 'progreso', role: 'status', 'aria-live': 'polite' });
 
   contenedor.append(
-    bloqueHoja, bloqueTextos, bloqueTipos, bloqueZoom, bloqueCapas, bloquePiezas,
+    bloqueHoja, bloqueTextos, bloqueEstilo, bloqueTipos, bloqueZoom, bloqueCapas, bloquePiezas,
     el('div', { clase: 'pie-panel' }, [botonGenerar, progreso]),
   );
 

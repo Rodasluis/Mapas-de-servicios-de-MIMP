@@ -11,7 +11,7 @@
  * base, como un alfiler, y el círculo se centra en él. Para eso está cajaEnPunto().
  */
 import { el, grupo, num } from '../motor/svg.js';
-import { ICONOS } from './catalogo.js';
+import { ICONOS, VICEMINISTERIOS } from './catalogo.js';
 import { ESTILOS, ESTILO_POR_DEFECTO } from './estilos.js';
 
 /** Lado de la caja de dibujo de estilos.js. */
@@ -27,7 +27,7 @@ export const TAMANO_MINIMO_MM = 3;
  */
 const TRAZO_MINIMO_MM = 0.1;
 
-export { ICONOS, ESTILOS, ESTILO_POR_DEFECTO };
+export { ICONOS, VICEMINISTERIOS, ESTILOS, ESTILO_POR_DEFECTO };
 
 /** El estilo pedido, o el de por defecto si no existe. */
 export const estiloDe = (nombre) => ESTILOS[nombre] || ESTILOS[ESTILO_POR_DEFECTO];
