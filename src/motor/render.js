@@ -35,7 +35,9 @@ import {
   agregarCentros, claseDe, clasesUsadas, repartirIconos, medirApinamiento,
   CLASES_POR_DEFECTO,
 } from './servicios.js';
-import { normalizarAmbito, encajeDeTanteo, cargarAmbito } from './ambito.js';
+import {
+  normalizarAmbito, encajeDeTanteo, cargarAmbito, divisionPara,
+} from './ambito.js';
 import { mapaDeUbicacion, resaltePara } from './localizador.js';
 import { bloqueLeyenda } from './leyenda.js';
 import { bloqueTabla, numeroDeCentro, esDudosa } from './tabla.js';
@@ -110,6 +112,9 @@ export function componerNacional(opciones) {
 export async function componer({ hoja, cargador, ambito, textos = {}, opciones = {} }) {
   const inicio = Date.now();
   const elAmbito = normalizarAmbito(ambito);
+  /* Hasta qué unidad se parte el ámbito. Una división que el ámbito no admite —viene
+     de la URL, que cualquiera puede escribir— cae en la de por omisión. */
+  const division = divisionPara(elAmbito, opciones.division);
   const [indice, version, logos, metricas, centrosJson] = await Promise.all([
     cargador.indice(), cargador.version(), cargador.logos(), cargador.metricas(),
     cargador.centros(),
@@ -157,7 +162,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
   const escalaTanteo = medirEscala(crearProyeccion(tanteo, marco, HOLGURA_MM), marco);
   const nivel = nivelPara(escalaTanteo.denominador, indice.niveles);
 
-  const plan = await cargarAmbito({ ambito: elAmbito, cargador, nivel });
+  const plan = await cargarAmbito({ ambito: elAmbito, cargador, nivel, division });
   const contexto = await cargador.contexto();
   const proyeccion = crearProyeccion(plan.encaje, marco, HOLGURA_MM);
   const escala = medirEscala(proyeccion, marco);
@@ -173,6 +178,17 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
   });
   const clasesVisibles = clasesUsadas(agregado, clases);
 
+  /* Los íconos se agrupan por la unidad del color salvo que el plan declare otra: el
+     nacional partido en distritos colorea cada distrito y agrupa por provincia. */
+  const unidadesSimbolos = plan.simbolosPor ? plan.simbolosPor.unidades : plan.unidades;
+  const agregadoSimbolos = plan.simbolosPor
+    ? agregarCentros(centrosJson, {
+      clave: plan.simbolosPor.clave,
+      tiposActivos,
+      pertenece: plan.perteneceAlAmbito,
+    })
+    : agregado;
+
   /* Un tipo en los datos sin ícono en el catálogo se dibujaría como un hueco, así que
      se detiene aquí con el nombre exacto que falta. */
   const cobertura = comprobarCobertura(agregado.tipos);
@@ -184,10 +200,12 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
 
   /* Geometría proyectada a milímetros, que sirve a la vez para dibujar y para saber
      qué partes de la hoja están ocupadas por tierra. */
-  const anillos = anillosPorRasgo(proyeccion, [
-    ...plan.unidades.features, ...plan.intermedios.features, ...plan.contorno.features,
-    ...plan.exterior.features, ...contexto.features,
-  ]);
+  /* Sin repetir rasgos: las unidades de los íconos suelen ser las del color o las
+     intermedias, y proyectar dos veces las 196 provincias no aporta nada. */
+  const anillos = anillosPorRasgo(proyeccion, [...new Set([
+    ...plan.unidades.features, ...unidadesSimbolos.features, ...plan.intermedios.features,
+    ...plan.contorno.features, ...plan.exterior.features, ...contexto.features,
+  ])]);
   const ocupacion = crearOcupacion(hoja.anchoMm, hoja.altoMm);
   /* «Territorio» es lo que un bloque del layout no debe tapar, y eso es el ÁMBITO, no
      todo el Perú: en un mapa de Cusco, poner la leyenda sobre Madre de Dios no estorba
@@ -248,7 +266,8 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       });
     } else {
       simbolos = dibujarSimbolos({
-        unidades: plan.unidades, agregado, anillos, estiloIconos, marco, medidor, factor, tamanoIcono,
+        unidades: unidadesSimbolos, agregado: agregadoSimbolos, anillos, estiloIconos, marco,
+        medidor, factor, tamanoIcono,
       });
     }
   }
@@ -368,7 +387,9 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     seleccion: opciones.zoom?.seleccion || [],
     grupos: simbolos.grupos,
     umbral: UMBRAL_APINAMIENTO,
-    unidades: plan.unidades,
+    /* Las zonas se arman con las unidades de los ÍCONOS, que son las que se estorban y
+       piden ampliación; el color de dentro del recuadro, con las del coropletas. */
+    unidades: unidadesSimbolos,
     /* Cómo se agrupan las unidades en zonas ampliables y cómo se llama cada una. En
        el mapa del país las provincias se agrupan por departamento; en el de un
        departamento, los distritos por provincia. */
@@ -383,12 +404,14 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       paises: contexto.features.filter((f) => f.properties.capa === 'pais'),
       exterior: plan.exterior.features,
       unidades: plan.unidades.features,
+      unidadesSimbolos: plan.simbolosPor ? unidadesSimbolos.features : null,
       intermedios: plan.intermedios.features,
       contorno: plan.contorno.features,
     },
     trazos: plan.trazos,
     anillos,
-    agregado,
+    agregado: agregadoSimbolos,
+    agregadoColor: agregado,
     clases,
     rampa: opciones.rampa || rampaNaranjas,
     estiloIconos,
@@ -505,6 +528,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
         nombre: plan.nombre,
         descripcion: plan.descripcion,
         agregacion: plan.agregacion,
+        division,
+        /* La unidad por la que se agrupan los íconos, que es en la que se informa el
+           apiñamiento. Sólo difiere de la del color en el nacional por distritos. */
+        agrupacionSimbolos: plan.simbolosPor ? plan.simbolosPor.nombre : plan.agregacion,
         simbolos: plan.simbolos,
       },
       nivel,

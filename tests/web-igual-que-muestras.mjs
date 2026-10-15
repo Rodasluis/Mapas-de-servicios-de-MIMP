@@ -89,6 +89,17 @@ export const CASOS = [
       desmarcadas: [],
     },
   },
+  /* Fase 15: el nivel de división viaja en la URL, se ve en su selector y llega al PDF. */
+  {
+    nombre: 'el país por departamentos, A4',
+    parametros: { hoja: 'A4', division: 'departamento', fecha: FECHA },
+    esperado: {
+      paginaMm: MEDIDAS.A4,
+      controles: { tamano: 'A4', division: 'departamento' },
+      marcadas: ['pieza-leyenda'],
+      desmarcadas: [],
+    },
+  },
   /* Fase 6: el ámbito viaja en la URL y tiene que llegar al PDF igual que lo demás. */
   {
     nombre: 'departamento de Cusco en A3',

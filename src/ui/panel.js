@@ -10,7 +10,9 @@
  * `role="button"` obliga a reimplementar el foco, las flechas y el anuncio del estado,
  * y casi siempre se reimplementa peor.
  */
-import { TAMANOS, ORIENTACIONES, siglaDe, subtituloDe } from './config.js';
+import {
+  TAMANOS, ORIENTACIONES, siglaDe, subtituloDe, divisionesDe, divisionPorDefecto,
+} from './config.js';
 import {
   dibujarIcono, ESTILOS, NOMBRES_ESTILO, ICONOS, VICEMINISTERIOS,
 } from '../iconos/index.js';
@@ -48,6 +50,18 @@ const muestraIcono = (tipo, estilo) => {
     tipo, estilo, x: 5, y: 10, tamanoMm: 10,
   })}</svg>`;
   return span;
+};
+
+/**
+ * Nombre de cada nivel de división. Se dice «hasta» porque lo que se ve es acumulativo:
+ * partir el país en distritos dibuja también provincias y departamentos, y llamarlo
+ * sólo «Distritos» haría pensar que los demás desaparecen. Escribirlos todos
+ * («Departamentos, provincias y distritos») no cabía en el ancho del panel.
+ */
+const NOMBRES_DIVISION = {
+  departamento: 'Hasta departamentos',
+  provincia: 'Hasta provincias',
+  distrito: 'Hasta distritos',
 };
 
 const casilla = (id, etiqueta, activa, alCambiar) => {
@@ -121,6 +135,33 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     return { nivel: 'distrito', id: selDistrito.value };
   };
 
+  /* Nivel de división. Sus opciones dependen del ámbito: el país admite tres, un
+     departamento dos y una provincia sólo distritos, así que en ella el selector queda
+     deshabilitado con su único valor a la vista. En el mapa distrital no hay nada por
+     debajo que elegir. */
+  const selDivision = el('select', { id: 'division' });
+  const llenarDivision = () => {
+    const opciones = divisionesDe(config.ambito);
+    selDivision.innerHTML = '';
+    if (!opciones.length) {
+      selDivision.appendChild(el('option', { value: '', texto: 'No aplica en un mapa distrital' }));
+      selDivision.disabled = true;
+      return;
+    }
+    for (const d of opciones) {
+      selDivision.appendChild(el('option', { value: d, texto: NOMBRES_DIVISION[d] }));
+    }
+    selDivision.value = config.division || divisionPorDefecto(config.ambito);
+    selDivision.disabled = opciones.length < 2;
+  };
+  selDivision.addEventListener('change', () => {
+    config.division = selDivision.value === divisionPorDefecto(config.ambito) ? null : selDivision.value;
+    /* La división cambia qué se puede ampliar: el país por departamentos no tiene
+       provincias que poner en un recuadro. */
+    llenarZonas();
+    emitir();
+  });
+
   const departamentoInicial = config.ambito.id ? config.ambito.id.slice(0, 2) : '';
   const provinciaInicial = config.ambito.id && config.ambito.id.length >= 4
     ? config.ambito.id.slice(0, 4) : '';
@@ -150,6 +191,11 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
 
   const alCambiarAmbito = () => {
     config.ambito = ambitoActual();
+    /* Cada ámbito empieza con su división de siempre. Arrastrar la anterior daría
+       resultados que nadie ha pedido: «departamentos» no existe dentro de Cusco, y
+       «provincias» en el país es lo normal, no una elección. */
+    config.division = null;
+    llenarDivision();
     sincronizarSubtitulo();
     llenarZonas();
     emitir();
@@ -177,7 +223,11 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     el('p', { clase: 'campo' }, [
       el('label', { for: 'ambito-distrito', texto: 'Distrito' }), selDistrito,
     ]),
+    el('p', { clase: 'campo' }, [
+      el('label', { for: 'division', texto: 'Nivel de división' }), selDivision,
+    ]),
   ]);
+  llenarDivision();
 
   /* ------------------------------ textos ------------------------------- */
   const bloqueTextos = grupo('Textos', [
@@ -397,12 +447,24 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
    *
    * `minimo` es la longitud mínima del ubigeo elegido: ampliar Cusco entero dentro del
    * mapa de Cusco repetiría el mapa.
+   *
+   * La división recorta lo más fino que se puede pedir, porque un recuadro amplía las
+   * unidades por las que se agrupan los íconos: el país por departamentos no tiene
+   * provincias que ampliar, ni un departamento por provincias, distritos. El país por
+   * distritos sigue agrupando por provincia, así que admite lo mismo que el normal.
    */
   const reglasZona = () => {
     const a = ambitoActual();
-    if (a.nivel === 'nacional') return { dep: null, prov: null, distrito: false, minimo: 2 };
-    if (a.nivel === 'departamento') return { dep: a.id, prov: null, distrito: true, minimo: 4 };
-    if (a.nivel === 'provincia') return { dep: a.id.slice(0, 2), prov: a.id, distrito: true, minimo: 6 };
+    const division = config.division || divisionPorDefecto(a);
+    if (a.nivel === 'nacional') {
+      return { dep: null, prov: null, provincia: division !== 'departamento', distrito: false, minimo: 2 };
+    }
+    if (a.nivel === 'departamento') {
+      return { dep: a.id, prov: null, provincia: true, distrito: division === 'distrito', minimo: 4 };
+    }
+    if (a.nivel === 'provincia') {
+      return { dep: a.id.slice(0, 2), prov: a.id, provincia: true, distrito: true, minimo: 6 };
+    }
     return null;
   };
 
@@ -410,6 +472,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   const zonaValida = (id, r = reglasZona()) => Boolean(r)
     && id.length >= r.minimo
     && (r.distrito || id.length <= 4)
+    && (r.provincia || id.length <= 2)
     && id.startsWith(r.prov || r.dep || '');
 
   const llenarZonaDep = () => {
@@ -436,6 +499,11 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
       selZonaProv.disabled = true;
       return;
     }
+    if (r && !r.provincia) {
+      selZonaProv.appendChild(opcion('', 'No disponible al dividir por departamentos'));
+      selZonaProv.disabled = true;
+      return;
+    }
     selZonaProv.appendChild(opcion('', !r || !ccdd ? '—' : r.minimo <= 2 ? 'Todo el departamento' : '— Elige una provincia —'));
     if (r && ccdd) {
       for (const p of catalogo.provincias.filter((x) => x.ccdd === ccdd)) selZonaProv.appendChild(opcion(p.id, p.nombre));
@@ -448,7 +516,8 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     const ccpp = selZonaProv.value;
     selZonaDist.innerHTML = '';
     if (r && !r.distrito) {
-      selZonaDist.appendChild(opcion('', 'No disponible en el mapa nacional'));
+      selZonaDist.appendChild(opcion('', ambitoActual().nivel === 'nacional'
+        ? 'No disponible en el mapa nacional' : 'No disponible al dividir por provincias'));
       selZonaDist.disabled = true;
       return;
     }

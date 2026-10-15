@@ -19,7 +19,7 @@ import { aPdf, lectorTtfNavegador } from './motor/pdf.js';
 import { crearPanel } from './ui/panel.js';
 import { crearVista } from './ui/vista.js';
 import {
-  desdeParametros, aParametros, aLlamadasDelMotor, nombreDeArchivo, NOMBRE_NIVEL,
+  desdeParametros, aParametros, aLlamadasDelMotor, nombreDeArchivo, NOMBRE_NIVEL, TAMANOS,
 } from './ui/config.js';
 
 const BASE = import.meta.env.BASE_URL;
@@ -227,8 +227,17 @@ async function arrancar() {
     const s = meta.servicios;
 
     if (s.gruposApinados.length > 12) {
-      avisos.push(`En ${meta.hoja} los símbolos se estorban en ${s.gruposApinados.length} provincias.`
+      const unidades = NOMBRE_NIVEL[meta.ambito.agrupacionSimbolos] || 'unidades';
+      avisos.push(`En ${meta.hoja} los símbolos se estorban en ${s.gruposApinados.length} ${unidades}.`
         + ' Usa una hoja mayor o filtra tipos de servicio.');
+    }
+    /* El país partido en distritos se dibuja en cualquier hoja, pero por debajo de A1
+       muchos distritos de la sierra miden menos de dos milímetros y sus límites se
+       juntan en manchas grises. Se dice antes de que alguien lo descubra impreso. */
+    if (meta.ambito.nivel === 'nacional' && meta.ambito.division === 'distrito'
+      && TAMANOS.indexOf(cfg.hoja.tamano) < TAMANOS.indexOf('A1')) {
+      avisos.push(`El mapa del Perú por distritos se lee bien desde A1. En ${cfg.hoja.tamano} muchos`
+        + ' distritos miden menos de 2 mm y sus límites se juntan.');
     }
     const omitidos = meta.etiquetas.omitidos.length;
     if (omitidos) {

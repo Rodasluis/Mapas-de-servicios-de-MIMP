@@ -164,6 +164,27 @@ const MUESTRAS = [
     opciones: { tipos: Object.keys(ICONOS).filter((t) => ICONOS[t].viceministerio === vm) },
     textos: { subtitulo: `Servicios del ${nombre}` },
   })),
+  /* Fase 15. El nivel de división. El país por departamentos en la hoja más pequeña,
+     que es donde esa lámina tiene sentido; por distritos en A1, la menor en la que se
+     leen, con el color por distrito y los íconos todavía por provincia; y Cusco por
+     provincias, el mapa departamental sin distritos. */
+  {
+    nombre: 'nacional_A4_departamentos',
+    hoja: { tamano: 'A4', orientacion: 'vertical' },
+    opciones: { division: 'departamento' },
+  },
+  {
+    nombre: 'nacional_A1_distritos',
+    hoja: { tamano: 'A1', orientacion: 'vertical' },
+    opciones: { division: 'distrito' },
+  },
+  {
+    nombre: 'departamento_Cusco_A3_provincias',
+    ambito: '08',
+    hoja: { tamano: 'A3', orientacion: 'vertical' },
+    opciones: { division: 'provincia' },
+    textos: { subtitulo: undefined },
+  },
 ];
 
 const TEXTOS = {
