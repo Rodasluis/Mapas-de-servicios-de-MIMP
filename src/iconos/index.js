@@ -1,14 +1,13 @@
 /**
- * Dibujo de los íconos de servicio, en cualquiera de los estilos de estilos.js.
+ * Dibujo de los íconos de servicio (estilos.js; hoy un solo estilo, el círculo).
  *
  * El tamaño se pide en milímetros REALES de impresión, no en proporción a la hoja: un
  * ícono de 4 mm mide 4 mm en A4 y en A0. Lo que cambia con la hoja es cuántos caben.
  *
- * Todas las funciones de dibujo reciben la CAJA del ícono —centro horizontal y base—,
- * sea cual sea el estilo; así los grupos de íconos, la leyenda y la hoja de íconos no
- * tienen que saber qué estilo se usa. Lo único que cambia con el estilo es dónde cae
- * esa caja cuando el ícono marca un punto del mapa: la casa señala el punto con su
- * base, como un alfiler, y el círculo se centra en él. Para eso está cajaEnPunto().
+ * Todas las funciones de dibujo reciben la CAJA del ícono —centro horizontal y base—;
+ * así los grupos de íconos, la leyenda y la hoja de íconos no tienen que saber cómo es
+ * el ícono. Lo único que depende del estilo es dónde cae esa caja cuando el ícono
+ * marca un punto del mapa: el círculo se centra en él. Para eso está cajaEnPunto().
  */
 import { el, grupo, num } from '../motor/svg.js';
 import { ICONOS, VICEMINISTERIOS } from './catalogo.js';
@@ -22,8 +21,8 @@ export const TAMANO_MINIMO_MM = 3;
 
 /**
  * Grosor mínimo de un trazo impreso. Los grosores del diseño son proporcionales al
- * ícono y a 3 mm el contorno de la casa bajaría a 0,06 mm, que una imprenta offset no
- * garantiza.
+ * ícono y a 3 mm el contorno de los ojos del CARPAM bajaría a 0,04 mm, que una
+ * imprenta offset no garantiza.
  */
 const TRAZO_MINIMO_MM = 0.1;
 
@@ -49,8 +48,8 @@ export function comprobarCobertura(tiposEnDatos) {
 }
 
 /**
- * Base de la caja de un ícono que marca el punto (x, y): el punto mismo para la casa,
- * medio ícono por debajo para el círculo.
+ * Base de la caja de un ícono que marca el punto (x, y): medio ícono por debajo para
+ * el círculo, que se centra en él; el punto mismo para un estilo anclado por la base.
  */
 export function cajaEnPunto(estilo, y, tamanoMm) {
   return estiloDe(estilo).anclaje === 'centro' ? y + tamanoMm / 2 : y;
@@ -64,7 +63,7 @@ export function cajaEnPunto(estilo, y, tamanoMm) {
  * @param {number} opciones.x          milímetros, centro horizontal de la caja
  * @param {number} opciones.y          milímetros, base de la caja
  * @param {number} opciones.tamanoMm   lado de la caja
- * @param {string} [opciones.estilo]   'casa' o 'circulo'
+ * @param {string} [opciones.estilo]   nombre del estilo; hoy sólo 'circulo'
  */
 export function dibujarIcono({
   tipo, x, y, tamanoMm, estilo = ESTILO_POR_DEFECTO, id,

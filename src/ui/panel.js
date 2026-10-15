@@ -13,9 +13,7 @@
 import {
   TAMANOS, ORIENTACIONES, siglaDe, subtituloDe, divisionesDe, divisionPorDefecto,
 } from './config.js';
-import {
-  dibujarIcono, ESTILOS, NOMBRES_ESTILO, ICONOS, VICEMINISTERIOS,
-} from '../iconos/index.js';
+import { dibujarIcono, ICONOS, VICEMINISTERIOS } from '../iconos/index.js';
 
 const el = (etiqueta, atributos = {}, hijos = []) => {
   const nodo = document.createElement(etiqueta);
@@ -41,13 +39,12 @@ const campoTexto = (id, etiqueta, valor, alCambiar) => {
 
 /**
  * Muestra de un ícono para el panel: el mismo SVG que va al mapa, a 18 px. La caja
- * se amplía un poco porque algunos pictogramas salen de la insignia (las ondas del
- * SAU en el estilo círculo).
+ * se amplía un poco porque algunos pictogramas salen del círculo (las ondas del SAU).
  */
-const muestraIcono = (tipo, estilo) => {
+const muestraIcono = (tipo) => {
   const span = el('span', { clase: 'muestra-icono', 'aria-hidden': 'true' });
   span.innerHTML = `<svg viewBox="-1 -1 12 12" width="18" height="18">${dibujarIcono({
-    tipo, estilo, x: 5, y: 10, tamanoMm: 10,
+    tipo, x: 5, y: 10, tamanoMm: 10,
   })}</svg>`;
   return span;
 };
@@ -300,49 +297,16 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   const tiposEnLista = [...catalogo.tipos].sort((a, b) => posicionVm(a) - posicionVm(b));
 
   const listaTipos = el('div', { clase: 'lista-tipos' });
-  const muestrasTipo = new Map();
   for (const tipo of tiposEnLista) {
     const id = `tipo-${siglaDe(tipo).replace(/\W/g, '')}`;
     const input = el('input', { type: 'checkbox', id });
     input.checked = !config.tipos || config.tipos.includes(tipo);
     input.addEventListener('change', leerCasillas);
     casillasTipo.set(tipo, input);
-    const muestra = muestraIcono(tipo, config.iconos);
-    muestrasTipo.set(tipo, muestra);
     listaTipos.appendChild(el('label', { clase: 'casilla', for: id }, [
       input,
-      muestra,
+      muestraIcono(tipo),
       el('span', { texto: `${tipo} (${catalogo.conteo.get(tipo) || 0})` }),
-    ]));
-  }
-
-  /* Estilo de los íconos, en su propia sección encima de los tipos: cambia el aspecto
-     de todos los servicios, no cuáles se muestran. Botones de opción, como el modo de
-     zoom, cada uno con una muestra del ícono del CEM en ese estilo: se elige viendo lo
-     que se elige. */
-  const bloqueEstilo = el('fieldset', { clase: 'grupo', id: 'iconos-estilo' }, [
-    el('legend', { texto: 'Estilo de íconos' }),
-  ]);
-  for (const nombre of NOMBRES_ESTILO) {
-    const input = el('input', {
-      type: 'radio', name: 'iconos-estilo', id: `iconos-estilo-${nombre}`, value: nombre,
-    });
-    input.checked = config.iconos === nombre;
-    input.addEventListener('change', () => {
-      if (!input.checked) return;
-      config.iconos = nombre;
-      /* Las muestras de la lista de tipos pasan al estilo nuevo. */
-      for (const [tipo, anterior] of muestrasTipo) {
-        const nueva = muestraIcono(tipo, nombre);
-        anterior.replaceWith(nueva);
-        muestrasTipo.set(tipo, nueva);
-      }
-      emitir();
-    });
-    bloqueEstilo.appendChild(el('label', { clase: 'casilla', for: input.id }, [
-      input,
-      muestraIcono('Centro Emergencia Mujer y Familia', nombre),
-      el('span', { texto: ESTILOS[nombre].nombre }),
     ]));
   }
 
@@ -611,7 +575,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   const progreso = el('p', { clase: 'progreso', id: 'progreso', role: 'status', 'aria-live': 'polite' });
 
   contenedor.append(
-    bloqueHoja, bloqueTextos, bloqueEstilo, bloqueTipos, bloqueZoom, bloqueCapas, bloquePiezas,
+    bloqueHoja, bloqueTextos, bloqueTipos, bloqueZoom, bloqueCapas, bloquePiezas,
     el('div', { clase: 'pie-panel' }, [botonGenerar, progreso]),
   );
 

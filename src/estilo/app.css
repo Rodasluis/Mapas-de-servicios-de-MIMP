@@ -120,7 +120,7 @@ input[type="text"]:disabled, select:disabled { background: #f4f5f7; color: var(-
   cursor: pointer;
 }
 .casilla input { margin-top: .2rem; flex: none; }
-/* Muestra del ícono en la lista de tipos y en el selector de estilo. */
+/* Muestra del ícono en la lista de tipos. */
 .muestra-icono { flex: none; display: inline-flex; margin-top: .05rem; }
 .muestra-icono svg { display: block; }
 

@@ -10,7 +10,7 @@ con las fuentes incrustadas, de modo que se puede imprimir en A0 —o en 2A0 y 4
 que aparezca un solo píxel.
 
 > **En producción** en **https://rodasluis.github.io/Mapas-de-servicios-de-MIMP/**.
-> Cuatro ámbitos, hojas de A4 a 4A0 y dos estilos de íconos. El repositorio se comprueba
+> Cuatro ámbitos, hojas de A4 a 4A0 y nivel de división elegible. El repositorio se comprueba
 > solo: regresión visual de los PDF, integridad de los totales, vectorialidad y
 > rendimiento, en cada pull request y antes de cada despliegue.
 
@@ -243,31 +243,29 @@ grande.
 
 ### Los íconos
 
-Hay **dos estilos**, y quien prepara el mapa elige uno en el panel (o con `?iconos=circulo`
-en la URL):
+Los servicios se dibujan con **círculos** de color y pictograma blanco, centrados en el
+punto que representan. Hasta la Fase 15 había además un estilo casa, a elegir en el
+panel; se retiró en la Fase 16 a pedido del área usuaria, y un enlace antiguo con
+`?iconos=casa` o `?iconos=circulo` abre hoy el mismo mapa que sin el parámetro.
 
-| Estilo | Forma | Cómo marca un punto |
-|---|---|---|
-| **Casa** (por omisión) | insignia con forma de casa, contorno oscuro y pictograma blanco | con la base, como un alfiler |
-| **Círculo** | círculo de color con pictograma blanco | centrado en el punto |
-
-Los dos salen del archivo de diseño entregado por el MIMP («iconos de servicios.ai»):
-la geometría y los colores se extrajeron de sus dos mesas de trabajo y se transcribieron
-a `src/iconos/estilos.js`, que es la **única definición** de la forma y el color de cada
-tipo. No se redibujó nada salvo dos excepciones, anotadas allí: el «!» del SAU en el
-estilo casa venía como un carácter de texto y se convirtió en trazado, y **Educadores de
-Calle**, que no está en el archivo, se adaptó a los dos estilos como ícono
-**provisional** hasta que diseño entregue el suyo.
+Salen del archivo de diseño entregado por el MIMP («iconos (1) PROPFINAL.ai», 15 de
+octubre de 2026): la geometría y los colores se extrajeron de su mesa de círculos y se
+transcribieron a `src/iconos/estilos.js`, que es la **única definición** de la forma y el
+color de cada tipo. No se redibujó nada. Respecto del archivo anterior cambiaron tres
+íconos —el escudo del UPE, la familia del CEDIF y la figura del Mi60+, que pierde el
+bastón—, y `estilos.js` anota también las diferencias del archivo que no son de diseño
+y se dejaron como estaban. **Educadores de Calle** sigue sin estar en el archivo y lleva
+un ícono **provisional** hasta que diseño entregue el suyo.
 
 El tamaño se fija en milímetros reales de impresión, con un mínimo de 3 mm, y ningún
 trazo baja de 0,1 mm, que es lo que una imprenta offset garantiza.
-`muestras/iconos.pdf` imprime los dos estilos a 3, 4,5 y 6 mm junto a su tipo, sigla y
-color: es a la vez la documentación de la correspondencia y la comprobación de que a
-tamaño real siguen distinguiéndose.
+`muestras/iconos.pdf` imprime cada ícono a 3, 4,5 y 6 mm junto a su tipo, sigla y color:
+es a la vez la documentación de la correspondencia y la comprobación de que a tamaño
+real siguen distinguiéndose.
 
-Un aviso sobre la paleta del estilo círculo, que es la del diseño: CAR Básico, CAR de
-Urgencia y Plataforma de Atención llevan tres azules casi iguales (#0066c5, #0069cc y
-#0067c7) y se distinguen sólo por el pictograma.
+Un aviso sobre la paleta, que es la del diseño: CAR Básico, CAR de Urgencia y
+Plataforma de Atención llevan tres azules casi iguales (#0066c5, #0069cc y #0067c7) y se
+distinguen sólo por el pictograma.
 
 ### Los recuadros de zoom
 
@@ -347,8 +345,8 @@ todo lo demás, y es de lectura, no de implementación.
 En ámbito provincial ya no se agrega nada. El mapa nacional responde «qué servicios
 llegan a esta provincia»; a escala de provincia esa pregunta ya está contestada y la que
 queda es «dónde está cada uno», que sólo se responde poniendo cada centro en su
-coordenada real. La casa se ancla por su punta, como un alfiler, y el círculo por su
-centro: en los dos casos lo que señala el punto es el ícono, no un borde del dibujo.
+coordenada real. El círculo se centra en ella: lo que señala el punto es el ícono, no
+un borde del dibujo.
 
 Los recuadros de zoom dibujan **lo mismo** que el mapa principal: si éste pinta cada
 centro en su sitio, el recuadro también. Un zoom que agregara lo que el mapa desagrega
@@ -772,7 +770,7 @@ son una transformación CSS por encima, así que mirar el mapa de cerca no puede
 lo que se exporta.
 
 **La configuración vive en la URL.** Cada ajuste que se aparta de lo normal se escribe
-en la barra de direcciones con nombres legibles —`?hoja=A2&tipos=CEM&iconos=circulo`—,
+en la barra de direcciones con nombres legibles —`?hoja=A2&tipos=CEM&division=departamento`—,
 nunca con índices que se desplacen al añadir un tipo ni con JSON en base64. Una
 configuración por omisión deja la dirección limpia, de modo que cada parámetro que
 aparece señala una decisión que alguien tomó, y el enlace se puede corregir a mano,

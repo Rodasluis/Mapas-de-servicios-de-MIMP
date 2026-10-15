@@ -11,7 +11,7 @@
  * omisión deja la dirección limpia, y cada parámetro que aparece señala una decisión
  * que alguien tomó.
  */
-import { ICONOS, ESTILOS, ESTILO_POR_DEFECTO } from '../iconos/index.js';
+import { ICONOS } from '../iconos/index.js';
 import { fechaDelMapa } from '../motor/fecha.js';
 import { CLASES_POR_DEFECTO } from '../motor/servicios.js';
 import { CAPAS_POR_DEFECTO, PIEZAS_POR_DEFECTO } from '../motor/render.js';
@@ -39,8 +39,6 @@ export const POR_DEFECTO = {
     elaboradoPor: '',
   },
   tipos: null, // null es «todos»
-  /* Estilo de los íconos: 'casa' o 'circulo' (src/iconos/estilos.js). */
-  iconos: ESTILO_POR_DEFECTO,
   capas: { ...CAPAS_POR_DEFECTO },
   piezas: { ...PIEZAS_POR_DEFECTO },
   /* Sin recuadros de zoom por omisión: se piden. Un recuadro automático tapa parte de
@@ -84,7 +82,6 @@ export function aParametros(config) {
   if (config.tipos && config.tipos.length) {
     p.set('tipos', config.tipos.map(siglaDe).join(','));
   }
-  if (config.iconos !== POR_DEFECTO.iconos) p.set('iconos', config.iconos);
   const apagadas = (objeto, defecto) => Object.keys(defecto).filter((k) => objeto[k] === false);
   const capas = apagadas(config.capas, CAPAS_POR_DEFECTO);
   if (capas.length) p.set('sinCapas', capas.join(','));
@@ -133,8 +130,8 @@ export function desdeParametros(p) {
     config.tipos = tipos.length ? tipos : null;
   }
 
-  const iconos = p.get('iconos');
-  if (iconos && ESTILOS[iconos]) config.iconos = iconos;
+  /* «iconos=casa» o «iconos=circulo» de los enlaces anteriores a la Fase 16 se
+     ignoran: sólo queda el círculo, y el enlace sigue abriendo el mismo mapa. */
 
   for (const [clave, objeto, defecto] of [
     ['sinCapas', config.capas, CAPAS_POR_DEFECTO],
@@ -213,7 +210,6 @@ export function aOpcionesDelMotor(config) {
        omisión llega al motor exactamente igual que antes de existir la opción. */
     ...(config.division ? { division: config.division } : {}),
     tipos: config.tipos,
-    iconos: config.iconos,
     clases: config.clases,
     capas: config.capas,
     piezas: config.piezas,
