@@ -365,6 +365,36 @@ que acabaría rasterizado en el PDF.
 En la web los recuadros no se dibujan por omisión: se piden, automáticos
 (`?zoom=auto`) o eligiendo las zonas.
 
+### El nivel de división
+
+La regla es la de **por omisión**, no la única. El **nivel de división**
+(`?division=` en la URL, `DIVISIONES` en `ambito.js`) deja partir el ámbito más grueso
+o más fino; se ofrecen sólo los niveles que hay por debajo de él, y un enlace sin
+`division` sale igual que antes de existir la opción.
+
+| Ámbito | División | Coropletas | Símbolos | Límite intermedio | Rótulos |
+|---|---|---|---|---|---|
+| Perú | `departamento` | por departamento | por departamento | — | departamentos |
+| Perú | `provincia` (omisión) | por provincia | por provincia | — | departamentos y provincias |
+| Perú | `distrito` | **por distrito** | **por provincia** | provincias | departamentos y provincias |
+| Departamento | `provincia` | por provincia | por provincia | — | provincias |
+| Departamento | `distrito` (omisión) | por distrito | por distrito | provincias | provincias y distritos |
+
+El Perú por distritos es el único caso en que el color y los íconos van por unidades
+distintas: el plan lo declara con `simbolosPor`. Agrupar los íconos por distrito daría
+432 grupos sobre piezas de dos o tres milímetros en la sierra, que se pisarían todos;
+por provincia siguen diciendo qué servicios llegan a cada sitio, y el color dice
+exactamente qué distritos tienen alguno. Los 1.893 distritos se cargan al mismo nivel
+de detalle que el resto del mapa —los 25 archivos por departamento—, para que sus
+bordes coincidan con los de provincia y departamento, y con un trazo propio
+(`limiteDistritalNacional`: el mínimo imprimible, en gris claro) para que la sierra no
+se vuelva una mancha. En A1 la lámina pesa 5,6 MB y tarda unos 23 s; por debajo de A1
+la interfaz avisa de que muchos distritos miden menos de 2 mm.
+
+Los recuadros de zoom arman sus zonas con las unidades de los **íconos**, que son las
+que se estorban: el Perú por departamentos amplía departamentos, y el Perú por
+distritos amplía departamentos o provincias, como el normal.
+
 ### Lo que rodea al ámbito
 
 El territorio de alrededor se dibuja siempre, atenuado y con su nombre. Un departamento

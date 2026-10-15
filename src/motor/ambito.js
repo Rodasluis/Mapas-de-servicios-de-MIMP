@@ -24,6 +24,27 @@ export const NIVELES = ['nacional', 'departamento', 'provincia', 'distrito'];
 export const NACIONAL = { nivel: 'nacional', id: null };
 
 /**
+ * Nivel de división: hasta qué unidad se parte el ámbito, que es la que colorea el
+ * coropletas. Se ofrecen sólo los niveles que hay POR DEBAJO del ámbito, de grueso a
+ * fino, y el de por omisión es el de la regla de arriba —un nivel por debajo—, así que
+ * un mapa que no pide división sale igual que antes de que existiera la opción.
+ *
+ * El mapa distrital no tiene nada por debajo: su única unidad es él mismo.
+ */
+export const DIVISIONES = {
+  nacional: { opciones: ['departamento', 'provincia', 'distrito'], porDefecto: 'provincia' },
+  departamento: { opciones: ['provincia', 'distrito'], porDefecto: 'distrito' },
+  provincia: { opciones: ['distrito'], porDefecto: 'distrito' },
+  distrito: { opciones: [], porDefecto: null },
+};
+
+/** La división pedida si el ámbito la admite; si no, la de por omisión. */
+export function divisionPara(ambito, pedida) {
+  const d = DIVISIONES[ambito.nivel] || DIVISIONES.nacional;
+  return d.opciones.includes(pedida) ? pedida : d.porDefecto;
+}
+
+/**
  * Normaliza lo que llega de la interfaz o de una muestra.
  *
  * Acepta `'15'` y `'1501'` sueltos además del objeto, porque el ubigeo ya dice de qué
@@ -81,18 +102,23 @@ export async function encajeDeTanteo(ambito, cargador) {
  * Devuelve siempre las mismas claves, con listas vacías donde no apliquen, para que
  * quien dibuja no tenga que preguntar en qué ámbito está.
  *
+ * `unidades` y `claveCentro` son la unidad del COLOR. Los íconos se agrupan por la
+ * misma unidad salvo que el plan declare `simbolosPor`, que hoy sólo lo hace el
+ * nacional partido en distritos (ver cargarNacional).
+ *
  * @returns {{
  *   unidades, intermedios, contorno, exterior, encaje,
- *   agregacion: 'provincia'|'distrito'|'ninguna',
- *   simbolos: 'agregado'|'individual',
+ *   agregacion: 'departamento'|'provincia'|'distrito',
+ *   simbolos: 'agregado'|'individual'|'numerado',
+ *   simbolosPor?: {unidades, clave: (centro) => string, nombre: string},
  *   claveCentro: (centro) => string,
  *   perteneceAlAmbito: (centro) => boolean,
  *   rotulos: Array<{nivel, rasgos, prioridad, mayusculas, exterior}>,
  * }}
  */
-export async function cargarAmbito({ ambito, cargador, nivel }) {
-  if (ambito.nivel === 'nacional') return cargarNacional({ cargador, nivel });
-  if (ambito.nivel === 'departamento') return cargarDepartamento({ ambito, cargador, nivel });
+export async function cargarAmbito({ ambito, cargador, nivel, division = divisionPara(ambito) }) {
+  if (ambito.nivel === 'nacional') return cargarNacional({ cargador, nivel, division });
+  if (ambito.nivel === 'departamento') return cargarDepartamento({ ambito, cargador, nivel, division });
   if (ambito.nivel === 'provincia') return cargarProvincia({ ambito, cargador, nivel });
   return cargarDistrito({ ambito, cargador, nivel });
 }
@@ -100,32 +126,88 @@ export async function cargarAmbito({ ambito, cargador, nivel }) {
 /* ------------------------------- nacional -------------------------------- */
 
 /**
- * El país: se colorea por provincia y se rotulan departamentos y provincias.
+ * El país, partido por departamento, por provincia (lo normal) o por distrito.
  * Fuera del Perú sólo hay países vecinos, que los trae la capa de contexto.
+ *
+ * - Por DEPARTAMENTO es la lámina más limpia: veinticinco grupos de íconos en
+ *   unidades grandes, buena para una hoja pequeña o una presentación.
+ * - Por DISTRITO el color dice exactamente qué distritos tienen servicio, pero los
+ *   íconos siguen agrupados por PROVINCIA. Por distrito serían 432 grupos sobre la
+ *   sierra, en piezas de dos o tres milímetros: se pisarían todos y el mapa dejaría de
+ *   decir qué servicios llegan a cada sitio. Los nombres de distrito no se escriben:
+ *   en el mapa del país no caben.
  */
-async function cargarNacional({ cargador, nivel }) {
-  const [departamentos, provincias] = await Promise.all([
-    cargador.departamentos(nivel), cargador.provincias(nivel),
-  ]);
-  return {
+async function cargarNacional({ cargador, nivel, division }) {
+  const departamentos = await cargador.departamentos(nivel);
+  const comun = {
     nombre: 'Perú',
     descripcion: 'Ámbito nacional',
     jerarquia: '',
-    unidades: provincias,
-    intermedios: coleccion([]),
     contorno: departamentos,
     exterior: coleccion([]),
     encaje: departamentos,
+    simbolos: 'agregado',
+    perteneceAlAmbito: () => true,
+  };
+  const rotuloDepartamentos = {
+    nivel: 'departamento', rasgos: departamentos.features, prioridad: 1, mayusculas: true,
+  };
+
+  if (division === 'departamento') {
+    return {
+      ...comun,
+      unidades: departamentos,
+      intermedios: coleccion([]),
+      /* La zona de un departamento es él mismo. Sin el corte de Lima: con
+         departamentos por unidad, «Lima Metropolitana y Callao» no es una de ellas. */
+      zonas: zonasPor(2, departamentos.features),
+      /* La unidad y el contorno son la misma línea: se traza una vez. */
+      trazos: { unidad: null, intermedio: null, contorno: 'limiteDepartamental' },
+      agregacion: 'departamento',
+      claveCentro: (c) => c.ccdd,
+      rotulos: [rotuloDepartamentos],
+    };
+  }
+
+  const provincias = await cargador.provincias(nivel);
+  const rotulos = [
+    rotuloDepartamentos,
+    { nivel: 'provincia', rasgos: provincias.features, prioridad: 2, mayusculas: false },
+  ];
+
+  if (division === 'distrito') {
+    /* Los distritos se publican por departamento; el país es la suma de los
+       veinticinco archivos, al mismo nivel de detalle que el resto del mapa para que
+       sus bordes coincidan con los de provincia y departamento. */
+    const porDepartamento = await Promise.all(
+      departamentos.features.map((f) => cargador.distritosDe(f.properties.ubigeo, nivel)),
+    );
+    return {
+      ...comun,
+      unidades: coleccion(porDepartamento.flatMap((c) => c.features)),
+      intermedios: provincias,
+      simbolosPor: { unidades: provincias, clave: (c) => c.ccpp, nombre: 'provincia' },
+      zonas: zonasPor(2, departamentos.features, true),
+      trazos: {
+        unidad: 'limiteDistritalNacional',
+        intermedio: 'limiteProvincialSobreDistritos',
+        contorno: 'limiteDepartamental',
+      },
+      agregacion: 'distrito',
+      claveCentro: (c) => c.ubigeo,
+      rotulos,
+    };
+  }
+
+  return {
+    ...comun,
+    unidades: provincias,
+    intermedios: coleccion([]),
     zonas: zonasPor(2, departamentos.features, true),
     trazos: { unidad: 'limiteProvincial', intermedio: null, contorno: 'limiteDepartamental' },
     agregacion: 'provincia',
-    simbolos: 'agregado',
     claveCentro: (c) => c.ccpp,
-    perteneceAlAmbito: () => true,
-    rotulos: [
-      { nivel: 'departamento', rasgos: departamentos.features, prioridad: 1, mayusculas: true },
-      { nivel: 'provincia', rasgos: provincias.features, prioridad: 2, mayusculas: false },
-    ],
+    rotulos,
   };
 }
 
@@ -137,18 +219,47 @@ async function cargarNacional({ cargador, nivel }) {
  * Las provincias siguen dibujándose como límite intermedio aunque ya no sean la unidad
  * del color. Sin ellas, ochenta o cien distritos forman una retícula sin jerarquía en
  * la que no se distingue a qué provincia pertenece cada uno.
+ *
+ * Partido por PROVINCIA, en cambio, es el mapa nacional en pequeño: las provincias son
+ * la unidad, se rotulan y agrupan los íconos, y los distritos no se cargan.
  */
-async function cargarDepartamento({ ambito, cargador, nivel }) {
+async function cargarDepartamento({ ambito, cargador, nivel, division }) {
   const ccdd = ambito.id;
   const [departamentos, provincias, distritos] = await Promise.all([
     cargador.departamentos(nivel),
     cargador.provinciasDe(ccdd, nivel),
-    cargador.distritosDe(ccdd, nivel),
+    division === 'provincia' ? null : cargador.distritosDe(ccdd, nivel),
   ]);
   const propio = departamentos.features.find((f) => f.properties.ubigeo === ccdd);
   if (!propio) throw new Error(`No hay geometría del departamento ${ccdd}.`);
 
   const vecinos = departamentos.features.filter((f) => f.properties.ubigeo !== ccdd);
+  const rotuloVecinos = { nivel: 'exterior', rasgos: vecinos, prioridad: 3, mayusculas: true, exterior: true };
+
+  if (division === 'provincia') {
+    return {
+      nombre: propio.properties.nombre,
+      descripcion: `Departamento de ${propio.properties.nombre}`,
+      jerarquia: '',
+      unidades: provincias,
+      intermedios: coleccion([]),
+      contorno: coleccion([propio]),
+      exterior: coleccion(vecinos),
+      encaje: coleccion([propio]),
+      /* La zona de una provincia es ella misma, como la de un distrito en el mapa
+         provincial. */
+      zonas: zonasPor(4, provincias.features),
+      trazos: { unidad: 'limiteProvincial', intermedio: null, contorno: 'limiteNacional' },
+      agregacion: 'provincia',
+      simbolos: 'agregado',
+      claveCentro: (c) => c.ccpp,
+      perteneceAlAmbito: (c) => c.ccdd === ccdd,
+      rotulos: [
+        { nivel: 'provincia', rasgos: provincias.features, prioridad: 1, mayusculas: true },
+        rotuloVecinos,
+      ],
+    };
+  }
 
   return {
     nombre: propio.properties.nombre,
@@ -177,7 +288,7 @@ async function cargarDepartamento({ ambito, cargador, nivel }) {
       /* Los departamentos vecinos se rotulan aunque estén fuera: son la referencia que
          dice hacia dónde sigue el territorio. Van los últimos en prioridad porque
          ninguno de ellos debe quitarle el sitio a un nombre de dentro del ámbito. */
-      { nivel: 'exterior', rasgos: vecinos, prioridad: 3, mayusculas: true, exterior: true },
+      rotuloVecinos,
     ],
   };
 }

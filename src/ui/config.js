@@ -15,6 +15,7 @@ import { ICONOS, ESTILOS, ESTILO_POR_DEFECTO } from '../iconos/index.js';
 import { fechaDelMapa } from '../motor/fecha.js';
 import { CLASES_POR_DEFECTO } from '../motor/servicios.js';
 import { CAPAS_POR_DEFECTO, PIEZAS_POR_DEFECTO } from '../motor/render.js';
+import { DIVISIONES } from '../motor/ambito.js';
 
 export const TAMANOS = ['A4', 'A3', 'A2', 'A1', 'A0', '2A0', '4A0'];
 export const ORIENTACIONES = ['vertical', 'horizontal'];
@@ -23,6 +24,10 @@ export const POR_DEFECTO = {
   hoja: { tamano: 'A1', orientacion: 'vertical' },
   /* Ámbito: nacional, o un ubigeo de departamento (2 dígitos) o provincia (4). */
   ambito: { nivel: 'nacional', id: null },
+  /* Nivel de división: 'departamento', 'provincia' o 'distrito'. null es «la del
+     ámbito» (motor/ambito.js, DIVISIONES), que es lo que se usaba antes de poder
+     elegirla: el país por provincias y un departamento por distritos. */
+  division: null,
   textos: {
     titulo: 'Ubicación de los servicios que brinda el MIMP',
     /* Vacío significa AUTOMÁTICO: lo rellena el motor con la descripción del ámbito.
@@ -66,6 +71,9 @@ export function aParametros(config) {
      «?ambito=1501» se lee y se corrige a mano sin tener que explicar también que es
      una provincia. */
   if (config.ambito && config.ambito.id) p.set('ambito', config.ambito.id);
+  if (config.division && config.division !== divisionPorDefecto(config.ambito)) {
+    p.set('division', config.division);
+  }
   if (config.hoja.tamano !== POR_DEFECTO.hoja.tamano) p.set('hoja', config.hoja.tamano);
   if (config.hoja.orientacion !== POR_DEFECTO.hoja.orientacion) {
     p.set('orientacion', config.hoja.orientacion === 'horizontal' ? 'h' : 'v');
@@ -103,6 +111,13 @@ export function desdeParametros(p) {
   if (/^[0-9]{2}$/.test(ambito)) config.ambito = { nivel: 'departamento', id: ambito };
   else if (/^[0-9]{4}$/.test(ambito)) config.ambito = { nivel: 'provincia', id: ambito };
   else if (/^[0-9]{6}$/.test(ambito)) config.ambito = { nivel: 'distrito', id: ambito };
+
+  /* Sólo una división que el ámbito admita: «division=departamento» en el enlace de un
+     mapa de Cusco no significa nada y se ignora. */
+  const division = p.get('division');
+  if (divisionesDe(config.ambito).includes(division)) {
+    config.division = division === divisionPorDefecto(config.ambito) ? null : division;
+  }
 
   const hoja = p.get('hoja');
   if (hoja && TAMANOS.includes(hoja)) config.hoja.tamano = hoja;
@@ -154,6 +169,12 @@ export function desdeParametros(p) {
   return config;
 }
 
+/** Divisiones que admite un ámbito, de la más gruesa a la más fina. */
+export const divisionesDe = (ambito) => (DIVISIONES[ambito?.nivel] || DIVISIONES.nacional).opciones;
+
+/** La división que usa un ámbito cuando nadie elige otra. */
+export const divisionPorDefecto = (ambito) => (DIVISIONES[ambito?.nivel] || DIVISIONES.nacional).porDefecto;
+
 /**
  * Subtítulo que le corresponde a un ámbito.
  *
@@ -188,6 +209,9 @@ export function etiquetarClase(c) {
 /** Lo que el motor espera, a partir de la configuración de la interfaz. */
 export function aOpcionesDelMotor(config) {
   return {
+    /* Sin división se omite, y el motor usa la del ámbito: así una configuración por
+       omisión llega al motor exactamente igual que antes de existir la opción. */
+    ...(config.division ? { division: config.division } : {}),
     tipos: config.tipos,
     iconos: config.iconos,
     clases: config.clases,
@@ -231,6 +255,8 @@ export function aLlamadasDelMotor(config) {
 /** Nombre de archivo descriptivo: ámbito, tamaño y fecha. */
 export function nombreDeArchivo(config, fecha = config.fecha ? new Date(config.fecha) : new Date()) {
   const partes = [config.ambito && config.ambito.id ? `ubigeo${config.ambito.id}` : 'peru'];
+  // Sólo si no es la de siempre: «peru_distritos» se distingue de «peru» a la vista.
+  if (config.division) partes.push(`${config.division}s`);
   if (config.tipos && config.tipos.length === 1) partes.push(siglaDe(config.tipos[0]).toLowerCase());
   else if (config.tipos && config.tipos.length) partes.push(`${config.tipos.length}tipos`);
   partes.push(`${config.hoja.tamano}-${config.hoja.orientacion === 'horizontal' ? 'h' : 'v'}`);

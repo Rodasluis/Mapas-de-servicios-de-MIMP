@@ -20,6 +20,15 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
 2. **Ámbito.** Los tres selectores están encadenados: departamento, luego provincia,
    luego distrito. Déjalos en blanco para subir de nivel —sin provincia se imprime el
    departamento entero; sin departamento, el Perú—.
+
+   **Nivel de división** dice hasta qué unidad se parte el ámbito, que es la que se
+   colorea. El Perú se puede dividir *hasta departamentos* (la lámina más limpia, buena
+   para A4 o una presentación), *hasta provincias* (lo normal) o *hasta distritos*. Por
+   distritos, el color dice exactamente qué distritos tienen servicio, pero los íconos
+   siguen agrupados por provincia y los nombres de distrito no se escriben. Se lee
+   bien desde A1; en hojas menores la aplicación avisa. Un departamento se divide
+   *hasta provincias* o *hasta distritos* (lo normal); una provincia, sólo hasta
+   distritos. Al cambiar de ámbito, el nivel vuelve al de siempre.
 3. **Textos.** El subtítulo vacío significa *automático*: el campo muestra en gris el
    texto que se va a usar («Distrito de Breña»). Escribe sólo si quieres otro.
 4. **Estilo de íconos.** *Casa* (por omisión), que señala cada centro con la punta
@@ -38,7 +47,9 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    varios recuadros y quítalos de la lista con **Quitar**. Lo que se puede elegir
    depende del ámbito: en el mapa del Perú, departamentos o provincias; en el de un
    departamento, sus provincias o distritos; en el de una provincia, sus distritos. Un
-   mapa distrital no tiene zonas que ampliar.
+   mapa distrital no tiene zonas que ampliar. La división también cuenta: el Perú
+   hasta departamentos sólo amplía departamentos, y un departamento hasta provincias,
+   sólo provincias.
 7. **Generar PDF.**
 
 ### Los cuatro ámbitos responden preguntas distintas
@@ -49,6 +60,9 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
 | Departamento | Cómo se reparten dentro del departamento | Lo mismo, por distrito |
 | Provincia | Dónde está cada centro | Cada centro en su coordenada |
 | Distrito | **Cuáles son**, con nombre y dirección | Cada centro numerado, más una tabla |
+
+La tabla describe la división de siempre; el **Nivel de división** cambia la unidad
+del color en el Perú y en un departamento.
 
 ### La escala sólo vale si imprimes al 100 %
 

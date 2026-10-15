@@ -63,6 +63,13 @@ export const color = {
      una retícula plana de cien piezas iguales. */
   limiteProvincialDestacado: '#1f1f1f',
   limiteDistrital: '#9a9a9a',
+  /* El mapa NACIONAL partido en distritos. Son 1.893 y en una A1 muchos miden dos o
+     tres milímetros: con el gris del mapa departamental, la sierra se volvía una mancha.
+     El distrito baja al trazo mínimo y a un gris claro, y la provincia sube lo justo
+     para seguir ordenando la lectura por encima de él, sin competir con el
+     departamento. */
+  limiteDistritalNacional: '#c4c4c4',
+  limiteProvincialSobreDistritos: '#6a6a6a',
 
   /* Tinta de los rótulos. */
   tinta: '#1a1a1a',
@@ -133,6 +140,8 @@ export const trazoMm = {
   limiteProvincial: 0.15,
   limiteProvincialDestacado: 0.4,
   limiteDistrital: 0.1,
+  limiteDistritalNacional: 0.08,
+  limiteProvincialSobreDistritos: 0.2,
   costa: 0.25,
   paisVecino: 0.15,
   marco: 0.6,
