@@ -28,7 +28,8 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    siguen agrupados por provincia y los nombres de distrito no se escriben. Se lee
    bien desde A1; en hojas menores la aplicación avisa. Un departamento se divide
    *hasta provincias* o *hasta distritos* (lo normal); una provincia, sólo hasta
-   distritos. Al cambiar de ámbito, el nivel vuelve al de siempre.
+   distritos. Al cambiar de ámbito, el nivel vuelve al de siempre. En cualquier nivel,
+   la clase más baja que tenga el mapa se pinta con el tono más claro.
 3. **Textos.** El subtítulo vacío significa *automático*: el campo muestra en gris el
    texto que se va a usar («Distrito de Breña»). Escribe sólo si quieres otro.
 4. **Tipos de servicio.** Las dos primeras casillas marcan o desmarcan de una vez los
@@ -47,7 +48,8 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    departamento, sus provincias o distritos; en el de una provincia, sus distritos. Un
    mapa distrital no tiene zonas que ampliar. La división también cuenta: el Perú
    hasta departamentos sólo amplía departamentos, y un departamento hasta provincias,
-   sólo provincias.
+   sólo provincias. Hasta distritos —el Perú o un departamento—, el recuadro no repite
+   los grupos con sus cifras: pone cada centro en su sitio.
 6. **Generar PDF.**
 
 ### Los cuatro ámbitos responden preguntas distintas

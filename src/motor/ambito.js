@@ -106,10 +106,16 @@ export async function encajeDeTanteo(ambito, cargador) {
  * misma unidad salvo que el plan declare `simbolosPor`, que hoy sólo lo hace el
  * nacional partido en distritos (ver cargarNacional).
  *
+ * `simbolosZoom` es cómo dibujan los íconos los recuadros de zoom cuando no es como el
+ * mapa principal. Partido hasta distritos —el país o un departamento—, el recuadro
+ * pone cada centro en su sitio en vez de repetir el grupo con sus cifras: el mapa da el
+ * reparto y el recuadro, que tiene la escala para hacerlo, dice dónde está cada uno.
+ *
  * @returns {{
  *   unidades, intermedios, contorno, exterior, encaje,
  *   agregacion: 'departamento'|'provincia'|'distrito',
  *   simbolos: 'agregado'|'individual'|'numerado',
+ *   simbolosZoom?: 'individual',
  *   simbolosPor?: {unidades, clave: (centro) => string, nombre: string},
  *   claveCentro: (centro) => string,
  *   perteneceAlAmbito: (centro) => boolean,
@@ -187,6 +193,7 @@ async function cargarNacional({ cargador, nivel, division }) {
       unidades: coleccion(porDepartamento.flatMap((c) => c.features)),
       intermedios: provincias,
       simbolosPor: { unidades: provincias, clave: (c) => c.ccpp, nombre: 'provincia' },
+      simbolosZoom: 'individual',
       zonas: zonasPor(2, departamentos.features, true),
       trazos: {
         unidad: 'limiteDistritalNacional',
@@ -280,6 +287,7 @@ async function cargarDepartamento({ ambito, cargador, nivel, division }) {
     },
     agregacion: 'distrito',
     simbolos: 'agregado',
+    simbolosZoom: 'individual',
     claveCentro: (c) => c.ubigeo,
     perteneceAlAmbito: (c) => c.ccdd === ccdd,
     rotulos: [

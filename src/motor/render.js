@@ -178,6 +178,16 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
   });
   const clasesVisibles = clasesUsadas(agregado, clases);
 
+  /* La rampa empieza en el tono más claro para la clase más baja que el mapa use. El
+     Perú por departamentos no tiene ninguno con menos de 4 tipos de servicio: con la
+     rampa fija salía entero en los tres tonos oscuros, y al pasar de provincias a
+     departamentos el mapa parecía otro. Se desplaza la rampa, no se reparte: las
+     distancias entre clases se conservan —un hueco sigue viéndose como un salto— y
+     un mapa cuya clase más baja ya es la primera sale exactamente igual que antes. */
+  const rampaBase = opciones.rampa || rampaNaranjas;
+  const desfase = clasesVisibles.length ? clasesVisibles[0] : 0;
+  const rampa = rampaBase.map((_, i) => rampaBase[Math.max(0, i - desfase)]);
+
   /* Los íconos se agrupan por la unidad del color salvo que el plan declare otra: el
      nacional partido en distritos colorea cada distrito y agrupa por provincia. */
   const unidadesSimbolos = plan.simbolosPor ? plan.simbolosPor.unidades : plan.unidades;
@@ -331,7 +341,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       estiloIconos,
       medidor,
       factor,
-      rampa: opciones.rampa || rampaNaranjas,
+      rampa,
       tamanoIconoMm: Math.min(5, tamanoIcono),
       marco,
       ocupacion,
@@ -395,8 +405,9 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
        departamento, los distritos por provincia. */
     zonas: plan.zonas,
     /* El recuadro dibuja lo mismo que el mapa principal: si éste pinta cada centro en
-       su sitio, el zoom también. */
-    modoSimbolos: plan.simbolos,
+       su sitio, el zoom también. La excepción la declara el ámbito: partido hasta
+       distritos, el recuadro desagrega lo que el mapa acumula (ver ambito.js). */
+    modoSimbolos: plan.simbolosZoom || plan.simbolos,
     centros: agregado.centros,
     /* Las mismas capas que dibuja el mapa, para que el recuadro sea un recorte
        ampliado y no una isla sobre el mar. */
@@ -413,7 +424,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     agregado: agregadoSimbolos,
     agregadoColor: agregado,
     clases,
-    rampa: opciones.rampa || rampaNaranjas,
+    rampa,
     estiloIconos,
     medidor,
     factor,
@@ -483,7 +494,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     plan,
     agregado,
     clases,
-    rampa: opciones.rampa || rampaNaranjas,
+    rampa,
     contexto,
     ruta,
     marco,
