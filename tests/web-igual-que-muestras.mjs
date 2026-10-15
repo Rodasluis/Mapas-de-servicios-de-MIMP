@@ -78,17 +78,6 @@ export const CASOS = [
       desmarcadas: [],
     },
   },
-  /* Fase 12: el estilo de íconos se elige en la web y llega al PDF. */
-  {
-    nombre: 'íconos en círculo, A3',
-    parametros: { hoja: 'A3', iconos: 'circulo', fecha: FECHA },
-    esperado: {
-      paginaMm: MEDIDAS.A3,
-      controles: { tamano: 'A3', 'iconos-estilo': 'circulo' },
-      marcadas: ['pieza-leyenda'],
-      desmarcadas: [],
-    },
-  },
   /* Fase 15: el nivel de división viaja en la URL, se ve en su selector y llega al PDF. */
   {
     nombre: 'el país por departamentos, A4',

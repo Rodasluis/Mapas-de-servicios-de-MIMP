@@ -43,7 +43,7 @@ import { bloqueLeyenda } from './leyenda.js';
 import { bloqueTabla, numeroDeCentro, esDudosa } from './tabla.js';
 import { construirRecuadros, maximoPorFormato, UMBRAL_APINAMIENTO } from './zoom.js';
 import {
-  dibujarIcono, comprobarCobertura, cajaEnPunto, ESTILOS, ESTILO_POR_DEFECTO, TAMANO_MINIMO_MM,
+  dibujarIcono, comprobarCobertura, cajaEnPunto, ESTILO_POR_DEFECTO, TAMANO_MINIMO_MM,
 } from '../iconos/index.js';
 import { poloDeInaccesibilidad, polosDeInaccesibilidad, puntoEnAnillos } from './ocupacion.js';
 import { crearIndice } from './colisiones.js';
@@ -119,9 +119,9 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     cargador.indice(), cargador.version(), cargador.logos(), cargador.metricas(),
     cargador.centros(),
   ]);
-  /* Estilo de los íconos (casa o círculo). Uno desconocido cae en el de por defecto
-     en vez de romper la lámina: viene de la URL, que cualquiera puede escribir. */
-  const estiloIconos = ESTILOS[opciones.iconos] ? opciones.iconos : ESTILO_POR_DEFECTO;
+  /* Un solo estilo de íconos, el círculo (src/iconos/estilos.js). Ya no se elige: un
+     enlace antiguo con ?iconos=casa sale igual que uno sin el parámetro. */
+  const estiloIconos = ESTILO_POR_DEFECTO;
 
   /* Filtro de tipos. null es «todos»; un conjunto vacío no dibujaría nada, así que se
      trata como todos y se anota, en vez de devolver un mapa en blanco sin explicación. */
@@ -1007,8 +1007,8 @@ function dibujarSimbolos({
  * provincia»; a escala de provincia esa pregunta ya está contestada y la que queda es
  * «dónde está cada uno», que sólo se responde poniendo cada centro en su sitio.
  *
- * El ícono se ancla por su punta, no por su centro: la insignia se dibuja encima del
- * punto, como un alfiler, de modo que lo que señala es la coordenada y no el dibujo.
+ * El círculo se centra en la coordenada: lo que señala el punto es el ícono, no un
+ * borde del dibujo.
  *
  * No se rotulan aquí. A esta escala varios centros comparten manzana y el nombre de
  * cada uno multiplicaría por cuatro la tinta sobre la misma superficie; la
@@ -1035,8 +1035,8 @@ function dibujarCentros({
        el símbolo al pie de la lámina en vez de quedarse sobre el mapa. */
     if (x < marco.x || x > marco.x + marco.ancho || y < marco.y || y > marco.y + marco.alto) continue;
 
-    /* Base de la caja del ícono: el punto mismo para la casa, que lo señala como un
-       alfiler; medio ícono más abajo para el círculo, que se centra en él. */
+    /* Base de la caja del ícono: medio ícono más abajo del punto, para que el círculo
+       se centre en él. */
     const base = cajaEnPunto(estiloIconos, y, tamanoIcono);
     piezas.push(dibujarIcono({
       tipo: c.tipo,

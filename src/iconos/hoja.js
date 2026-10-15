@@ -1,11 +1,10 @@
 /**
- * Hoja de referencia de los íconos: tipo → pictograma, sigla y color, en los dos
- * estilos.
+ * Hoja de referencia de los íconos: tipo → pictograma, sigla y color.
  *
  * Es la documentación de la correspondencia, pero impresa y a tamaño real, que es la
  * única forma de comprobar lo que de verdad importa: que a 3 mm —el tamaño al que
  * aparecen en un mapa nacional apretado— cada tipo se sigue distinguiendo de los
- * demás, en un estilo y en el otro.
+ * demás. Si vuelve a haber más de un estilo, cada uno ocupa sus columnas.
  */
 import { crearHoja } from '../motor/hoja.js';
 import { color, ptAmm } from '../estilo/tokens.js';
@@ -39,6 +38,8 @@ export function componerHojaDeIconos({ centros, medidor }) {
   const colNombre = x0 + 2 + NOMBRES_ESTILO.length * anchoEstilo + 2;
   const colColor = NOMBRES_ESTILO.map((_, i) => x0 + hoja.util.ancho - 38 + i * 19);
   const colSigla = colColor[0] - 15;
+  /* Con un solo estilo no se rotula: «Círculo» sobre la única columna no dice nada. */
+  const varios = NOMBRES_ESTILO.length > 1;
 
   const piezas = [
     rect({ x: 0, y: 0, ancho: hoja.anchoMm, alto: hoja.altoMm }, { fill: color.fondoHoja }),
@@ -46,7 +47,7 @@ export function componerHojaDeIconos({ centros, medidor }) {
       x: x0, y: hoja.util.y + ptAmm(eTitulo.pt), fill: color.tinta,
       'font-family': eTitulo.familia, 'font-size': ptAmm(eTitulo.pt), 'font-weight': 700,
     }),
-    texto(`${tipos.length} tipos · ${NOMBRES_ESTILO.length} estilos a elegir en la interfaz`
+    texto(`${tipos.length} tipos${varios ? ` · ${NOMBRES_ESTILO.length} estilos a elegir en la interfaz` : ''}`
       + ' · tamaños reales de impresión', {
       x: x0, y: hoja.util.y + ptAmm(eTitulo.pt) + 4, fill: color.tintaSuave,
       'font-family': eDato.familia, 'font-size': ptAmm(eDato.pt),
@@ -57,17 +58,19 @@ export function componerHojaDeIconos({ centros, medidor }) {
   const yEstilo = hoja.util.y + 18;
   const yCabecera = yEstilo + 4;
   NOMBRES_ESTILO.forEach((nombre, i) => {
-    piezas.push(texto(ESTILOS[nombre].nombre, {
-      x: colEstilo[i], y: yEstilo, fill: color.tinta,
-      'font-family': eCab.familia, 'font-size': ptAmm(eCab.pt * 1.1), 'font-weight': 600,
-    }));
+    if (varios) {
+      piezas.push(texto(ESTILOS[nombre].nombre, {
+        x: colEstilo[i], y: yEstilo, fill: color.tinta,
+        'font-family': eCab.familia, 'font-size': ptAmm(eCab.pt * 1.1), 'font-weight': 600,
+      }));
+    }
     TAMANOS.forEach((t, j) => {
       piezas.push(texto(`${String(t).replace('.', ',')} mm`, {
         x: colEstilo[i] + PASO_MM * (j + 0.5), y: yCabecera, 'text-anchor': 'middle',
         fill: color.tintaSuave, 'font-family': eCab.familia, 'font-size': ptAmm(eCab.pt * 0.9),
       }, { medidor, estilo: { ...eCab, pt: eCab.pt * 0.9 } }));
     });
-    piezas.push(texto(`Color ${ESTILOS[nombre].nombre.toLowerCase()}`, {
+    piezas.push(texto(varios ? `Color ${ESTILOS[nombre].nombre.toLowerCase()}` : 'Color', {
       x: colColor[i], y: yCabecera, fill: color.tintaSuave,
       'font-family': eCab.familia, 'font-size': ptAmm(eCab.pt), 'font-weight': 600,
     }));

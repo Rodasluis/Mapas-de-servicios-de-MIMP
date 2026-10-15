@@ -136,20 +136,6 @@ const MUESTRAS = [
     opciones: { tipos: ['Educadores de Calle', 'Hogares de Refugio Temporal - HRT'] },
     textos: { subtitulo: 'Educadores de Calle y Hogares de Refugio Temporal' },
   },
-  /* Fase 12. El estilo de íconos círculo: en el nacional, los grupos agregados; en el
-     distrital, cada centro centrado en su punto con su número de referencia. */
-  {
-    nombre: 'nacional_A3_circulo',
-    hoja: { tamano: 'A3', orientacion: 'vertical' },
-    opciones: { iconos: 'circulo' },
-  },
-  {
-    nombre: 'distrito_Lima_A3_circulo',
-    ambito: '150101',
-    hoja: { tamano: 'A3', orientacion: 'vertical' },
-    opciones: { iconos: 'circulo' },
-    textos: { subtitulo: undefined },
-  },
   {
     nombre: 'distrito_Carabayllo_A4',
     ambito: '150106',
