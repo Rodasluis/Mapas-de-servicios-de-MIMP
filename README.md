@@ -235,6 +235,14 @@ Nada de esto está escrito a mano. El filtro de tipos recorre todo el camino: al
 un tipo activo, el coropletas se recalcula, la leyenda se queda con una línea y las
 clases altas desaparecen porque ninguna provincia llega a ellas.
 
+La rampa **empieza en el tono más claro** para la clase más baja que el mapa use. El
+Perú por departamentos no tiene ninguno con menos de cuatro tipos de servicio, y con la
+rampa fija salía entero en los tres tonos oscuros; ahora sus clases (4-6, 7-9 y 10+)
+toman los tres primeros. La rampa se desplaza, no se reparte: las distancias entre
+clases se conservan —un hueco sigue viéndose como un salto— y un mapa cuya clase más
+baja ya es la primera sale igual que antes. La leyenda y los recuadros usan la misma
+rampa desplazada.
+
 La leyenda va **siempre abajo a la izquierda**, en todos los formatos: que cambiara de
 esquina según la hoja obligaba a buscarla de nuevo en cada mapa. Cuando no cabe no se
 muda, encoge — más columnas, siglas en lugar de nombres y cuerpos menores, en ese
@@ -350,7 +358,11 @@ un borde del dibujo.
 
 Los recuadros de zoom dibujan **lo mismo** que el mapa principal: si éste pinta cada
 centro en su sitio, el recuadro también. Un zoom que agregara lo que el mapa desagrega
-estaría contando dos cosas distintas del mismo lugar en la misma lámina.
+estaría contando dos cosas distintas del mismo lugar en la misma lámina. La única
+excepción va en sentido contrario y la declara el ámbito (`simbolosZoom`): partido
+hasta distritos —el país o un departamento—, el recuadro pone cada centro en su sitio
+en vez de repetir los grupos con sus cifras. El mapa da el reparto y el recuadro, que
+tiene la escala para hacerlo, dice dónde está cada uno.
 
 Dentro del recuadro sólo la **zona ampliada** —el departamento, la provincia o el
 distrito— lleva íconos. Lo que la rodea se sigue dibujando, para que el recorte no
@@ -391,7 +403,8 @@ la interfaz avisa de que muchos distritos miden menos de 2 mm.
 
 Los recuadros de zoom arman sus zonas con las unidades de los **íconos**, que son las
 que se estorban: el Perú por departamentos amplía departamentos, y el Perú por
-distritos amplía departamentos o provincias, como el normal.
+distritos amplía departamentos o provincias, como el normal. Hasta distritos, además,
+el recuadro dibuja cada centro en su sitio (ver arriba).
 
 ### Lo que rodea al ámbito
 
