@@ -227,7 +227,7 @@ async function arrancar() {
     const s = meta.servicios;
 
     if (s.gruposApinados.length > 12) {
-      const unidades = NOMBRE_NIVEL[meta.ambito.agrupacionSimbolos] || 'unidades';
+      const unidades = NOMBRE_NIVEL[meta.ambito.agregacion] || 'unidades';
       avisos.push(`En ${meta.hoja} los símbolos se estorban en ${s.gruposApinados.length} ${unidades}.`
         + ' Usa una hoja mayor o filtra tipos de servicio.');
     }

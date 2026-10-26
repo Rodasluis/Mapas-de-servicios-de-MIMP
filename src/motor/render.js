@@ -188,17 +188,6 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
   const desfase = clasesVisibles.length ? clasesVisibles[0] : 0;
   const rampa = rampaBase.map((_, i) => rampaBase[Math.max(0, i - desfase)]);
 
-  /* Los íconos se agrupan por la unidad del color salvo que el plan declare otra: el
-     nacional partido en distritos colorea cada distrito y agrupa por provincia. */
-  const unidadesSimbolos = plan.simbolosPor ? plan.simbolosPor.unidades : plan.unidades;
-  const agregadoSimbolos = plan.simbolosPor
-    ? agregarCentros(centrosJson, {
-      clave: plan.simbolosPor.clave,
-      tiposActivos,
-      pertenece: plan.perteneceAlAmbito,
-    })
-    : agregado;
-
   /* Un tipo en los datos sin ícono en el catálogo se dibujaría como un hueco, así que
      se detiene aquí con el nombre exacto que falta. */
   const cobertura = comprobarCobertura(agregado.tipos);
@@ -210,10 +199,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
 
   /* Geometría proyectada a milímetros, que sirve a la vez para dibujar y para saber
      qué partes de la hoja están ocupadas por tierra. */
-  /* Sin repetir rasgos: las unidades de los íconos suelen ser las del color o las
-     intermedias, y proyectar dos veces las 196 provincias no aporta nada. */
+  /* Sin repetir rasgos: en el ámbito distrital la unidad y el contorno son el mismo
+     distrito, y proyectarlo dos veces no aporta nada. */
   const anillos = anillosPorRasgo(proyeccion, [...new Set([
-    ...plan.unidades.features, ...unidadesSimbolos.features, ...plan.intermedios.features,
+    ...plan.unidades.features, ...plan.intermedios.features,
     ...plan.contorno.features, ...plan.exterior.features, ...contexto.features,
   ])]);
   const ocupacion = crearOcupacion(hoja.anchoMm, hoja.altoMm);
@@ -276,8 +265,8 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       });
     } else {
       simbolos = dibujarSimbolos({
-        unidades: unidadesSimbolos, agregado: agregadoSimbolos, anillos, estiloIconos, marco,
-        medidor, factor, tamanoIcono,
+        unidades: plan.unidades, agregado, anillos, estiloIconos, marco, medidor, factor,
+        tamanoIcono, adaptado: plan.tamanoSimbolos === 'adaptado',
       });
     }
   }
@@ -343,6 +332,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       factor,
       rampa,
       tamanoIconoMm: Math.min(5, tamanoIcono),
+      /* Con íconos de tamaños distintos hay que decir que el tamaño no es un dato: en un
+         mapa temático, un símbolo mayor se lee como «más». */
+      notasExtra: plan.tamanoSimbolos === 'adaptado' && capasVisibles.simbolos
+        ? ['El tamaño de los íconos se ajusta al de cada distrito; no indica cantidad.'] : [],
       marco,
       ocupacion,
     }),
@@ -397,9 +390,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     seleccion: opciones.zoom?.seleccion || [],
     grupos: simbolos.grupos,
     umbral: UMBRAL_APINAMIENTO,
-    /* Las zonas se arman con las unidades de los ÍCONOS, que son las que se estorban y
-       piden ampliación; el color de dentro del recuadro, con las del coropletas. */
-    unidades: unidadesSimbolos,
+    unidades: plan.unidades,
     /* Cómo se agrupan las unidades en zonas ampliables y cómo se llama cada una. En
        el mapa del país las provincias se agrupan por departamento; en el de un
        departamento, los distritos por provincia. */
@@ -415,14 +406,12 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       paises: contexto.features.filter((f) => f.properties.capa === 'pais'),
       exterior: plan.exterior.features,
       unidades: plan.unidades.features,
-      unidadesSimbolos: plan.simbolosPor ? unidadesSimbolos.features : null,
       intermedios: plan.intermedios.features,
       contorno: plan.contorno.features,
     },
     trazos: plan.trazos,
     anillos,
-    agregado: agregadoSimbolos,
-    agregadoColor: agregado,
+    agregado,
     clases,
     rampa,
     estiloIconos,
@@ -540,9 +529,6 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
         descripcion: plan.descripcion,
         agregacion: plan.agregacion,
         division,
-        /* La unidad por la que se agrupan los íconos, que es en la que se informa el
-           apiñamiento. Sólo difiere de la del color en el nacional por distritos. */
-        agrupacionSimbolos: plan.simbolosPor ? plan.simbolosPor.nombre : plan.agregacion,
         simbolos: plan.simbolos,
       },
       nivel,
@@ -571,6 +557,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
         clasesUsadas: clasesVisibles.map((i) => clases[i].etiqueta),
         filtro: tiposActivos ? [...tiposActivos] : null,
         tamanoIconoMm: Number(tamanoIcono.toFixed(2)),
+        iconoAdaptado: simbolos.iconoAdaptado || null,
         gruposApinados: simbolos.apinados,
         recuadros: recuadros.regiones,
         capacidadRecuadros: recuadros.capacidad,
@@ -925,14 +912,23 @@ function solicitudesDeRotulos({ niveles, anillos, simbolos, factor, marco }) {
  * El grupo se ancla en el polo de inaccesibilidad de la provincia, no en su centroide:
  * en una provincia cóncava o partida en islas el centroide cae fuera y el grupo se
  * dibujaría sobre la vecina.
+ *
+ * Con `adaptado`, cada grupo se achica lo justo para caber en el mayor círculo que
+ * entra en su unidad —el radio del polo—, entre ICONO_ADAPTADO_MINIMO_MM y el tamaño
+ * de la hoja, y la cifra baja con él hasta CIFRA_MINIMA_PT. Es el país partido hasta
+ * distritos: en una A1 hay distritos de selva donde cabría un ícono de diez milímetros
+ * y distritos de Lima o de la sierra donde no cabe uno de dos. Sin `adaptado`, el
+ * dibujo es exactamente el de siempre.
  */
 function dibujarSimbolos({
   unidades, agregado, anillos, estiloIconos, marco, medidor, factor, tamanoIcono,
+  adaptado = false,
 }) {
   const eCifra = { familia: 'SourceSans3', variante: 'Semibold', pt: 5.2 * Math.sqrt(factor) };
   const altoCifra = medidor.alto(eCifra) * 0.95;
   const piezas = [];
   const grupos = [];
+  const tamanos = [];
 
   for (const f of unidades.features) {
     const datos = agregado.porUnidad.get(f.properties.ubigeo);
@@ -943,8 +939,13 @@ function dibujarSimbolos({
     const caja = cajaDeAnillos(anillosProv, marco);
     /* Se piden varios de una vez: el primero ancla el grupo de íconos y los demás
        quedan guardados para que el motor de rótulos tenga dónde probar el nombre sin
-       repetir el cálculo del campo de distancias. */
-    const polos = caja ? polosDeInaccesibilidad(anillosProv, caja, 1.2, PUNTOS_POR_ROTULO) : [];
+       repetir el cálculo del campo de distancias.
+
+       Al adaptar, la rejilla se afina en las unidades chicas: con celdas de 1,2 mm, un
+       distrito de dos milímetros no tiene un polo que medir. */
+    const celda = adaptado && caja
+      ? Math.min(1.2, Math.max(0.1, Math.min(caja.ancho, caja.alto) / 20)) : 1.2;
+    const polos = caja ? polosDeInaccesibilidad(anillosProv, caja, celda, PUNTOS_POR_ROTULO) : [];
     const polo = polos[0];
     if (!polo) continue;
 
@@ -953,7 +954,23 @@ function dibujarSimbolos({
     const tipos = [...datos.tipos.keys()].sort(
       (a, b) => agregado.porTipo.get(b) - agregado.porTipo.get(a) || a.localeCompare(b, 'es'),
     );
-    const { posiciones, ancho, alto } = repartirIconos(tipos.length, polo, tamanoIcono, altoCifra);
+
+    /* Tamaño de este grupo. El grupo es una rejilla de columnas × filas (repartirIconos)
+       y tiene que caber en el diámetro del círculo interior de su unidad. */
+    let tam = tamanoIcono;
+    let eC = eCifra;
+    let altoC = altoCifra;
+    if (adaptado) {
+      const columnas = Math.ceil(Math.sqrt(tipos.length));
+      const filas = Math.ceil(tipos.length / columnas);
+      const cabe = (2 * polo.radioMm)
+        / Math.max(columnas * 1.12, filas * (1 + altoCifra / tamanoIcono));
+      tam = Math.min(tamanoIcono, Math.max(ICONO_ADAPTADO_MINIMO_MM, cabe));
+      eC = { ...eCifra, pt: Math.max(CIFRA_MINIMA_PT, eCifra.pt * (tam / tamanoIcono)) };
+      altoC = medidor.alto(eC) * 0.95;
+      tamanos.push(tam);
+    }
+    const { posiciones, ancho, alto } = repartirIconos(tipos.length, polo, tam, altoC);
 
     tipos.forEach((tipo, i) => {
       const p = posiciones[i];
@@ -961,22 +978,22 @@ function dibujarSimbolos({
         tipo,
         x: p.x,
         y: p.y,
-        tamanoMm: tamanoIcono,
+        tamanoMm: tam,
         estilo: estiloIconos,
       }));
       piezas.push(textoConHalo(String(datos.tipos.get(tipo)), {
         x: p.x,
-        y: p.y + altoCifra * 0.82,
+        y: p.y + altoC * 0.82,
         'text-anchor': 'middle',
         fill: color.tinta,
-        'font-family': eCifra.familia,
-        'font-size': ptAmm(eCifra.pt),
+        'font-family': eC.familia,
+        'font-size': ptAmm(eC.pt),
         'font-weight': 600,
       }, {
         colorHalo: color.halo,
-        grosorMm: trazoMm.haloRotulo * factor * 0.7,
+        grosorMm: trazoMm.haloRotulo * factor * 0.7 * (eC.pt / eCifra.pt),
         medidor,
-        estilo: eCifra,
+        estilo: eC,
       }));
     });
 
@@ -1007,8 +1024,26 @@ function dibujarSimbolos({
       apinamientoPct: Number((g.apinamiento * 100).toFixed(0)),
     })).sort((a, b) => b.apinamientoPct - a.apinamientoPct),
     apinamientoMaximoPct: Number((Math.max(0, ...medidos.map((g) => g.apinamiento)) * 100).toFixed(0)),
+    /* Qué tamaños salieron al adaptar: el informe dice cuántos grupos quedaron en el
+       mínimo, que son los que ni así caben en su unidad. */
+    iconoAdaptado: adaptado && tamanos.length ? {
+      minimoMm: Number(Math.min(...tamanos).toFixed(2)),
+      maximoMm: Number(Math.max(...tamanos).toFixed(2)),
+      medianaMm: Number([...tamanos].sort((a, b) => a - b)[Math.floor(tamanos.length / 2)].toFixed(2)),
+      enElMinimo: tamanos.filter((t) => t <= ICONO_ADAPTADO_MINIMO_MM + 1e-9).length,
+      alTamanoDeLaHoja: tamanos.filter((t) => t >= tamanoIcono - 1e-9).length,
+      grupos: tamanos.length,
+    } : null,
   };
 }
+
+/** Lado mínimo de un ícono adaptado a su unidad. Por debajo de 3 mm el pictograma ya no
+    se distingue, pero el color sigue diciendo el tipo; por debajo de 2 mm, ni eso. Lo
+    fijó el área usuaria en la Fase 18. */
+const ICONO_ADAPTADO_MINIMO_MM = 2;
+
+/** Cuerpo mínimo de la cifra de un ícono adaptado: más chica no se lee impresa. */
+const CIFRA_MINIMA_PT = 4;
 
 /**
  * Cada centro en su coordenada real, con el ícono de su tipo.
