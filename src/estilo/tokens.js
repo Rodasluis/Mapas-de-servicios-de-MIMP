@@ -36,6 +36,7 @@ export const color = {
   territorioExterior: '#e3e1dd',
   territorioExteriorBorde: '#c2bfba',
   rotuloExterior: '#8a8781',
+  rotuloDistritoNacional: '#8c8c8c',
 
   /* Localizador: el Perú en miniatura con el ámbito resaltado. */
   localizadorRelleno: '#e8e6e2',
@@ -64,12 +65,13 @@ export const color = {
   limiteProvincialDestacado: '#1f1f1f',
   limiteDistrital: '#9a9a9a',
   /* El mapa NACIONAL partido en distritos. Son 1.893 y en una A1 muchos miden dos o
-     tres milímetros: con el gris del mapa departamental, la sierra se volvía una mancha.
-     El distrito baja al trazo mínimo y a un gris claro, y la provincia sube lo justo
-     para seguir ordenando la lectura por encima de él, sin competir con el
-     departamento. */
-  limiteDistritalNacional: '#c4c4c4',
-  limiteProvincialSobreDistritos: '#6a6a6a',
+     tres milímetros, así que el distrito va al trazo mínimo imprimible. En la Fase 15
+     iba en gris claro (#c4c4c4) y apenas se veía; desde la Fase 19, a pedido del área
+     usuaria, el distrito toma el gris que tenía la provincia y la provincia baja a un
+     gris oscuro, de modo que los dos se notan y siguen ordenados por debajo del negro
+     del departamento. */
+  limiteDistritalNacional: '#6a6a6a',
+  limiteProvincialSobreDistritos: '#333333',
 
   /* Tinta de los rótulos. */
   tinta: '#1a1a1a',
@@ -110,6 +112,10 @@ export const tipografia = {
   rotuloDepartamento: { familia: 'SourceSans3', peso: 'Bold', pt: 9, versalitas: true },
   rotuloProvincia: { familia: 'SourceSans3', peso: 'Regular', pt: 6.5 },
   rotuloDistrito: { familia: 'SourceSans3', peso: 'Regular', pt: 5.5 },
+  /* Distritos en el mapa del PAÍS: un punto menos que el distrital y en gris claro
+     (color.rotuloDistritoNacional). Con el cuerpo y el gris de las provincias, «Purús»
+     provincia y «Purus» distrito se leían iguales uno al lado del otro. */
+  rotuloDistritoNacional: { familia: 'SourceSans3', peso: 'Regular', pt: 4.6 },
   rotuloCentro: { familia: 'SourceSans3', peso: 'Semibold', pt: 5.5 },
   rotuloPais: { familia: 'SourceSans3', peso: 'Bold', pt: 11 },
   rotuloAgua: { familia: 'SourceSans3', peso: 'It', pt: 9 },

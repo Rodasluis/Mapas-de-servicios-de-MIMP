@@ -193,17 +193,23 @@ const servidor = await preview({
 const urlBase = servidor.resolvedUrls.local[0];
 
 const navegador = await chromium.launch();
-const pagina = await navegador.newPage();
 
 /* Sin esto, un error dentro de la página se manifestaría como una espera infinita. */
 const erroresPagina = [];
-pagina.on('pageerror', (err) => erroresPagina.push(err.message));
-pagina.on('console', (msg) => {
-  if (msg.type() === 'error') erroresPagina.push(msg.text());
-});
 
-await pagina.goto(new URL('muestras.html', urlBase).href, { waitUntil: 'networkidle' });
-await pagina.waitForFunction(() => typeof window.generarMapa === 'function', { timeout: 30000 });
+/** Abre una pestaña del banco de muestras, lista para generar. */
+async function abrirPagina() {
+  const p = await navegador.newPage();
+  p.on('pageerror', (err) => erroresPagina.push(err.message));
+  p.on('console', (msg) => {
+    if (msg.type() === 'error') erroresPagina.push(msg.text());
+  });
+  await p.goto(new URL('muestras.html', urlBase).href, { waitUntil: 'networkidle' });
+  await p.waitForFunction(() => typeof window.generarMapa === 'function', { timeout: 30000 });
+  return p;
+}
+
+const pagina = await abrirPagina();
 
 /* -------------------------------- generación ---------------------------- */
 
@@ -258,10 +264,26 @@ asegurarCarpeta(DESTINO);
 const resultados = [];
 for (const muestra of MUESTRAS) {
   process.stdout.write(`  · ${muestra.nombre} … `);
+  /* Cada lámina en su propia pestaña, que se cierra al terminar. Generadas todas en la
+     misma, la memoria se acumulaba de una a otra —la cartografía de cada nivel queda en
+     caché— y en un equipo con poca memoria la pestaña moría en las A0, 2A0 o 4A0 sin
+     avisar: el script se quedaba esperando para siempre. Cerrarla la libera, y si
+     Playwright detecta que se cayó, se dice cuál en vez de seguir esperando (cuando el
+     sistema la mata por falta de memoria puede no enterarse). Los PDF no cambian: cada
+     pestaña compone desde cero lo mismo que componía la compartida. */
+  const pestana = await abrirPagina();
+  const caida = new Promise((_, rechazar) => {
+    pestana.on('crash', () => rechazar(new Error(
+      'la pestaña del navegador se cayó, casi seguro por falta de memoria',
+    )));
+  });
+  // Que se caiga DESPUÉS de terminar no debe tumbar el proceso por un rechazo sin atender.
+  caida.catch(() => {});
   const t0 = Date.now();
   let salida;
+  let msTotalNode;
   try {
-    salida = await pagina.evaluate((cfg) => window.generarMapa(cfg), {
+    salida = await Promise.race([caida, pestana.evaluate((cfg) => window.generarMapa(cfg), {
       hoja: muestra.hoja,
       ambito: muestra.ambito,
       /* La fecha fija va en los DOS sitios, igual que la pone la interfaz en
@@ -271,13 +293,15 @@ for (const muestra of MUESTRAS) {
       textos: { ...TEXTOS, ...(fechaFija ? { fecha: fechaFija } : {}), ...(muestra.textos || {}) },
       opciones: muestra.opciones,
       fecha: fechaFija,
-    });
+    })]);
+    msTotalNode = Date.now() - t0;
   } catch (err) {
     console.log('ERROR');
     await cerrar();
     abortar(`Falló la generación de ${muestra.nombre}.`, `${err.message}\n${erroresPagina.join('\n')}`);
+  } finally {
+    await pestana.close().catch(() => {});
   }
-  const msTotalNode = Date.now() - t0;
 
   /* Con --fecha, el pie tiene que imprimir ESA fecha. Si se quedara con la del día, la
      regresión visual fallaría cada mañana por una diferencia que no es del mapa, y el
@@ -301,6 +325,10 @@ for (const muestra of MUESTRAS) {
 
   const archivo = path.join(DESTINO, `${muestra.nombre}.pdf`);
   fs.writeFileSync(archivo, Buffer.from(salida.pdf, 'base64'));
+  /* Escrito el archivo, el PDF ya no hace falta en memoria: los controles de abajo usan
+     sólo el informe (meta). Guardar los 24 hasta el final eran más de cien megas que
+     le faltaban al navegador para componer la 2A0 en un equipo justo de memoria. */
+  salida.pdf = null;
   const verificacion = verificarArchivo(archivo);
   resultados.push({ muestra, salida, verificacion, msTotalNode });
   console.log(`${peso(verificacion.bytes)} en ${(msTotalNode / 1000).toFixed(1)} s`);

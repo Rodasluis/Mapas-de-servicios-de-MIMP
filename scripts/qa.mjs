@@ -61,10 +61,25 @@ titulo('El dibujo no cambió (hash del PDF)');
 
 const referencias = leerReferencias();
 const navegador = await chromium.launch();
-const pagina = await navegador.newPage();
 const erroresPagina = [];
-pagina.on('pageerror', (e) => erroresPagina.push(e.message));
-await prepararRenderizador(pagina);
+
+/**
+ * Hace algo con el renderizador en una pestaña propia, que se cierra al terminar.
+ *
+ * Rasterizar las 24 láminas en una sola pestaña acumulaba memoria hasta que, en un
+ * equipo justo, la pestaña moría en la 2A0 y la aprobación se quedaba esperando para
+ * siempre. Una por lámina la libera; el resultado es el mismo.
+ */
+async function conRenderizador(fn) {
+  const p = await navegador.newPage();
+  p.on('pageerror', (e) => erroresPagina.push(e.message));
+  try {
+    await prepararRenderizador(p);
+    return await fn(p);
+  } finally {
+    await p.close().catch(() => {});
+  }
+}
 
 const laminas = {};
 const fallosVisuales = [];
@@ -72,7 +87,7 @@ const nuevas = [];
 /* Sólo se rasteriza lo que hay que diagnosticar; firmar quince láminas cuesta minutos
    y, si los hashes cuadran, no hay nada que mirar. En la aprobación sí se firman todas,
    porque la firma es lo que permitirá diagnosticar el día que un hash se mueva. */
-const firmar = async (rutaPdf) => (await firmarPdf(pagina, rutaPdf)).firma;
+const firmar = (rutaPdf) => conRenderizador(async (p) => (await firmarPdf(p, rutaPdf)).firma);
 
 for (const m of informe.muestras) {
   const rutaPdf = path.join(MUESTRAS, `${m.nombre}.pdf`);
@@ -96,16 +111,16 @@ for (const m of informe.muestras) {
   }
 
   /* El hash cambió: ahora sí se rasteriza, para decir cuánto y dónde. */
-  const { firma } = await firmarPdf(pagina, rutaPdf);
+  const firma = await firmar(rutaPdf);
   laminas[m.nombre].firma = firma;
   const c = compararFirmas(previa.firma, firma);
   const cuanto = c.comparable
     ? `media ${c.media.toFixed(2)}, máx ${c.maxima}, ${c.celdas} celda(s) por encima de ${TOLERANCIA_CELDA}`
     : 'sin firma previa con la que medir el cambio';
   console.log(`${hash.slice(0, 12)} ≠ ${previa.hash.slice(0, 12)}  ✗`);
-  const imagen = await escribirDiferencia({
+  const imagen = await conRenderizador((pagina) => escribirDiferencia({
     pagina, rutaPdf, nombre: m.nombre, referencia: previa.firma, destino: DIFERENCIAS,
-  });
+  }));
   fallosVisuales.push({
     nombre: m.nombre,
     motivo: `el PDF cambió · ${cuanto}`,

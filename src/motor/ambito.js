@@ -104,10 +104,6 @@ export async function encajeDeTanteo(ambito, cargador) {
  *
  * `unidades` y `claveCentro` son la unidad del color y la de los grupos de íconos.
  *
- * `tamanoSimbolos: 'adaptado'` achica los íconos de cada grupo para que quepa en su
- * unidad; sin él, todos van al tamaño de la hoja. Hoy lo declara sólo el nacional
- * partido en distritos (ver cargarNacional).
- *
  * `simbolosZoom` es cómo dibujan los íconos los recuadros de zoom cuando no es como el
  * mapa principal. Partido hasta distritos —el país o un departamento—, el recuadro
  * pone cada centro en su sitio en vez de repetir el grupo con sus cifras: el mapa da el
@@ -118,10 +114,9 @@ export async function encajeDeTanteo(ambito, cargador) {
  *   agregacion: 'departamento'|'provincia'|'distrito',
  *   simbolos: 'agregado'|'individual'|'numerado',
  *   simbolosZoom?: 'individual',
- *   tamanoSimbolos?: 'adaptado',
  *   claveCentro: (centro) => string,
  *   perteneceAlAmbito: (centro) => boolean,
- *   rotulos: Array<{nivel, rasgos, prioridad, mayusculas, exterior}>,
+ *   rotulos: Array<{nivel, rasgos, prioridad, mayusculas, exterior, estricto, opcional}>,
  * }}
  */
 export async function cargarAmbito({ ambito, cargador, nivel, division = divisionPara(ambito) }) {
@@ -140,10 +135,9 @@ export async function cargarAmbito({ ambito, cargador, nivel, division = divisio
  * - Por DEPARTAMENTO es la lámina más limpia: veinticinco grupos de íconos en
  *   unidades grandes, buena para una hoja pequeña o una presentación.
  * - Por DISTRITO el color dice exactamente qué distritos tienen servicio y cada uno
- *   lleva su grupo de íconos. Son 432 grupos y muchos distritos de la sierra y de Lima
- *   miden dos o tres milímetros en una A1, así que el tamaño de los íconos se ADAPTA a
- *   cada distrito (`tamanoSimbolos: 'adaptado'`, ver dibujarSimbolos en render.js).
- *   Los nombres de distrito no se escriben: en el mapa del país no caben.
+ *   lleva su grupo de íconos, al mismo tamaño que en cualquier otro mapa de esa hoja.
+ *   Son 432 grupos y en la sierra y en Lima se tocan; los recuadros de zoom los separan.
+ *   Los nombres de distrito se escriben sólo donde caben enteros (ver más abajo).
  */
 async function cargarNacional({ cargador, nivel, division }) {
   const departamentos = await cargador.departamentos(nivel);
@@ -190,11 +184,11 @@ async function cargarNacional({ cargador, nivel, division }) {
     const porDepartamento = await Promise.all(
       departamentos.features.map((f) => cargador.distritosDe(f.properties.ubigeo, nivel)),
     );
+    const distritos = porDepartamento.flatMap((c) => c.features);
     return {
       ...comun,
-      unidades: coleccion(porDepartamento.flatMap((c) => c.features)),
+      unidades: coleccion(distritos),
       intermedios: provincias,
-      tamanoSimbolos: 'adaptado',
       simbolosZoom: 'individual',
       zonas: zonasPor(2, departamentos.features, true),
       trazos: {
@@ -204,7 +198,18 @@ async function cargarNacional({ cargador, nivel, division }) {
       },
       agregacion: 'distrito',
       claveCentro: (c) => c.ubigeo,
-      rotulos,
+      /* Los nombres de distrito van después de los de departamento y provincia y en modo
+         ESTRICTO: sólo donde caben enteros dentro de su distrito sin tocar íconos ni
+         otros nombres. A esta escala la mayoría no cabe, y escribirlos asomando o sobre
+         los íconos, como se hace con las provincias, llenaría el país de texto. Son
+         OPCIONALES: que falten no es un aviso, es lo esperado. */
+      rotulos: [
+        ...rotulos,
+        {
+          nivel: 'distrito', rasgos: distritos, prioridad: 3, mayusculas: false,
+          estricto: true, opcional: true, estilo: 'distritoNacional',
+        },
+      ],
     };
   }
 

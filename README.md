@@ -386,26 +386,33 @@ o más fino; se ofrecen sólo los niveles que hay por debajo de él, y un enlace
 |---|---|---|---|---|---|
 | Perú | `departamento` | por departamento | por departamento | — | departamentos |
 | Perú | `provincia` (omisión) | por provincia | por provincia | — | departamentos y provincias |
-| Perú | `distrito` | por distrito | **por distrito, a su tamaño** | provincias | departamentos y provincias |
+| Perú | `distrito` | por distrito | por distrito | provincias | departamentos, provincias y **distritos donde caben** |
 | Departamento | `provincia` | por provincia | por provincia | — | provincias |
 | Departamento | `distrito` (omisión) | por distrito | por distrito | provincias | provincias y distritos |
 
 En el Perú por distritos cada uno de los 432 distritos con servicios lleva su grupo de
-íconos, y el **tamaño se adapta a cada distrito** (`tamanoSimbolos: 'adaptado'` en el
-plan): el grupo se achica lo justo para caber en el mayor círculo que entra en su
-distrito, entre 2 mm y el tamaño de la hoja, y la cifra baja con él hasta 4 pt. Hace
-falta porque el espacio va de un extremo a otro: en una A1 hay distritos de selva donde
-cabría un ícono de diez milímetros y distritos de Lima o de la sierra donde no cabe uno
-de uno. En A1 salen entre 2 y 5,4 mm, con la mitad por debajo de 2,8; unos 150 grupos
-quedan en el mínimo, que son los que ni así caben y se tocan con los vecinos. Por
-debajo de 3 mm el pictograma ya no se distingue y el tipo se reconoce por el color; el
-mínimo de 2 mm lo fijó el área usuaria. Como un símbolo mayor se lee como «más», la
-leyenda avisa de que el tamaño no indica cantidad.
+íconos, **al mismo tamaño que en cualquier otro mapa de esa hoja**: el tamaño crece o
+se achica con el papel y con nada más. En la sierra y en Lima los grupos se tocan, y
+los recuadros de zoom son los que los separan. En la Fase 18 se probó a achicar los
+íconos distrito por distrito para que cupieran (entre 2 mm y el tamaño de la hoja); el
+área usuaria prefirió un tamaño único y se retiró en la Fase 19. Lo que sí quedó es la
+rejilla fina de respaldo: una unidad más chica que la celda con la que se busca su
+polo no tenía dónde anclar sus íconos y se quedaba sin ellos, sin aviso.
+
+Los **nombres de distrito** se escriben donde caben enteros dentro de su distrito, sin
+tocar íconos ni otros nombres (rótulo `estricto`); los demás se omiten sin aviso, porque
+a esta escala es lo esperado (nivel `opcional`), y su recuento queda en el resumen. A
+las provincias, en cambio, se les deja asomar o montarse sobre los íconos antes que
+perder el nombre: con 1.893 distritos eso llenaría el país de texto. Van en un tercer
+nivel visual, más pequeño y en gris más claro que las provincias
+(`rotuloDistritoNacional`), para que «Purús» provincia y «Purus» distrito no se lean
+iguales. En A1 caben unos 190.
 
 Los 1.893 distritos se cargan al mismo nivel de detalle que el resto del mapa —los 25
 archivos por departamento—, para que sus bordes coincidan con los de provincia y
-departamento, y con un trazo propio (`limiteDistritalNacional`: el mínimo imprimible,
-en gris claro) para que la sierra no se vuelva una mancha. En A1 la lámina pesa unos
+departamento, y con trazos propios: el distrito al mínimo imprimible en el gris medio
+(`limiteDistritalNacional`) y la provincia en gris oscuro
+(`limiteProvincialSobreDistritos`), por debajo del negro del departamento. En A1 la lámina pesa unos
 5 MB; por debajo de A1 la interfaz avisa de que muchos distritos miden menos de 2 mm.
 
 Los recuadros de zoom arman sus zonas con las unidades de los íconos, que son las que

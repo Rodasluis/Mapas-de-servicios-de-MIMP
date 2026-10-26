@@ -25,8 +25,8 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    colorea. El Perú se puede dividir *hasta departamentos* (la lámina más limpia, buena
    para A4 o una presentación), *hasta provincias* (lo normal) o *hasta distritos*. Por
    distritos, el color dice exactamente qué distritos tienen servicio y cada distrito
-   lleva sus íconos, achicados para caber en él (entre 2 mm y el tamaño normal; el
-   tamaño no indica cantidad). Los nombres de distrito no se escriben. Se lee
+   lleva sus íconos, al mismo tamaño que en cualquier mapa de esa hoja. Los nombres de
+   distrito, más pequeños y en gris más claro, se escriben donde caben enteros. Se lee
    bien desde A1; en hojas menores la aplicación avisa. Un departamento se divide
    *hasta provincias* o *hasta distritos* (lo normal); una provincia, sólo hasta
    distritos. Al cambiar de ámbito, el nivel vuelve al de siempre. En cualquier nivel,

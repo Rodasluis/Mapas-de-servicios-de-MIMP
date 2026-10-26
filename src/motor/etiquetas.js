@@ -164,6 +164,14 @@ function colocarUna(s, { indice, medidor, marco, factor }) {
           const caja = { x: cx - ancho / 2, y: cy - alto / 2, ancho, alto };
           if (!dentroDe(marco, caja)) continue;
 
+          /* Estricto: el nombre entero dentro de su unidad —las cuatro esquinas, no sólo
+             el centro— y nada de asomar. Es para los niveles que se rotulan sólo donde
+             sobra sitio, como los 1.893 distritos del mapa del país. */
+          if (s.estricto) {
+            if (s.dentro && esquinasDentro(caja, s.dentro)) dentro.push({ cx, cy, caja });
+            continue;
+          }
+
           if (!s.dentro || s.dentro(cx, cy)) { dentro.push({ cx, cy, caja }); continue; }
 
           /* Un rótulo tiene que señalar lo que nombra. En un distrito diminuto el
@@ -201,7 +209,10 @@ function colocarUna(s, { indice, medidor, marco, factor }) {
      no dice nada—. Aquí NO vale la primera que encaje: se prueban todas y se elige la
      que MENOS tape. Antes valía la primera, que por el orden es la del polo, y el polo
      es justamente donde está el grupo de íconos; en un mapa provincial eso dejaba
-     tapados tres de cada cinco nombres teniendo sitio mejor a un milímetro. */
+     tapados tres de cada cinco nombres teniendo sitio mejor a un milímetro.
+
+     Un rótulo estricto no la hace: si no hay hueco limpio, se omite. */
+  if (s.estricto) return null;
   let mejor = null;
   for (const lineas of variantes) {
     const ancho = Math.max(...lineas.map((l) => medidor.ancho(l, s.estilo)));
@@ -238,6 +249,10 @@ function partirEnDos(texto, medidor, estilo) {
   return [mejor.a, mejor.b];
 }
 
+/** ¿Caen las cuatro esquinas de la caja dentro de la unidad? */
+const esquinasDentro = (r, dentro) => dentro(r.x, r.y) && dentro(r.x + r.ancho, r.y)
+  && dentro(r.x, r.y + r.alto) && dentro(r.x + r.ancho, r.y + r.alto);
+
 const dentroDe = (contenedor, r) => r.x >= contenedor.x && r.y >= contenedor.y
   && r.x + r.ancho <= contenedor.x + contenedor.ancho
   && r.y + r.alto <= contenedor.y + contenedor.alto;
@@ -272,6 +287,8 @@ function dibujar(lineas, cx, cy, s, medidor, factor) {
  * @param {number} o.prioridad menor es antes
  * @param {Array}  o.puntos    candidatos {x, y}, el primero es el preferido
  * @param {object} o.estilo    {familia, variante, pt}
+ * @param {boolean} [o.estricto] sólo si cabe entero dentro de su unidad, sin asomar
+ *                               ni montarse sobre íconos; si no, se omite
  */
 export function crearSolicitud(o) {
   return { permitirDosLineas: true, ...o };
