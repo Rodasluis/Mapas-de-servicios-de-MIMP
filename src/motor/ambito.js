@@ -102,9 +102,11 @@ export async function encajeDeTanteo(ambito, cargador) {
  * Devuelve siempre las mismas claves, con listas vacías donde no apliquen, para que
  * quien dibuja no tenga que preguntar en qué ámbito está.
  *
- * `unidades` y `claveCentro` son la unidad del COLOR. Los íconos se agrupan por la
- * misma unidad salvo que el plan declare `simbolosPor`, que hoy sólo lo hace el
- * nacional partido en distritos (ver cargarNacional).
+ * `unidades` y `claveCentro` son la unidad del color y la de los grupos de íconos.
+ *
+ * `tamanoSimbolos: 'adaptado'` achica los íconos de cada grupo para que quepa en su
+ * unidad; sin él, todos van al tamaño de la hoja. Hoy lo declara sólo el nacional
+ * partido en distritos (ver cargarNacional).
  *
  * `simbolosZoom` es cómo dibujan los íconos los recuadros de zoom cuando no es como el
  * mapa principal. Partido hasta distritos —el país o un departamento—, el recuadro
@@ -116,7 +118,7 @@ export async function encajeDeTanteo(ambito, cargador) {
  *   agregacion: 'departamento'|'provincia'|'distrito',
  *   simbolos: 'agregado'|'individual'|'numerado',
  *   simbolosZoom?: 'individual',
- *   simbolosPor?: {unidades, clave: (centro) => string, nombre: string},
+ *   tamanoSimbolos?: 'adaptado',
  *   claveCentro: (centro) => string,
  *   perteneceAlAmbito: (centro) => boolean,
  *   rotulos: Array<{nivel, rasgos, prioridad, mayusculas, exterior}>,
@@ -137,11 +139,11 @@ export async function cargarAmbito({ ambito, cargador, nivel, division = divisio
  *
  * - Por DEPARTAMENTO es la lámina más limpia: veinticinco grupos de íconos en
  *   unidades grandes, buena para una hoja pequeña o una presentación.
- * - Por DISTRITO el color dice exactamente qué distritos tienen servicio, pero los
- *   íconos siguen agrupados por PROVINCIA. Por distrito serían 432 grupos sobre la
- *   sierra, en piezas de dos o tres milímetros: se pisarían todos y el mapa dejaría de
- *   decir qué servicios llegan a cada sitio. Los nombres de distrito no se escriben:
- *   en el mapa del país no caben.
+ * - Por DISTRITO el color dice exactamente qué distritos tienen servicio y cada uno
+ *   lleva su grupo de íconos. Son 432 grupos y muchos distritos de la sierra y de Lima
+ *   miden dos o tres milímetros en una A1, así que el tamaño de los íconos se ADAPTA a
+ *   cada distrito (`tamanoSimbolos: 'adaptado'`, ver dibujarSimbolos en render.js).
+ *   Los nombres de distrito no se escriben: en el mapa del país no caben.
  */
 async function cargarNacional({ cargador, nivel, division }) {
   const departamentos = await cargador.departamentos(nivel);
@@ -192,7 +194,7 @@ async function cargarNacional({ cargador, nivel, division }) {
       ...comun,
       unidades: coleccion(porDepartamento.flatMap((c) => c.features)),
       intermedios: provincias,
-      simbolosPor: { unidades: provincias, clave: (c) => c.ccpp, nombre: 'provincia' },
+      tamanoSimbolos: 'adaptado',
       simbolosZoom: 'individual',
       zonas: zonasPor(2, departamentos.features, true),
       trazos: {

@@ -386,25 +386,32 @@ o más fino; se ofrecen sólo los niveles que hay por debajo de él, y un enlace
 |---|---|---|---|---|---|
 | Perú | `departamento` | por departamento | por departamento | — | departamentos |
 | Perú | `provincia` (omisión) | por provincia | por provincia | — | departamentos y provincias |
-| Perú | `distrito` | **por distrito** | **por provincia** | provincias | departamentos y provincias |
+| Perú | `distrito` | por distrito | **por distrito, a su tamaño** | provincias | departamentos y provincias |
 | Departamento | `provincia` | por provincia | por provincia | — | provincias |
 | Departamento | `distrito` (omisión) | por distrito | por distrito | provincias | provincias y distritos |
 
-El Perú por distritos es el único caso en que el color y los íconos van por unidades
-distintas: el plan lo declara con `simbolosPor`. Agrupar los íconos por distrito daría
-432 grupos sobre piezas de dos o tres milímetros en la sierra, que se pisarían todos;
-por provincia siguen diciendo qué servicios llegan a cada sitio, y el color dice
-exactamente qué distritos tienen alguno. Los 1.893 distritos se cargan al mismo nivel
-de detalle que el resto del mapa —los 25 archivos por departamento—, para que sus
-bordes coincidan con los de provincia y departamento, y con un trazo propio
-(`limiteDistritalNacional`: el mínimo imprimible, en gris claro) para que la sierra no
-se vuelva una mancha. En A1 la lámina pesa 5,6 MB y tarda unos 23 s; por debajo de A1
-la interfaz avisa de que muchos distritos miden menos de 2 mm.
+En el Perú por distritos cada uno de los 432 distritos con servicios lleva su grupo de
+íconos, y el **tamaño se adapta a cada distrito** (`tamanoSimbolos: 'adaptado'` en el
+plan): el grupo se achica lo justo para caber en el mayor círculo que entra en su
+distrito, entre 2 mm y el tamaño de la hoja, y la cifra baja con él hasta 4 pt. Hace
+falta porque el espacio va de un extremo a otro: en una A1 hay distritos de selva donde
+cabría un ícono de diez milímetros y distritos de Lima o de la sierra donde no cabe uno
+de uno. En A1 salen entre 2 y 5,4 mm, con la mitad por debajo de 2,8; unos 150 grupos
+quedan en el mínimo, que son los que ni así caben y se tocan con los vecinos. Por
+debajo de 3 mm el pictograma ya no se distingue y el tipo se reconoce por el color; el
+mínimo de 2 mm lo fijó el área usuaria. Como un símbolo mayor se lee como «más», la
+leyenda avisa de que el tamaño no indica cantidad.
 
-Los recuadros de zoom arman sus zonas con las unidades de los **íconos**, que son las
-que se estorban: el Perú por departamentos amplía departamentos, y el Perú por
-distritos amplía departamentos o provincias, como el normal. Hasta distritos, además,
-el recuadro dibuja cada centro en su sitio (ver arriba).
+Los 1.893 distritos se cargan al mismo nivel de detalle que el resto del mapa —los 25
+archivos por departamento—, para que sus bordes coincidan con los de provincia y
+departamento, y con un trazo propio (`limiteDistritalNacional`: el mínimo imprimible,
+en gris claro) para que la sierra no se vuelva una mancha. En A1 la lámina pesa unos
+5 MB; por debajo de A1 la interfaz avisa de que muchos distritos miden menos de 2 mm.
+
+Los recuadros de zoom arman sus zonas con las unidades de los íconos, que son las que
+se estorban: el Perú por departamentos amplía departamentos, y el Perú por distritos,
+departamentos, provincias o distritos. Hasta distritos, además, el recuadro dibuja cada
+centro en su sitio y al tamaño normal (ver arriba).
 
 ### Lo que rodea al ámbito
 

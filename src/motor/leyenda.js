@@ -49,7 +49,7 @@ function notasDeUbicacion(centros) {
 
 export function bloqueLeyenda({
   agregado, clasesUsadas, clases = CLASES_POR_DEFECTO, estiloIconos, medidor, factor,
-  rampa, tamanoIconoMm, altoMaximoMm, anchoMaximoMm, unidad = 'provincia',
+  rampa, tamanoIconoMm, altoMaximoMm, anchoMaximoMm, unidad = 'provincia', notasExtra = [],
 }) {
   /* El coropletas no siempre cuenta por provincia: en un mapa departamental la unidad
      es el distrito. Anunciar la unidad equivocada convierte la leyenda en una fuente
@@ -57,7 +57,7 @@ export function bloqueLeyenda({
   const tituloClases = `Presencia de servicios por ${unidad}`;
   const tipos = agregado.tipos;
   if (!tipos.length) return null;
-  const notas = notasDeUbicacion(agregado.centros || []);
+  const notas = [...notasDeUbicacion(agregado.centros || []), ...notasExtra];
 
   /**
    * Se busca la composición MENOS agresiva que quepa en la caja disponible. Para cada

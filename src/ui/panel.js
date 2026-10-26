@@ -415,13 +415,15 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
    * La división recorta lo más fino que se puede pedir, porque un recuadro amplía las
    * unidades por las que se agrupan los íconos: el país por departamentos no tiene
    * provincias que ampliar, ni un departamento por provincias, distritos. El país por
-   * distritos sigue agrupando por provincia, así que admite lo mismo que el normal.
+   * distritos agrupa por distrito, así que admite también un distrito.
    */
   const reglasZona = () => {
     const a = ambitoActual();
     const division = config.division || divisionPorDefecto(a);
     if (a.nivel === 'nacional') {
-      return { dep: null, prov: null, provincia: division !== 'departamento', distrito: false, minimo: 2 };
+      return {
+        dep: null, prov: null, provincia: division !== 'departamento', distrito: division === 'distrito', minimo: 2,
+      };
     }
     if (a.nivel === 'departamento') {
       return { dep: a.id, prov: null, provincia: true, distrito: division === 'distrito', minimo: 4 };
@@ -481,7 +483,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     selZonaDist.innerHTML = '';
     if (r && !r.distrito) {
       selZonaDist.appendChild(opcion('', ambitoActual().nivel === 'nacional'
-        ? 'No disponible en el mapa nacional' : 'No disponible al dividir por provincias'));
+        ? 'Sólo al dividir hasta distritos' : 'No disponible al dividir por provincias'));
       selZonaDist.disabled = true;
       return;
     }

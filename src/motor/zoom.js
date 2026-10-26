@@ -144,7 +144,9 @@ export const LIMA = '15';
 export function zonaDe(ubigeo, def) {
   if (def.limaAparte) {
     const ccdd = ubigeo.slice(0, 2);
-    if (ubigeo === LIMA_METROPOLITANA || ccdd === CALLAO) {
+    /* Por prefijo y no por igualdad: la unidad puede ser la provincia de Lima o uno de
+       sus distritos (el país partido hasta distritos). */
+    if (ubigeo.startsWith(LIMA_METROPOLITANA) || ccdd === CALLAO) {
       return { clave: 'lima-callao', nombre: 'Lima Metropolitana y Callao' };
     }
     if (ccdd === LIMA) return { clave: 'lima-provincias', nombre: 'Lima provincias' };
@@ -155,8 +157,8 @@ export function zonaDe(ubigeo, def) {
 
 /** ¿Esta unidad pertenece a esa zona? */
 const enZona = (ubigeo, clave) => {
-  if (clave === 'lima-callao') return ubigeo === LIMA_METROPOLITANA || ubigeo.startsWith(CALLAO);
-  if (clave === 'lima-provincias') return ubigeo.startsWith(LIMA) && ubigeo !== LIMA_METROPOLITANA;
+  if (clave === 'lima-callao') return ubigeo.startsWith(LIMA_METROPOLITANA) || ubigeo.startsWith(CALLAO);
+  if (clave === 'lima-provincias') return ubigeo.startsWith(LIMA) && !ubigeo.startsWith(LIMA_METROPOLITANA);
   return ubigeo.startsWith(clave);
 };
 
@@ -362,7 +364,6 @@ export function construirRecuadros({
   modo = 'auto', seleccion = [], grupos, umbral, unidades, zonas, anillos, agregado,
   clases, rampa, estiloIconos, medidor, factor, tamanoIcono, marco, ocupacion, maximo,
   modoSimbolos = 'agregado', centros = [], entorno = null, trazos = null,
-  agregadoColor = null,
 }) {
   const tope = maximo ?? maximoPorFormato(factor);
   const vacio = {
@@ -599,7 +600,6 @@ export function construirRecuadros({
         miembros,
         protagonistas,
         agregado,
-        agregadoColor,
         clases,
         rampa,
         estiloIconos,
@@ -670,7 +670,7 @@ function dibujarRecuadro({
   x, y, ancho, alto, anchoMapa, altoMapa, cabecera, borde, etiqueta,
   sub, miembros, protagonistas, agregado, clases, rampa, estiloIconos, tamanoIcono, altoCifra,
   eTitulo, eCifra, medidor, factor, modoSimbolos = 'agregado', centros = [],
-  entorno = null, trazos = null, agregadoColor = null,
+  entorno = null, trazos = null,
 }) {
   const marcoInterno = { x: x + borde, y: y + cabecera, ancho: anchoMapa, alto: altoMapa };
   const proy = crearProyeccion(sub, marcoInterno, 1.2);
@@ -706,9 +706,6 @@ function dibujarRecuadro({
     paises: (entorno0.paises || []).filter(seVe),
     exterior: (entorno0.exterior || []).filter(seVe),
     unidades: entorno0.unidades ? entorno0.unidades.filter(seVe) : null,
-    /* Sólo cuando los íconos se agrupan por otra unidad que la del color: el nacional
-       partido en distritos, que agrupa por provincia. */
-    simbolos: entorno0.unidadesSimbolos ? entorno0.unidadesSimbolos.filter(seVe) : null,
     intermedios: (entorno0.intermedios || []).filter(seVe),
     contorno: (entorno0.contorno || []).filter(seVe),
   };
@@ -729,9 +726,8 @@ function dibujarRecuadro({
 
   /* La coropleta es la de TODAS las unidades del mapa que caigan dentro, no sólo la de
      los miembros: eso es lo que hace que el recuadro se lea como un trozo del mapa. */
-  const porColor = agregadoColor || agregado;
   const relleno = (e.unidades || miembros).map((f) => {
-    const datos = porColor.porUnidad.get(f.properties.ubigeo);
+    const datos = agregado.porUnidad.get(f.properties.ubigeo);
     const clase = claseDe(datos ? datos.tiposDistintos : 0, clases);
     return el('path', { d: ruta(f.geometry), fill: clase >= 0 ? rampa[clase] : color.sinDato });
   });
@@ -758,7 +754,7 @@ function dibujarRecuadro({
      el centro de la caja envolvente y los rótulos en el polo, así que la reserva que
      hacía el motor de rótulos no coincidía con dónde estaban los íconos y el nombre
      de Callao acababa encima de ellos. */
-  const visibles = e.simbolos || e.unidades || miembros;
+  const visibles = e.unidades || miembros;
   const geometria = new Map();
   for (const f of visibles) {
     const recolector = recolectorDeAnillos();
