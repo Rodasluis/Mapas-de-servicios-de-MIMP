@@ -38,9 +38,12 @@ No es una captura de pantalla: el PDF se construye a partir de geometría vector
    src/estilo/tokens.js; los de los servicios, con su forma, en src/iconos/estilos.js
    (un solo estilo, círculo, transcrito del archivo de diseño del MIMP; el estilo casa
    se retiró en la Fase 16).
-3. Todo PDF lleva en el pie: fuente de datos, versión del directorio (fecha de
-   publicación y comienzo del hash), fecha de generación y la nota
-   "Escala válida al imprimir al 100 %".
+3. Todo PDF lleva en el pie las fuentes (MIMP, INEI, Natural Earth), la cartografía
+   (proyección y retícula) y la escala. La versión del directorio (fecha de
+   publicación y comienzo del hash) y la fecha de generación ya no se imprimen, ni la
+   nota "Escala válida al imprimir al 100 %" —decisiones del área usuaria en la
+   revisión de la Fase 20—: la versión y la fecha van en las propiedades del PDF
+   (palabras clave).
 4. Salida determinista: la misma configuración produce el mismo PDF (salvo la fecha).
 5. Trabajo por fase en rama propia (fase-N-...). main solo recibe merges revisados,
    porque cada push a main despliega en Pages.

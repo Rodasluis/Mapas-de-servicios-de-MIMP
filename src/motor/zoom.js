@@ -104,6 +104,10 @@ export function maximoPorFormato(factor) {
 /** Separación entre el recuadro y lo que lo rodea. */
 const AIRE_MM = 2.5;
 
+/** Tope del lado de un recuadro cuando es el único de la lámina, en fracción del lado
+    menor del marco (con varios, 0,48: ver construirRecuadros). */
+const LADO_MAXIMO_SI_ES_UNO = 0.75;
+
 /**
  * Zonas ampliables: una por DEPARTAMENTO, con dos excepciones en Lima.
  *
@@ -382,6 +386,7 @@ export function construirRecuadros({
   const vacio = {
     colocados: [],
     referencias: '',
+    enlaces: '',
     regiones: [],
     avisos: [],
     capacidad: { tope, colocados: 0, cabeOtro: false },
@@ -408,6 +413,13 @@ export function construirRecuadros({
 
   /* Tope por recuadro para que el primero no se quede con todo el hueco libre. */
   const ladoMaximo = Math.min(marco.ancho, marco.alto) * 0.48;
+  /* Cuando hay una sola zona que ampliar —el recuadro de Lima Metropolitana y Callao
+     que el mapa del país lleva por omisión— no hay con quién repartir el hueco: el
+     tope sube y el recuadro se busca de abajo arriba, pegado a la leyenda. Con el tope
+     de siempre se quedaba en A1, A0 y 2A0 un palmo por debajo de lo que cabía, y arriba
+     del hueco, con un vacío entre él y la leyenda (revisión de la Fase 20). */
+  const unoSolo = candidatas.length === 1;
+  const ladoMaximoDelRecuadro = unoSolo ? Math.min(marco.ancho, marco.alto) * LADO_MAXIMO_SI_ES_UNO : ladoMaximo;
 
   /**
    * Busca el mayor hueco libre con la proporción de un encuadre y mide cuánto amplía.
@@ -467,7 +479,8 @@ export function construirRecuadros({
       aspecto: aspectoDe(altura),
       region,
       minLadoMm: LADO_MINIMO_MM,
-      maxLadoMm: ladoMaximo,
+      maxLadoMm: ladoMaximoDelRecuadro,
+      ...(unoSolo ? { desdeAbajo: true } : {}),
     });
 
     let hueco = null;
@@ -521,6 +534,7 @@ export function construirRecuadros({
 
   const colocados = [];
   const referencias = [];
+  const enlaces = [];
   const resumen = [];
   const avisos = [];
   const soloEnRecuadro = new Set();
@@ -637,20 +651,16 @@ export function construirRecuadros({
 
     /* El rectángulo de referencia marca el ENCUADRE que se ha ampliado, que cuando la
        zona no cabe entera es sólo una parte de ella. Dibujar la zona completa mientras
-       el recuadro enseña un trozo señalaría un sitio que no es el que se amplió. */
-    referencias.push(grupo({}, [
-      rect(caja, {
-        fill: 'none', stroke: color.mimpRojo, 'stroke-width': trazoMm.recuadroZoom * 0.7,
-      }),
-      texto(etiqueta, {
-        x: caja.x,
-        y: caja.y - medidor.alto(eTitulo) * 0.25,
-        fill: color.mimpRojo,
-        'font-family': eTitulo.familia,
-        'font-size': ptAmm(eTitulo.pt * 0.8),
-        'font-weight': 600,
-      }),
-    ]));
+       el recuadro enseña un trozo señalaría un sitio que no es el que se amplió.
+
+       Sin título: hasta la revisión de la Fase 20 llevaba encima el nombre de la zona,
+       que tapaba los íconos de la unidad vecina (el de Lima Metropolitana y Callao caía
+       sobre los de Huaral). El nombre ya va en el recuadro, y lo que dice cuál es su
+       zona son las líneas que unen las esquinas de los dos rectángulos. */
+    referencias.push(rect(caja, {
+      fill: 'none', stroke: color.mimpRojo, 'stroke-width': trazoMm.recuadroZoom * 0.7,
+    }));
+    enlaces.push(...lineasDeEnlace(caja, { x, y, ancho, alto }, trazoMm.recuadroZoom * 0.7));
 
     resumen.push({
       etiqueta,
@@ -676,6 +686,7 @@ export function construirRecuadros({
   return {
     colocados,
     referencias: referencias.join('\n'),
+    enlaces: enlaces.join('\n'),
     regiones: resumen,
     avisos,
     capacidad: { tope, colocados: colocados.length, cabeOtro },
@@ -977,6 +988,71 @@ function rotularMiembros({ geometria, cajasSimbolos, marcoInterno, medidor, fact
     solicitudes, indice, medidor, marco: marcoInterno, factor,
   });
   return svg;
+}
+
+/**
+ * Las líneas que unen la zona ampliada con su recuadro, como en los mapas de ArcGIS o
+ * QGIS: de cada esquina del rectángulo de referencia a la misma esquina del recuadro.
+ *
+ * Sólo las que no atraviesan ninguno de los dos rectángulos, que son las dos de fuera:
+ * las que los cruzan por dentro se leerían como parte del dibujo. Van en degradado, a
+ * plena tinta junto a cada rectángulo y casi transparentes a mitad de camino, porque
+ * cruzan el mapa por encima de territorio y lo que importa es dónde empiezan y dónde
+ * acaban. El degradado se hace por tramos con su propia opacidad, no con un gradiente
+ * SVG: es lo que svg2pdf pasa al PDF como trazo vectorial sin sorpresas.
+ *
+ * @returns {string[]} los tramos, ya dibujados
+ */
+function lineasDeEnlace(zona, recuadro, grosorMm) {
+  const esquinas = (r) => [[r.x, r.y], [r.x + r.ancho, r.y], [r.x + r.ancho, r.y + r.alto], [r.x, r.y + r.alto]];
+  const a = esquinas(zona);
+  const b = esquinas(recuadro);
+  // Si se tocan, no hay nada que unir.
+  if (!(zona.x + zona.ancho < recuadro.x || recuadro.x + recuadro.ancho < zona.x
+    || zona.y + zona.alto < recuadro.y || recuadro.y + recuadro.alto < zona.y)) return [];
+
+  const tramos = [];
+  for (let i = 0; i < 4; i++) {
+    const [x0, y0] = a[i];
+    const [x1, y1] = b[i];
+    if (cruzaPorDentro(x0, y0, x1, y1, zona) || cruzaPorDentro(x0, y0, x1, y1, recuadro)) continue;
+    for (let k = 0; k < TRAMOS_DEL_ENLACE; k++) {
+      const t0 = k / TRAMOS_DEL_ENLACE;
+      const t1 = (k + 1) / TRAMOS_DEL_ENLACE;
+      // Opacidad del tramo según lo lejos que está su centro de los dos extremos.
+      const lejania = 1 - Math.abs((t0 + t1) - 1);
+      tramos.push(el('line', {
+        x1: num(x0 + (x1 - x0) * t0), y1: num(y0 + (y1 - y0) * t0),
+        x2: num(x0 + (x1 - x0) * t1), y2: num(y0 + (y1 - y0) * t1),
+        stroke: color.mimpRojo,
+        'stroke-width': num(grosorMm, 3),
+        'stroke-opacity': num(OPACIDAD_ENLACE[0] + (OPACIDAD_ENLACE[1] - OPACIDAD_ENLACE[0]) * lejania, 2),
+      }));
+    }
+  }
+  return tramos;
+}
+
+/** Tramos de cada línea de enlace y su opacidad en los extremos y a mitad de camino. */
+const TRAMOS_DEL_ENLACE = 16;
+const OPACIDAD_ENLACE = [0.9, 0.12];
+
+/**
+ * ¿Pasa el segmento por el INTERIOR del rectángulo? Recorte de Liang-Barsky contra el
+ * rectángulo encogido un hilo, para que salir de una de sus esquinas no cuente.
+ */
+function cruzaPorDentro(x0, y0, x1, y1, r) {
+  const e = Math.min(r.ancho, r.alto) * 0.01;
+  const xmin = r.x + e; const xmax = r.x + r.ancho - e;
+  const ymin = r.y + e; const ymax = r.y + r.alto - e;
+  const dx = x1 - x0; const dy = y1 - y0;
+  let t0 = 0; let t1 = 1;
+  for (const [p, q] of [[-dx, x0 - xmin], [dx, xmax - x0], [-dy, y0 - ymin], [dy, ymax - y0]]) {
+    if (p === 0) { if (q < 0) return false; continue; }
+    const t = q / p;
+    if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+  }
+  return t1 - t0 > 1e-6;
 }
 
 /** Estilo de los nombres de un recuadro; la rejilla de íconos lo usa para dejarles sitio. */

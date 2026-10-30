@@ -245,9 +245,8 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     campoTexto('titulo', 'Título', config.textos.titulo, (v) => { config.textos.titulo = v; emitir(); }),
     campoTexto('subtitulo', 'Subtítulo', config.textos.subtitulo, (v) => { config.textos.subtitulo = v; emitir(); }),
     campoTexto('periodo', 'Periodo', config.textos.periodo, (v) => { config.textos.periodo = v; emitir(); }),
-    campoTexto('elaboradoPor', 'Elaborado por', config.textos.elaboradoPor, (v) => {
-      config.textos.elaboradoPor = v; emitir();
-    }),
+    /* «Elaborado por» se retiró en la revisión de la Fase 20, con la línea del pie que
+       lo imprimía. */
   ]);
 
   /* --------------------------- tipos de servicio ----------------------- */

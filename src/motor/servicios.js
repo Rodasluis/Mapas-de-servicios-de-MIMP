@@ -281,7 +281,7 @@ export function repartirEnRejilla(n, centro, tamanoMm, altoCifraMm, { dentro = n
             const cx = rejilla.x + dx * (anchoRejilla / 2 + aire + v.ancho / 2);
             const cy = rejilla.y + dy * (altoRejilla / 2 + aire + v.alto / 2);
             const nombre = { x: cx - v.ancho / 2, y: cy - v.alto / 2, ancho: v.ancho, alto: v.alto };
-            const fuera = fraccionFuera(nombre, dentro);
+            const fuera = fraccionFuera(nombre, dentro, rotulo.altoLetra);
             if (fuera > 0 && fuera >= menosFuera) continue;
             const reparto = repartirIconos(n, rejilla, tamanoMm, altoCifraMm, columnas);
             if (!reparto.posiciones.every(cabe)) continue;

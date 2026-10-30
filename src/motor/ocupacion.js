@@ -388,10 +388,12 @@ export function polosDeInaccesibilidad(anillos, caja, celdaMm = 1.5, cuantos = 1
  * @param {object} opciones.region      dónde buscar, en milímetros
  * @param {number} opciones.minLadoMm   por debajo de esto no merece la pena
  * @param {number} opciones.maxLadoMm   tope, para que uno no se coma el hueco entero
+ * @param {boolean} [opciones.desdeAbajo] de los sitios donde cabe, el más bajo en vez
+ *        del más alto: el recuadro de zoom único va así pegado a la leyenda
  * @returns {{x, y, ancho, alto}|null}
  */
 export function mayorRectanguloLibre(ocupacion, {
-  aspecto, region, minLadoMm, maxLadoMm,
+  aspecto, region, minLadoMm, maxLadoMm, desdeAbajo = false,
 }) {
   const { celdaMm } = ocupacion;
   const ocupado = ocupacion.__mascaraOcupada();
@@ -419,7 +421,10 @@ export function mayorRectanguloLibre(ocupacion, {
   /** ¿Cabe en algún sitio un rectángulo de estas celdas? Devuelve dónde. */
   const buscar = (anchoCeldas, altoCeldas) => {
     if (anchoCeldas < 1 || altoCeldas < 1) return null;
-    for (let f = f0; f + altoCeldas <= f1; f++) {
+    const filasPosibles = [];
+    for (let f = f0; f + altoCeldas <= f1; f++) filasPosibles.push(f);
+    if (desdeAbajo) filasPosibles.reverse();
+    for (const f of filasPosibles) {
       for (let c = c0; c + anchoCeldas <= c1; c++) {
         if (suma(c, f, c + anchoCeldas, f + altoCeldas) === 0) {
           return { x: c * celdaMm, y: f * celdaMm, ancho: anchoCeldas * celdaMm, alto: altoCeldas * celdaMm };

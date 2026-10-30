@@ -45,14 +45,21 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    a cada ícono, y el nombre de la unidad junto a la rejilla, dentro de su territorio
    cuando cabe. En una unidad angosta la rejilla se alarga o sigue su forma en vez de
    salirse. En el mapa los íconos van a la mitad del tamaño de la leyenda, para que los
-   grupos no se choquen. En **Capas → Íconos de cada grupo** se puede elegir el
-   **anillo**, como el desplazamiento de puntos de QGIS.
+   grupos no se choquen, y los nombres de los territorios en letra pequeña, para que
+   quepan dentro de su provincia o distrito. En **Capas → Íconos de cada grupo** se
+   puede elegir el **anillo**, como el desplazamiento de puntos de QGIS.
+
+   La leyenda escribe enteros los tipos que el directorio abrevia: *Centro de Acogida
+   Residencial* en lugar de CAR, *Servicio de Atención Integral de Personas con
+   Discapacidad* en lugar de SAIPD y *personas con discapacidad* en lugar de PCD. Los
+   nombres largos van en dos líneas.
 5. **Recuadros de zoom.** El mapa del Perú —hasta provincias o hasta distritos— abre
    con un recuadro de **Lima Metropolitana y Callao** juntos, porque sin ampliarlos ahí
    se ve una mancha. Mientras está en la lámina, los íconos de Lima y Callao van **sólo
    en el recuadro**, con su cifra; en el mapa queda el color y el rectángulo rojo que
-   dice dónde está. Si el recuadro no cupiera en la hoja, los íconos se quedan en el
-   mapa. Se quita con **Quitar**; los demás mapas abren sin recuadros. Tres opciones:
+   dice dónde está, unido al recuadro por dos líneas rojas en degradado. El nombre de
+   la zona va sólo en el recuadro. Si el recuadro no cupiera en la hoja, los íconos se
+   quedan en el mapa. Se quita con **Quitar**; los demás mapas abren sin recuadros. Tres opciones:
    *Automáticos* (el motor amplía donde los símbolos no caben), *Elegir zonas* o
    *Ninguno*. Con *Elegir zonas* aparecen tres
    selectores encadenados —departamento, provincia y distrito—: elige la zona y pulsa
@@ -81,9 +88,9 @@ del color en el Perú y en un departamento.
 
 ### La escala sólo vale si imprimes al 100 %
 
-El pie de cada lámina lo dice. Si el diálogo de impresión trae «ajustar a la página»
-—viene activado por omisión en casi todos—, la barra de escala deja de medir lo que
-dice. Desactívalo.
+La lámina ya no lo dice en el pie, pero sigue valiendo. Si el diálogo de impresión trae
+«ajustar a la página» —viene activado por omisión en casi todos—, la barra de escala
+deja de medir lo que dice. Desactívalo.
 
 ## Los avisos dicen lo que el mapa **no** está diciendo
 
@@ -118,7 +125,8 @@ Se puede corregir a mano. El ubigeo dice solo de qué nivel es por su longitud: 
 dígitos departamento, cuatro provincia, seis distrito.
 
 Añadiendo `&fecha=2026-09-24` el PDF sale **idéntico byte a byte** cada vez que se abra
-el enlace, con la misma línea «Generado el». Sirve para rehacer meses después un mapa
+el enlace, con la misma fecha de generación en sus propiedades. Sirve para rehacer
+meses después un mapa
 que se aprobó.
 
 ![Un distrito con su tabla de centros](imagenes/interfaz-distrito.png)
@@ -142,8 +150,9 @@ no cambia solo cuando el MIMP publica otra versión. Para pasar a la nueva:
 5. **Vuelve a aprobar las referencias visuales** (ver abajo): con datos nuevos el dibujo
    cambia, y esas diferencias son esperadas, no regresiones.
 
-La versión queda registrada en `public/data/version.json` y aparece en el pie de cada
-PDF, para que una lámina impresa siempre diga de qué corte de datos salió.
+La versión queda registrada en `public/data/version.json` y va en las propiedades de
+cada PDF (Archivo → Propiedades → Palabras clave en el visor), para que un archivo
+siempre diga de qué corte de datos salió. El pie impreso ya no la lleva.
 
 ## Control de calidad
 

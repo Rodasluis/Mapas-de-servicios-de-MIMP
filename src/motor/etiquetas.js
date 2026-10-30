@@ -105,6 +105,16 @@ const SEPARACION = 0.3;
 const SEPARACION_HORIZONTAL = 0.3;
 
 /**
+ * Cuánto pueden rozar el límite de su unidad las letras de un rótulo ESTRICTO —los
+ * distritos del mapa del país—, en fracción de los puntos de su contorno.
+ *
+ * Exigir cero dejaba fuera nombres que a la vista cabían: basta con que la punta de una
+ * letra toque el borde. Con un 10 % el nombre sigue claramente dentro, con el centro
+ * siempre dentro y sin tocar íconos (revisión de la Fase 20).
+ */
+const FUERA_TOLERADA_ESTRICTO = 0.1;
+
+/**
  * Cuánto de su caja puede tener un rótulo debajo de íconos, como mucho.
  *
  * Los rótulos se dibujan debajo de los símbolos, así que un nombre con media caja
@@ -140,10 +150,11 @@ const COSTE = {
   ASOMA: 0.4, // el centro del rótulo fuera de su unidad
   LEJOS: 0.3, // del grupo de íconos, a partir de cuatro alturas de letra
   RESERVA_AJENA: 0.5, // encima del hueco que la rejilla de otra unidad dejó a su nombre
+  VERTICAL: 0.6, // girado: sólo cuando acostado no cabe
   /* Más la fracción de la caja que tapa. Tiene que superar la suma de todo lo demás
-     (3,1): los rótulos se dibujan debajo de los íconos, así que uno montado sobre
+     (3,7): los rótulos se dibujan debajo de los íconos, así que uno montado sobre
      ellos no sólo los tapa, también queda medio escondido. */
-  SOBRE_SIMBOLOS: 3.5,
+  SOBRE_SIMBOLOS: 4,
 };
 
 /**
@@ -182,16 +193,22 @@ export function colocarEtiquetas({ solicitudes, indice, medidor, marco, factor =
   const omitidos = [];
   rotulos.forEach(({ s, candidatos }, i) => {
     if (eleccion[i] < 0) {
-      omitidos.push({ id: s.id, texto: s.texto, nivel: s.nivel, motivo: 'sin sitio' });
+      /* Por qué falta: o no tenía ninguna posición admisible —no cabe en su unidad, o
+         sólo cabía sobre íconos o fuera del marco—, o las tenía y otros nombres las
+         ocuparon. Son problemas distintos y se arreglan distinto. */
+      omitidos.push({
+        id: s.id, texto: s.texto, nivel: s.nivel,
+        motivo: candidatos.length ? 'sin hueco libre' : 'no cabe',
+      });
       return;
     }
     const c = candidatos[eleccion[i]];
-    piezas.push(dibujar(c.lineas, c.cx, c.cy, s, medidor, factor));
+    piezas.push(dibujar(c.lineas, c.cx, c.cy, s, medidor, factor, c.vertical));
     indice.agregar({ ...c.caja, etiqueta: s.texto, nivel: s.nivel, id: s.id });
     /* Lo que hace falta para revisar cada nombre uno por uno: cuánto sale de su unidad,
        a qué distancia queda de sus íconos y cuánto los tapa. */
     colocados.push({
-      id: s.id, texto: s.texto, nivel: s.nivel, lineas: c.lineas.length,
+      id: s.id, texto: s.texto, nivel: s.nivel, lineas: c.lineas.length, vertical: c.vertical,
       x: Number(c.caja.x.toFixed(2)), y: Number(c.caja.y.toFixed(2)),
       ancho: Number(c.caja.ancho.toFixed(2)), alto: Number(c.caja.alto.toFixed(2)),
       fueraPct: Math.round(c.fuera * 100),
@@ -247,15 +264,15 @@ function candidatosDe(s, { indice, medidor, marco, reservas }) {
 
   const lista = [];
   /** Prueba una posición y, si es admisible, la apunta con su coste. */
-  const probar = (cx, cy, ancho, alto, lineas, costeBase, punto) => {
+  const probar = (cx, cy, ancho, alto, lineas, costeBase, punto, vertical = false) => {
     const caja = { x: cx - ancho / 2, y: cy - alto / 2, ancho, alto };
     if (!dentroDe(marco, caja)) return;
     if (indice.choca(caja, HOLGURA_MM, ES_SIMBOLO)) return;
 
     const centroDentro = !s.dentro || s.dentro(cx, cy);
     if (s.estricto && !centroDentro) return;
-    const fuera = s.dentro ? fraccionFuera(caja, s.dentro) : 0;
-    if (s.estricto && fuera > 0) return;
+    const fuera = s.dentro ? fraccionFuera(caja, s.dentro, altoLetra, vertical) : 0;
+    if (s.estricto && fuera > FUERA_TOLERADA_ESTRICTO) return;
     /* La distancia al grupo se cuenta desde el hilo de aire: pegado es cero. */
     const separacion = s.grupo ? Math.max(0, distanciaEntre(caja, s.grupo.caja) - aire * 1.01) : 0;
     /* Un rótulo tiene que señalar lo que nombra. En un distrito diminuto el nombre no
@@ -278,7 +295,7 @@ function candidatosDe(s, { indice, medidor, marco, reservas }) {
       + (reservas.areaSolapada(caja, esAjena) > 0 ? COSTE.RESERVA_AJENA : 0)
       + (sobreSimbolos > 0 ? COSTE.SOBRE_SIMBOLOS + sobreSimbolos : 0);
     lista.push({
-      caja, cx, cy, lineas, coste, orden: lista.length, fuera, separacion, sobreSimbolos,
+      caja, cx, cy, lineas, vertical, coste, orden: lista.length, fuera, separacion, sobreSimbolos,
     });
   };
 
@@ -303,6 +320,20 @@ function candidatosDe(s, { indice, medidor, marco, reservas }) {
     }
 
     /* 2. Alrededor de los puntos interiores de la unidad. */
+    alrededorDeLosPuntos(ancho, alto, lineas, 0, false);
+  });
+
+  /* 3. En VERTICAL, sólo para los rótulos que van enteros dentro de su unidad o no van
+        —los distritos del mapa del país— y en una línea. Es el último recurso: muchos
+        distritos de la sierra son altos y estrechos, y su nombre no cabe acostado
+        aunque a la vista sobre sitio. Así lo hace QGIS con las unidades alargadas
+        (revisión de la Fase 20). */
+  if (s.estricto) {
+    const { lineas, ancho, alto } = variantes[0];
+    alrededorDeLosPuntos(alto, ancho, lineas, COSTE.VERTICAL, true);
+  }
+
+  function alrededorDeLosPuntos(ancho, alto, lineas, extra, vertical) {
     s.puntos.forEach((punto, p) => {
       DISTANCIAS.forEach((distancia, d) => {
         DIRECCIONES.forEach(([dx, dy], r) => {
@@ -310,11 +341,11 @@ function candidatosDe(s, { indice, medidor, marco, reservas }) {
           const cx = punto.x + dx * (ancho / 2 + aire) * distancia;
           const cy = punto.y + dy * (alto / 2 + aire) * distancia;
           probar(cx, cy, ancho, alto, lineas,
-            COSTE.PUNTO * (p / ultimoPunto) + COSTE.DISTANCIA * d + COSTE.DIRECCION * r, punto);
+            extra + COSTE.PUNTO * (p / ultimoPunto) + COSTE.DISTANCIA * d + COSTE.DIRECCION * r, punto, vertical);
         });
       });
     });
-  });
+  }
 
   /* Orden estable: a igual coste, el de generación, que ya va de lo preferido a lo
      menos preferido. */
@@ -503,24 +534,41 @@ function partirEnDos(texto, medidor, estilo) {
  * cruzar el límite por el medio con las cuatro dentro, o tener una fuera por un
  * milímetro y pagar lo mismo que medio nombre fuera. Ahora se miran puntos repartidos
  * por los bordes de arriba y de abajo, uno por cada alto de letra, más los dos de los
- * lados. Un poco hacia dentro, porque la caja incluye el aire de acentos y
- * descendentes que el dibujo casi nunca ocupa.
+ * lados.
+ *
+ * Y se miran sobre la franja que ocupan las LETRAS, no sobre la caja: en Source Sans 3
+ * la caja de una línea mide 1,326 em —ascenso más descenso—, y las mayúsculas y las
+ * astas empiezan a un 27 % de su alto y la línea base queda a un 15 % del pie. Lo de
+ * arriba es aire para acentos y lo de abajo, para las colas de la «g» o la «p». Medida
+ * sobre la caja, un nombre que sólo rozaba el límite con ese aire contaba como fuera, y
+ * en el mapa del país por distritos se perdían cientos de nombres que a la vista cabían
+ * (revisión de la Fase 20).
+ *
+ * @param {number} [altoLetra] alto de UNA línea; por omisión, el de la caja
  */
-export function fraccionFuera(r, dentro) {
-  const mx = r.ancho * 0.02;
-  const my = r.alto * 0.12;
-  const x0 = r.x + mx; const x1 = r.x + r.ancho - mx;
-  const y0 = r.y + my; const y1 = r.y + r.alto - my;
-  const columnas = Math.max(2, Math.min(8, Math.ceil(r.ancho / r.alto) + 1));
+export function fraccionFuera(r, dentro, altoLetra = r.alto, vertical = false) {
+  /* En vertical el texto está girado un cuarto de vuelta a la izquierda: lo de arriba
+     de las letras queda a la izquierda de la caja y la línea base, a la derecha. Se
+     mide en el sistema del texto y se gira el punto al mirarlo. */
+  const largo = vertical ? r.alto : r.ancho;
+  const corto = vertical ? r.ancho : r.alto;
+  const m = largo * 0.02;
+  const a0 = m; const a1 = largo - m; // a lo largo del texto
+  const b0 = altoLetra * 0.27; const b1 = corto - altoLetra * 0.15; // de arriba a la base
+  const columnas = Math.max(2, Math.min(8, Math.ceil(largo / corto) + 1));
   let fuera = 0; let total = 0;
-  const mirar = (x, y) => { total++; if (!dentro(x, y)) fuera++; };
+  const mirar = (a, b) => {
+    total++;
+    const [x, y] = vertical ? [r.x + b, r.y + r.alto - a] : [r.x + a, r.y + b];
+    if (!dentro(x, y)) fuera++;
+  };
   for (let c = 0; c < columnas; c++) {
-    const x = x0 + ((x1 - x0) * c) / (columnas - 1);
-    mirar(x, y0);
-    mirar(x, y1);
+    const a = a0 + ((a1 - a0) * c) / (columnas - 1);
+    mirar(a, b0);
+    mirar(a, b1);
   }
-  mirar(x0, (y0 + y1) / 2);
-  mirar(x1, (y0 + y1) / 2);
+  mirar(a0, (b0 + b1) / 2);
+  mirar(a1, (b0 + b1) / 2);
   return fuera / total;
 }
 
@@ -534,7 +582,10 @@ const dentroDe = (contenedor, r) => r.x >= contenedor.x && r.y >= contenedor.y
   && r.x + r.ancho <= contenedor.x + contenedor.ancho
   && r.y + r.alto <= contenedor.y + contenedor.alto;
 
-function dibujar(lineas, cx, cy, s, medidor, factor) {
+/* En vertical se dibuja como en horizontal, centrado en el mismo punto, y se gira un
+   cuarto de vuelta a la izquierda: se lee de abajo arriba, como los números de la
+   retícula. */
+function dibujar(lineas, cx, cy, s, medidor, factor, vertical = false) {
   const alturaLinea = medidor.alto(s.estilo) * 0.92;
   const primera = cy - ((lineas.length - 1) * alturaLinea) / 2 + medidor.alto(s.estilo) * 0.32;
   const halo = {
@@ -543,7 +594,8 @@ function dibujar(lineas, cx, cy, s, medidor, factor) {
     medidor,
     estilo: s.estilo,
   };
-  return grupo({}, lineas.map((linea, i) => textoConHalo(linea, {
+  const giro = vertical ? { transform: `rotate(-90 ${num(cx)} ${num(cy)})` } : {};
+  return grupo(giro, lineas.map((linea, i) => textoConHalo(linea, {
     x: num(cx),
     y: num(primera + i * alturaLinea),
     'text-anchor': 'middle',

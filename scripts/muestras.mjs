@@ -593,7 +593,7 @@ for (const { muestra, salida } of resultados) {
   const porNivel = {};
   const anotar = (nivel, clave) => {
     porNivel[nivel] = porNivel[nivel] || {
-      total: 0, dentro: 0, poco: 0, mucho: 0, sinSitio: 0, pegados: 0, conGrupo: 0, tapan: 0,
+      total: 0, dentro: 0, poco: 0, mucho: 0, sinSitio: 0, pegados: 0, conGrupo: 0, tapan: 0, verticales: 0,
     };
     porNivel[nivel][clave]++;
   };
@@ -606,6 +606,7 @@ for (const { muestra, salida } of resultados) {
       if (c.aGrupoMm === 0) anotar(c.nivel, 'pegados');
     }
     if (c.sobreSimbolosPct > 0) anotar(c.nivel, 'tapan');
+    if (c.vertical) anotar(c.nivel, 'verticales');
   }
   for (const o of e.sinSitio) {
     if (o.nivel === 'exterior') continue;
@@ -617,20 +618,24 @@ for (const { muestra, salida } of resultados) {
     console.log(`    ${`${nivel}${nivel.endsWith('r') ? 'es' : 's'}`.padEnd(14)} ${v.dentro}/${v.total} dentro de su unidad`
       + ` · ${v.poco} asoman menos de un cuarto · ${v.mucho} más · ${v.sinSitio} sin sitio`
       + (v.conGrupo ? ` · ${v.pegados}/${v.conGrupo} pegados a sus íconos` : '')
-      + (v.tapan ? ` · ${v.tapan} rozan íconos` : ''));
+      + (v.tapan ? ` · ${v.tapan} rozan íconos` : '')
+      + (v.verticales ? ` · ${v.verticales} en vertical` : ''));
   }
 
-  const fila = (nivel, id, nombre, r) => {
+  /* Puesto (en vertical, si va girado) o el motivo por el que falta: «no cabe» en su
+     unidad, o «sin hueco libre» porque otros nombres le ocuparon las posiciones. */
+  const fila = (nivel, id, nombre, r, motivo) => {
     const g = grupoDe.get(id);
     filasTerritorio.push([
-      muestra.nombre, nivel, id, nombre, r ? 'puesto' : 'sin sitio',
+      muestra.nombre, nivel, id, nombre,
+      r ? (r.vertical ? 'puesto en vertical' : 'puesto') : `sin sitio: ${motivo || '—'}`,
       r ? r.lineas : '', r ? r.fueraPct : '', r && r.aGrupoMm !== null ? r.aGrupoMm : '',
       r ? r.sobreSimbolosPct : '', g ? g.iconos : '', g && g.dentro !== null ? g.dentro : '',
       g ? g.forma : '', g ? (g.conNombre ? 'sí' : 'no') : '',
     ]);
   };
   for (const c of e.colocados) if (c.nivel !== 'exterior') fila(c.nivel, c.id, c.texto, c);
-  for (const o of e.sinSitio) if (o.nivel !== 'exterior') fila(o.nivel, o.id, o.texto, null);
+  for (const o of e.sinSitio) if (o.nivel !== 'exterior') fila(o.nivel, o.id, o.texto, null, o.motivo);
 }
 const CABECERA_TERRITORIOS = [
   'muestra', 'nivel', 'ubigeo', 'nombre', 'rótulo', 'líneas', 'fuera de su unidad (%)',
@@ -652,8 +657,16 @@ for (const { muestra, salida } of resultados) {
   console.log(`    piezas: ${layout.colocadas.map((p) => `${p.nombre}@${p.anclaje}`).join(', ') || 'ninguna'}`);
   const ley = layout.colocadas.find((p) => p.nombre === 'leyenda');
   if (ley) {
+    const c = layout.leyenda;
     console.log(`    leyenda: ${ley.ancho}×${ley.alto} mm en ${ley.anclaje}`
-      + ` · tapa ${ley.territorioTapadoPct} % de su caja`);
+      + ` · tapa ${ley.territorioTapadoPct} % de su caja`
+      + (c ? ` · ${c.columnas} columna(s),`
+        + ` ${c.abreviada ? 'siglas' : 'nombres completos'}${c.nombresPartidos ? ' partidos' : ' en una línea'},`
+        + ` texto al ${Math.round(c.escalaTexto * 100)} %` : ''));
+    const cl = layout.colocadas.find((p) => p.nombre === 'clases');
+    if (cl) console.log(`    clases: ${cl.ancho}×${cl.alto} mm en ${cl.anclaje}`);
+    const esc = layout.colocadas.find((p) => p.nombre === 'escala');
+    if (esc) console.log(`    escala gráfica: en ${esc.anclaje}${esc.anclaje.startsWith('abajo') ? '' : '  · fuera de la fila de abajo'}`);
   }
   const t = salida.meta.titulo;
   console.log(`    título: cuerpo al ${Math.round(t.reduccion * 100)} % en ${t.lineas} líneas`

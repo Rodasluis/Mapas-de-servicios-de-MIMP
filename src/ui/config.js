@@ -23,6 +23,9 @@ export const ZOOM_LIMA_CALLAO = ['1501', '07'];
 export const TAMANOS = ['A4', 'A3', 'A2', 'A1', 'A0', '2A0', '4A0'];
 export const ORIENTACIONES = ['vertical', 'horizontal'];
 
+/** Los textos que escribe la persona y que viajan en la URL. */
+const CAMPOS_DE_TEXTO = ['titulo', 'subtitulo', 'periodo'];
+
 export const POR_DEFECTO = {
   hoja: { tamano: 'A1', orientacion: 'vertical' },
   /* Ámbito: nacional, o un ubigeo de departamento (2 dígitos) o provincia (4). */
@@ -39,7 +42,6 @@ export const POR_DEFECTO = {
        a «?ambito=08» abría un mapa de Cusco subtitulado «Ámbito nacional». */
     subtitulo: '',
     periodo: '',
-    elaboradoPor: '',
   },
   tipos: null, // null es «todos»
   /* Cómo se reparten los íconos de cada grupo: 'rejilla', que sigue la forma de las
@@ -84,7 +86,7 @@ export function aParametros(config) {
   if (config.hoja.orientacion !== POR_DEFECTO.hoja.orientacion) {
     p.set('orientacion', config.hoja.orientacion === 'horizontal' ? 'h' : 'v');
   }
-  for (const campo of ['titulo', 'subtitulo', 'periodo', 'elaboradoPor']) {
+  for (const campo of CAMPOS_DE_TEXTO) {
     if (config.textos[campo] !== POR_DEFECTO.textos[campo]) p.set(campo, config.textos[campo]);
   }
   if (config.tipos && config.tipos.length) {
@@ -138,7 +140,8 @@ export function desdeParametros(p) {
   const orientacion = p.get('orientacion');
   if (orientacion) config.hoja.orientacion = orientacion.startsWith('h') ? 'horizontal' : 'vertical';
 
-  for (const campo of ['titulo', 'subtitulo', 'periodo', 'elaboradoPor']) {
+  /* Un enlace antiguo con «elaboradoPor» abre igual: el parámetro ya no se lee. */
+  for (const campo of CAMPOS_DE_TEXTO) {
     if (p.has(campo)) config.textos[campo] = p.get(campo);
   }
 
