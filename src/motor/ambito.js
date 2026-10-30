@@ -103,17 +103,15 @@ export async function encajeDeTanteo(ambito, cargador) {
  * quien dibuja no tenga que preguntar en qué ámbito está.
  *
  * `unidades` y `claveCentro` son la unidad del color y la de los grupos de íconos.
- *
- * `simbolosZoom` es cómo dibujan los íconos los recuadros de zoom cuando no es como el
- * mapa principal. Partido hasta distritos —el país o un departamento—, el recuadro
- * pone cada centro en su sitio en vez de repetir el grupo con sus cifras: el mapa da el
- * reparto y el recuadro, que tiene la escala para hacerlo, dice dónde está cada uno.
+ * Los recuadros de zoom dibujan los íconos como el mapa principal: partido hasta
+ * distritos, un grupo por distrito con sus cifras. Entre las Fases 17 y 20 ponían cada
+ * centro en su sitio, sin cifras; desde que Lima y Callao llevan los íconos sólo en su
+ * recuadro, ése es el único sitio donde se pueden contar, y tienen que llevarlas.
  *
  * @returns {{
  *   unidades, intermedios, contorno, exterior, encaje,
  *   agregacion: 'departamento'|'provincia'|'distrito',
  *   simbolos: 'agregado'|'individual'|'numerado',
- *   simbolosZoom?: 'individual',
  *   claveCentro: (centro) => string,
  *   perteneceAlAmbito: (centro) => boolean,
  *   rotulos: Array<{nivel, rasgos, prioridad, mayusculas, exterior, estricto, opcional}>,
@@ -189,7 +187,6 @@ async function cargarNacional({ cargador, nivel, division }) {
       ...comun,
       unidades: coleccion(distritos),
       intermedios: provincias,
-      simbolosZoom: 'individual',
       zonas: zonasPor(2, departamentos.features, true),
       trazos: {
         unidad: 'limiteDistritalNacional',
@@ -294,7 +291,6 @@ async function cargarDepartamento({ ambito, cargador, nivel, division }) {
     },
     agregacion: 'distrito',
     simbolos: 'agregado',
-    simbolosZoom: 'individual',
     claveCentro: (c) => c.ubigeo,
     perteneceAlAmbito: (c) => c.ccdd === ccdd,
     rotulos: [

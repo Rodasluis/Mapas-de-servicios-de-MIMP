@@ -32,8 +32,8 @@ import {
   SITIO_FIJO,
 } from './layout.js';
 import {
-  agregarCentros, claseDe, clasesUsadas, repartirIconos, medirApinamiento,
-  CLASES_POR_DEFECTO,
+  agregarCentros, claseDe, clasesUsadas, repartirGrupo, medirApinamiento, cifraDeGrupo,
+  CLASES_POR_DEFECTO, DISPOSICIONES,
 } from './servicios.js';
 import {
   normalizarAmbito, encajeDeTanteo, cargarAmbito, divisionPara,
@@ -45,9 +45,9 @@ import { construirRecuadros, maximoPorFormato, UMBRAL_APINAMIENTO } from './zoom
 import {
   dibujarIcono, comprobarCobertura, cajaEnPunto, ESTILO_POR_DEFECTO, TAMANO_MINIMO_MM,
 } from '../iconos/index.js';
-import { poloDeInaccesibilidad, polosDeInaccesibilidad, puntoEnAnillos } from './ocupacion.js';
+import { poloDeInaccesibilidad, polosDeInaccesibilidad, pruebaDentro } from './ocupacion.js';
 import { crearIndice } from './colisiones.js';
-import { colocarEtiquetas, crearSolicitud } from './etiquetas.js';
+import { colocarEtiquetas, crearSolicitud, medirRotulo } from './etiquetas.js';
 import { color, trazoMm, tipografia, layoutMm, rampaNaranjas, ptAmm } from '../estilo/tokens.js';
 import { el, grupo, texto, textoConHalo, rect, documento, num } from './svg.js';
 import { fechaDelMapa } from './fecha.js';
@@ -122,6 +122,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
   /* Un solo estilo de íconos, el círculo (src/iconos/estilos.js). Ya no se elige: un
      enlace antiguo con ?iconos=casa sale igual que uno sin el parámetro. */
   const estiloIconos = ESTILO_POR_DEFECTO;
+  /* Disposición de los íconos de cada grupo: en anillo, como el «desplazamiento de
+     puntos» de QGIS (por omisión), o en rejilla. Una desconocida cae en la de por
+     omisión: viene de la URL. */
+  const disposicion = DISPOSICIONES.includes(opciones.disposicion) ? opciones.disposicion : DISPOSICIONES[0];
 
   /* Filtro de tipos. null es «todos»; un conjunto vacío no dibujaría nada, así que se
      trata como todos y se anota, en vez de devolver un mapa en blanco sin explicación. */
@@ -226,9 +230,16 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
 
      Los 6 mm se midieron en A0. En 2A0 y 4A0 el mapa está a una escala mayor —las
      provincias miden 1,4 y 2 veces más— y el tope se estira con la raíz de ese
-     crecimiento: 7 mm en 2A0 y 8 mm en 4A0. De A4 a A0 no cambia nada. */
+     crecimiento: 7 mm en 2A0 y 8 mm en 4A0. De A4 a A0 no cambia nada.
+
+     Desde la revisión de la Fase 20 el ícono del mapa va a la MITAD de ese tamaño
+     (ESCALA_ICONO_MAPA): 1,7 mm en A4 y 3 mm en A0. Lo pidió el área usuaria para que
+     los grupos no se choquen. Queda por debajo del mínimo en el que el pictograma se
+     lee bien (TAMANO_MINIMO_MM), así que a esa medida los tipos se distinguen sobre
+     todo por el color. La leyenda no cambia: sus íconos tienen su propia medida. */
   const topeIcono = 6 * Math.sqrt(Math.max(1, factor / FACTOR_A0));
-  const tamanoIcono = Math.min(topeIcono, Math.max(TAMANO_MINIMO_MM, 3.4 * Math.sqrt(factor)));
+  const tamanoIcono = ESCALA_ICONO_MAPA
+    * Math.min(topeIcono, Math.max(TAMANO_MINIMO_MM, 3.4 * Math.sqrt(factor)));
   const vacioSimbolos = { svg: '', grupos: [], apinados: [], apinamientoMaximoPct: 0 };
   /* En el ámbito distrital cada centro lleva además un número, que es lo que lo une
      con su fila de la tabla. La numeración se fija aquí, una sola vez, para que el
@@ -266,7 +277,8 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     } else {
       simbolos = dibujarSimbolos({
         unidades: plan.unidades, agregado, anillos, estiloIconos, marco, medidor, factor,
-        tamanoIcono,
+        tamanoIcono, disposicion,
+        nombres: capasVisibles.rotulos ? nombresParaRejilla({ niveles: plan.rotulos, factor, medidor }) : undefined,
       });
     }
   }
@@ -275,9 +287,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
      Se salen de su provincia —el de Lima se adentra en el mar— así que un bloque
      puesto sobre «espacio libre» podía caer encima: la leyenda y un recuadro de zoom
      acabaron sobre los símbolos de Lima, y la escala sobre los de Arequipa. */
-  for (const g of simbolos.grupos) {
-    ocupacion.marcarBloque({ x: g.x, y: g.y, ancho: g.ancho, alto: g.alto });
-  }
+  for (const g of simbolos.grupos) for (const c of g.celdas || [g]) ocupacion.marcarBloque(c);
 
   const grilla = capasVisibles.grilla
     ? construirGrilla(proyeccion, marco, escala.denominador)
@@ -331,7 +341,6 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       medidor,
       factor,
       rampa,
-      tamanoIconoMm: Math.min(5, tamanoIcono),
       marco,
       ocupacion,
     }),
@@ -392,9 +401,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
        departamento, los distritos por provincia. */
     zonas: plan.zonas,
     /* El recuadro dibuja lo mismo que el mapa principal: si éste pinta cada centro en
-       su sitio, el zoom también. La excepción la declara el ámbito: partido hasta
-       distritos, el recuadro desagrega lo que el mapa acumula (ver ambito.js). */
-    modoSimbolos: plan.simbolosZoom || plan.simbolos,
+       su sitio, el zoom también, y si agrupa por distrito con sus cifras, el zoom
+       agrupa por distrito con sus cifras. */
+    modoSimbolos: plan.simbolos,
+    disposicion,
     centros: agregado.centros,
     /* Las mismas capas que dibuja el mapa, para que el recuadro sea un recorte
        ampliado y no una isla sobre el mar. */
@@ -418,6 +428,18 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     ocupacion,
     maximo: opciones.maximoRecuadros,
   });
+
+  /* Lima Metropolitana y Callao llevan los íconos SÓLO en su recuadro (zoom.js,
+     SOLO_EN_RECUADRO): en el mapa son una mancha de grupos que se pisan, y repetirlos
+     al lado del recuadro que los separa sólo añade ruido. Se quitan después de colocar
+     el recuadro, no antes, porque si no cupiera en la hoja esos servicios no
+     aparecerían en ninguna parte. Su reserva en la rejilla de ocupación se queda: ya
+     ha servido para colocar la leyenda y los recuadros, y quitarla ahora no movería
+     nada. */
+  const soloEnRecuadro = plan.simbolos === 'agregado' ? recuadros.soloEnRecuadro : new Set();
+  if (soloEnRecuadro.size) {
+    simbolos = resumirSimbolos(simbolos.grupos.filter((g) => !soloEnRecuadro.has(g.unidad)));
+  }
 
   const etiquetas = capasVisibles.contexto
     ? rotulosDeContexto({ contexto, anillosPorRasgo: anillos, marco, ocupacion, medidor, factor })
@@ -448,11 +470,15 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
   for (const z of recuadros.colocados) {
     indiceRotulos.agregar({ x: z.x, y: z.y, ancho: z.ancho, alto: z.alto, etiqueta: z.nombre });
   }
+  /* Celda por celda: un grupo que sigue la forma de su unidad no estorba en los huecos
+     de su caja envolvente, y es justo ahí donde suele caber su nombre. */
   for (const g of simbolos.grupos) {
-    indiceRotulos.agregar({
-      x: g.x, y: g.y, ancho: g.ancho, alto: g.alto,
-      etiqueta: `símbolos ${g.nombre}`, nivel: 'simbolos',
-    });
+    for (const c of g.celdas || [g]) {
+      indiceRotulos.agregar({
+        x: c.x, y: c.y, ancho: c.ancho, alto: c.alto,
+        etiqueta: `símbolos ${g.nombre}`, nivel: 'simbolos',
+      });
+    }
   }
   for (const c of etiquetas.cajas || []) indiceRotulos.agregar(c);
 
@@ -461,6 +487,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       solicitudes: solicitudesDeRotulos({
         niveles: plan.rotulos, anillos, simbolos, factor, marco,
       }),
+      /* Los huecos que cada rejilla dejó a su nombre: un departamento, que se coloca
+         antes, no debe quitárselo a su provincia teniendo otro sitio. */
+      reservas: simbolos.grupos.filter((g) => g.reservaNombre)
+        .map((g) => ({ ...g.reservaNombre, id: g.unidad })),
       indice: indiceRotulos,
       medidor,
       marco,
@@ -553,10 +583,23 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
         clasesUsadas: clasesVisibles.map((i) => clases[i].etiqueta),
         filtro: tiposActivos ? [...tiposActivos] : null,
         tamanoIconoMm: Number(tamanoIcono.toFixed(2)),
+        disposicion,
         gruposApinados: simbolos.apinados,
         recuadros: recuadros.regiones,
         capacidadRecuadros: recuadros.capacidad,
         avisosRecuadros: recuadros.avisos,
+        // Unidades cuyos íconos van sólo en su recuadro (Lima Metropolitana y Callao).
+        unidadesSoloEnRecuadro: soloEnRecuadro.size,
+        /* Cada grupo del mapa, para revisarlos uno por uno: cómo se dispuso (rejilla
+           compacta, alargada o siguiendo la forma) y cuántos íconos caben en su unidad. */
+        grupos: simbolos.grupos.filter((g) => g.forma).map((g) => ({
+          unidad: g.unidad,
+          nombre: g.nombre,
+          iconos: g.tipos,
+          forma: g.forma,
+          dentro: g.iconosDentro,
+          conNombre: g.conNombre,
+        })),
         apinamientoMaximoPct: simbolos.apinamientoMaximoPct,
         iconosSinUso: cobertura.sinUso,
       },
@@ -589,6 +632,11 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
         omitidos: rotulos.omitidos
           .filter((o) => !plan.rotulos.some((r) => r.opcional && r.nivel === o.nivel))
           .map((o) => o.texto),
+        /* Cada nombre puesto, con cuánto sale de su unidad y a qué distancia queda de
+           sus íconos (etiquetas.js), y cada uno sin sitio, opcionales incluidos: con
+           los dos se revisan los territorios uno por uno (muestras/territorios.csv). */
+        colocados: rotulos.colocados,
+        sinSitio: rotulos.omitidos.map(({ id, texto, nivel }) => ({ id, texto, nivel })),
         cajas: indiceRotulos.lista().map((c) => ({
           etiqueta: c.etiqueta || c.id || '',
           nivel: c.nivel || 'bloque',
@@ -762,6 +810,9 @@ const CERCANOS_A_LISTAR = 6;
 /** Factor de formato del A0: la hoja en la que se calibraron los topes de tamaño. */
 const FACTOR_A0 = factorFormato({ diagonalMm: Math.hypot(...TAMANOS.A0) });
 
+/** Fracción del tamaño de referencia a la que se dibuja el ícono del mapa (ver componer). */
+const ESCALA_ICONO_MAPA = 0.5;
+
 /**
  * Los centros más cercanos al ámbito, con su distancia en línea recta.
  *
@@ -855,21 +906,46 @@ const ESTILOS_ROTULO = {
 /** Finura del campo de distancias según el nivel: más fino, más lento y más preciso. */
 const CELDA_POR_PRIORIDAD = [2, 1.5, 1.2];
 
+/** Estilo y tinta del rótulo de un nivel, a la medida de la hoja. */
+function estiloDeRotulo(nivel, factor) {
+  const def = ESTILOS_ROTULO[nivel] || ESTILOS_ROTULO.provincia;
+  const t = tipografia[def.tipo];
+  return {
+    estilo: { familia: t.familia, variante: t.peso, pt: t.pt * Math.sqrt(factor) },
+    tinta: color[def.color],
+  };
+}
+
+/** El texto del rótulo de un rasgo, en mayúsculas si su nivel lo pide. */
+const textoDeRotulo = (capa, f) => (capa.mayusculas
+  ? f.properties.nombre.toLocaleUpperCase('es') : f.properties.nombre);
+
+/**
+ * El nombre de cada unidad, ya medido, para que su rejilla de íconos le deje sitio
+ * (servicios.js, repartirEnRejilla).
+ *
+ * Sólo los niveles que se rotulan siempre: en el Perú por distritos los nombres de
+ * distrito son opcionales y casi ninguno cabe, así que apartar sus íconos para ellos
+ * movería el mapa a cambio de nada.
+ */
+function nombresParaRejilla({ niveles, factor, medidor }) {
+  const nombres = new Map();
+  for (const capa of niveles) {
+    if (capa.exterior || capa.opcional) continue;
+    const { estilo } = estiloDeRotulo(capa.estilo || capa.nivel, factor);
+    for (const f of capa.rasgos) {
+      nombres.set(f.properties.ubigeo, medirRotulo(textoDeRotulo(capa, f), estilo, medidor));
+    }
+  }
+  return nombres;
+}
+
 function solicitudesDeRotulos({ niveles, anillos, simbolos, factor, marco }) {
   const solicitudes = [];
-  const polosDe = new Map(simbolos.grupos.map((g) => [g.unidad, g.polos]));
-
-  const estiloDe = (nivel) => {
-    const def = ESTILOS_ROTULO[nivel] || ESTILOS_ROTULO.provincia;
-    const t = tipografia[def.tipo];
-    return {
-      estilo: { familia: t.familia, variante: t.peso, pt: t.pt * Math.sqrt(factor) },
-      tinta: color[def.color],
-    };
-  };
+  const grupoDe = new Map(simbolos.grupos.map((g) => [g.unidad, g]));
 
   for (const capa of niveles) {
-    const { estilo, tinta } = estiloDe(capa.estilo || capa.nivel);
+    const { estilo, tinta } = estiloDeRotulo(capa.estilo || capa.nivel, factor);
     const celda = CELDA_POR_PRIORIDAD[Math.min(capa.prioridad - 1, CELDA_POR_PRIORIDAD.length - 1)];
 
     for (const f of capa.rasgos) {
@@ -879,7 +955,9 @@ function solicitudesDeRotulos({ niveles, anillos, simbolos, factor, marco }) {
       /* Los polos de las unidades ya los calculó la capa de símbolos. Reaprovecharlos
          ahorra rehacer el campo de distancias y, sobre todo, garantiza que el nombre
          busque sitio alrededor del MISMO punto donde están los íconos. */
-      let polos = capa.exterior ? null : polosDe.get(f.properties.ubigeo);
+      /* Y el nombre se busca pegado a ese grupo, que es lo que nombra. */
+      const g = capa.exterior ? null : grupoDe.get(f.properties.ubigeo);
+      let polos = g ? g.polos : null;
       if (!polos || !polos.length) {
         const caja = cajaDeAnillos(anillosRasgo, marco);
         polos = caja ? polosDeInaccesibilidad(anillosRasgo, caja, celda, PUNTOS_POR_ROTULO) : [];
@@ -888,14 +966,15 @@ function solicitudesDeRotulos({ niveles, anillos, simbolos, factor, marco }) {
 
       solicitudes.push(crearSolicitud({
         id: f.properties.ubigeo,
-        texto: capa.mayusculas ? f.properties.nombre.toLocaleUpperCase('es') : f.properties.nombre,
+        texto: textoDeRotulo(capa, f),
         nivel: capa.nivel,
         prioridad: capa.prioridad,
         peso: polos[0].radioMm,
         puntos: polos,
         estilo,
         color: tinta,
-        dentro: (x, y) => puntoEnAnillos(x, y, anillosRasgo),
+        dentro: g?.dentro || pruebaDentro(anillosRasgo),
+        ...(g ? { grupo: { caja: { x: g.x, y: g.y, ancho: g.ancho, alto: g.alto } } } : {}),
         ...(capa.estricto ? { estricto: true } : {}),
       }));
     }
@@ -915,18 +994,20 @@ function solicitudesDeRotulos({ niveles, anillos, simbolos, factor, marco }) {
  *
  * El grupo se ancla en el polo de inaccesibilidad de la provincia, no en su centroide:
  * en una provincia cóncava o partida en islas el centroide cae fuera y el grupo se
- * dibujaría sobre la vecina.
+ * dibujaría sobre la vecina. En rejilla puede correrse a otro punto interior para
+ * dejarle sitio a su nombre, o seguir la forma de la unidad (servicios.js).
  *
  * Todos los íconos tienen el mismo tamaño, el de la hoja: crece o se achica con el
  * papel y con nada más. En la Fase 18 se probó a achicarlos distrito por distrito y el
  * área usuaria prefirió un tamaño único (Fase 19).
  */
 function dibujarSimbolos({
-  unidades, agregado, anillos, estiloIconos, marco, medidor, factor, tamanoIcono,
+  unidades, agregado, anillos, estiloIconos, marco, medidor, factor, tamanoIcono, disposicion,
+  nombres = new Map(),
 }) {
-  const eCifra = { familia: 'SourceSans3', variante: 'Semibold', pt: 5.2 * Math.sqrt(factor) };
-  const altoCifra = medidor.alto(eCifra) * 0.95;
-  const piezas = [];
+  const cifra = cifraDeGrupo(factor);
+  const eCifra = cifra.estilo;
+  const altoCifra = cifra.alto;
   const grupos = [];
 
   for (const f of unidades.features) {
@@ -956,8 +1037,17 @@ function dibujarSimbolos({
     const tipos = [...datos.tipos.keys()].sort(
       (a, b) => agregado.porTipo.get(b) - agregado.porTipo.get(a) || a.localeCompare(b, 'es'),
     );
-    const { posiciones, ancho, alto } = repartirIconos(tipos.length, polo, tamanoIcono, altoCifra);
+    /* La prueba de la unidad va con el grupo: la rejilla la usa para seguir su forma y
+       los rótulos, para saber si caen dentro, sin volver a repartir los lados. Con el
+       nombre medido, la rejilla le deja sitio a su lado dentro de la unidad. */
+    const dentro = pruebaDentro(anillosProv);
+    const {
+      posiciones, celdas, caja: cajaGrupo, forma, iconosDentro, conNombre, nombre,
+    } = repartirGrupo(tipos.length, polo, tamanoIcono, altoCifra, disposicion, {
+      dentro, rotulo: nombres.get(f.properties.ubigeo), puntos: polos,
+    });
 
+    const piezas = [];
     tipos.forEach((tipo, i) => {
       const p = posiciones[i];
       piezas.push(dibujarIcono({
@@ -969,7 +1059,7 @@ function dibujarSimbolos({
       }));
       piezas.push(textoConHalo(String(datos.tipos.get(tipo)), {
         x: p.x,
-        y: p.y + altoCifra * 0.82,
+        y: p.y + cifra.base,
         'text-anchor': 'middle',
         fill: color.tinta,
         'font-family': eCifra.familia,
@@ -977,7 +1067,7 @@ function dibujarSimbolos({
         'font-weight': 600,
       }, {
         colorHalo: color.halo,
-        grosorMm: trazoMm.haloRotulo * factor * 0.7,
+        grosorMm: cifra.halo,
         medidor,
         estilo: eCifra,
       }));
@@ -986,23 +1076,37 @@ function dibujarSimbolos({
     grupos.push({
       unidad: f.properties.ubigeo,
       nombre: f.properties.nombre,
-      x: polo.x - ancho / 2,
-      y: polo.y - alto / 2,
-      ancho,
-      alto,
+      ...cajaGrupo,
+      celdas,
+      dentro,
+      forma,
+      iconosDentro,
+      conNombre,
+      // El hueco que la rejilla dejó a su nombre, para que no se lo quite otro rótulo.
+      reservaNombre: nombre ? nombre.caja : null,
       // Los polos ya están calculados; los rótulos los reutilizan en vez de rehacerlos.
       polo: { x: polo.x, y: polo.y, radioMm: polo.radioMm },
       polos: polos.map((p) => ({ x: p.x, y: p.y, radioMm: p.radioMm })),
       tipos: tipos.length,
       centros: datos.total,
+      // El dibujo va con su grupo para poder quitarlo después (Lima y Callao, ver componer).
+      svg: piezas.join('\n'),
     });
   }
 
+  return resumirSimbolos(grupos);
+}
+
+/**
+ * Dibujo e informe de unos grupos de íconos: el apiñamiento se mide entre los que
+ * quedan, porque un grupo deja de estorbar cuando se quita el de al lado.
+ */
+function resumirSimbolos(grupos) {
   const medidos = medirApinamiento(grupos);
   const apinados = medidos.filter((g) => g.apinamiento > UMBRAL_APINAMIENTO);
 
   return {
-    svg: piezas.join('\n'),
+    svg: medidos.map((g) => g.svg).join('\n'),
     grupos: medidos,
     apinados: apinados.map((g) => ({
       nombre: g.nombre,

@@ -13,9 +13,12 @@
  */
 import { ICONOS } from '../iconos/index.js';
 import { fechaDelMapa } from '../motor/fecha.js';
-import { CLASES_POR_DEFECTO } from '../motor/servicios.js';
+import { CLASES_POR_DEFECTO, DISPOSICIONES } from '../motor/servicios.js';
 import { CAPAS_POR_DEFECTO, PIEZAS_POR_DEFECTO } from '../motor/render.js';
 import { DIVISIONES } from '../motor/ambito.js';
+
+/** Lima Metropolitana y Callao: la zona que el recuadro amplía en un solo bloque. */
+export const ZOOM_LIMA_CALLAO = ['1501', '07'];
 
 export const TAMANOS = ['A4', 'A3', 'A2', 'A1', 'A0', '2A0', '4A0'];
 export const ORIENTACIONES = ['vertical', 'horizontal'];
@@ -39,11 +42,16 @@ export const POR_DEFECTO = {
     elaboradoPor: '',
   },
   tipos: null, // null es «todos»
+  /* Cómo se reparten los íconos de cada grupo: 'rejilla', que sigue la forma de las
+     unidades angostas, o 'anillo', como el desplazamiento de puntos de QGIS
+     (motor/servicios.js, DISPOSICIONES). */
+  disposicion: DISPOSICIONES[0],
   capas: { ...CAPAS_POR_DEFECTO },
   piezas: { ...PIEZAS_POR_DEFECTO },
-  /* Sin recuadros de zoom por omisión: se piden. Un recuadro automático tapa parte de
-     la lámina con un trozo del mapa que quien la prepara no ha elegido. */
-  zoom: { modo: 'ninguno', seleccion: [] },
+  /* El zoom que le toca al mapa por omisión, el del país por provincias: Lima y Callao.
+     Para los demás lo decide zoomPorDefecto(). Los automáticos no se ponen nunca solos:
+     tapan parte de la lámina con un trozo del mapa que quien la prepara no ha elegido. */
+  zoom: { modo: 'manual', seleccion: [...ZOOM_LIMA_CALLAO] },
   /* Fecha de generación. Normalmente es la del día, pero se puede fijar en la URL
      para REPETIR una configuración tal cual: un mapa regenerado meses después con la
      misma dirección sale idéntico, incluida la línea «Generado el» del pie. Es también
@@ -82,16 +90,25 @@ export function aParametros(config) {
   if (config.tipos && config.tipos.length) {
     p.set('tipos', config.tipos.map(siglaDe).join(','));
   }
+  if (config.disposicion !== POR_DEFECTO.disposicion) p.set('disposicion', config.disposicion);
   const apagadas = (objeto, defecto) => Object.keys(defecto).filter((k) => objeto[k] === false);
   const capas = apagadas(config.capas, CAPAS_POR_DEFECTO);
   if (capas.length) p.set('sinCapas', capas.join(','));
   const piezas = apagadas(config.piezas, PIEZAS_POR_DEFECTO);
   if (piezas.length) p.set('sinPiezas', piezas.join(','));
 
-  /* «Ninguno» es el modo por omisión y no se escribe. Los automáticos se piden con
-     zoom=auto y los elegidos, con la lista de ubigeos. */
-  if (config.zoom.modo === 'auto') p.set('zoom', 'auto');
-  else if (config.zoom.modo === 'manual') p.set('zoom', config.zoom.seleccion.join(',') || 'ninguno');
+  /* Sólo se escribe el zoom que se aparta del que le toca a ese mapa (zoomPorDefecto):
+     en el país, Lima y Callao; en lo demás, ninguno. Quitar ese recuadro se escribe
+     como zoom=ninguno; sin eso, al recargar el enlace volvería. Los
+     automáticos se piden con zoom=auto y los elegidos, con la lista de ubigeos. */
+  const zoomDeSiempre = zoomPorDefecto(config.ambito, config.division);
+  const esElDeSiempre = config.zoom.modo === zoomDeSiempre.modo
+    && (config.zoom.modo !== 'manual' || esZoomLimaCallao(config.zoom) === esZoomLimaCallao(zoomDeSiempre));
+  if (!esElDeSiempre) {
+    if (config.zoom.modo === 'auto') p.set('zoom', 'auto');
+    else if (config.zoom.modo === 'manual') p.set('zoom', config.zoom.seleccion.join(',') || 'ninguno');
+    else p.set('zoom', 'ninguno');
+  }
 
   if (config.fecha) p.set('fecha', config.fecha);
   if (config.clases && !iguales(config.clases, CLASES_POR_DEFECTO)) {
@@ -130,6 +147,9 @@ export function desdeParametros(p) {
     config.tipos = tipos.length ? tipos : null;
   }
 
+  const disposicion = p.get('disposicion');
+  if (DISPOSICIONES.includes(disposicion)) config.disposicion = disposicion;
+
   /* «iconos=casa» o «iconos=circulo» de los enlaces anteriores a la Fase 16 se
      ignoran: sólo queda el círculo, y el enlace sigue abriendo el mismo mapa. */
 
@@ -149,6 +169,9 @@ export function desdeParametros(p) {
   if (zoom === 'auto') config.zoom = { modo: 'auto', seleccion: [] };
   else if (zoom === 'ninguno') config.zoom = { modo: 'ninguno', seleccion: [] };
   else if (zoom) config.zoom = { modo: 'manual', seleccion: zoom.split(',').filter(Boolean) };
+  /* El país abre con Lima y Callao ampliados (ver zoomPorDefecto). Sólo si el enlace
+     no dice nada del zoom: uno con zoom=ninguno lo pidió así. */
+  else config.zoom = zoomPorDefecto(config.ambito, config.division);
 
   if (p.has('fecha') && FECHA_ISO.test(p.get('fecha'))) config.fecha = p.get('fecha');
 
@@ -171,6 +194,31 @@ export const divisionesDe = (ambito) => (DIVISIONES[ambito?.nivel] || DIVISIONES
 
 /** La división que usa un ámbito cuando nadie elige otra. */
 export const divisionPorDefecto = (ambito) => (DIVISIONES[ambito?.nivel] || DIVISIONES.nacional).porDefecto;
+
+/**
+ * Recuadros con los que abre un mapa cuando nadie los ha pedido.
+ *
+ * El país, partido hasta provincias o hasta distritos, abre con Lima y Callao
+ * ampliados juntos, como un solo bloque —el recuadro de «Lima Metropolitana y
+ * Callao»—, que es como se leen. Son 156 centros en unos pocos milímetros: sin ampliar,
+ * el mapa enseña ahí una mancha de grupos que se pisan, y con el recuadro en la lámina
+ * esos íconos se dibujan sólo en él (motor/zoom.js, SOLO_EN_RECUADRO).
+ *
+ * El país hasta departamentos no lo lleva: sus unidades son departamentos, y Lima
+ * Metropolitana es sólo una parte del de Lima. Los demás ámbitos, ninguno.
+ */
+export function zoomPorDefecto(ambito, division) {
+  const d = division || divisionPorDefecto(ambito);
+  if (ambito?.nivel === 'nacional' && (d === 'provincia' || d === 'distrito')) {
+    return { modo: 'manual', seleccion: [...ZOOM_LIMA_CALLAO] };
+  }
+  return { modo: 'ninguno', seleccion: [] };
+}
+
+/** ¿Es éste el recuadro de Lima y Callao que se pone por omisión? */
+export const esZoomLimaCallao = (zoom) => zoom?.modo === 'manual'
+  && zoom.seleccion.length === ZOOM_LIMA_CALLAO.length
+  && ZOOM_LIMA_CALLAO.every((z) => zoom.seleccion.includes(z));
 
 /**
  * Subtítulo que le corresponde a un ámbito.
@@ -210,6 +258,7 @@ export function aOpcionesDelMotor(config) {
        omisión llega al motor exactamente igual que antes de existir la opción. */
     ...(config.division ? { division: config.division } : {}),
     tipos: config.tipos,
+    disposicion: config.disposicion,
     clases: config.clases,
     capas: config.capas,
     piezas: config.piezas,

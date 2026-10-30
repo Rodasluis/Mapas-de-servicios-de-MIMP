@@ -47,9 +47,21 @@ function notasDeUbicacion(centros) {
     : `${partes[0]}: ubicado en su distrito; la dirección es reservada.`];
 }
 
+/**
+ * Lado del ícono de la leyenda en un A4. En las demás hojas crece con `factor`, igual
+ * que el texto que tiene al lado.
+ *
+ * Antes se tomaba el ícono del mapa con un tope de 5 mm. El del mapa crece con la RAÍZ
+ * del formato, porque tiene que caber en las provincias, y el texto de la leyenda con
+ * el formato entero: en un A0 el nombre iba a 26 pt y su ícono medía 5 mm, la mitad de
+ * la letra. La leyenda es un bloque de lectura, no un trozo del mapa, y se escala
+ * entera con la hoja.
+ */
+const ICONO_LEYENDA_MM = 3.4;
+
 export function bloqueLeyenda({
   agregado, clasesUsadas, clases = CLASES_POR_DEFECTO, estiloIconos, medidor, factor,
-  rampa, tamanoIconoMm, altoMaximoMm, anchoMaximoMm, unidad = 'provincia',
+  rampa, altoMaximoMm, anchoMaximoMm, unidad = 'provincia',
 }) {
   /* El coropletas no siempre cuenta por provincia: en un mapa departamental la unidad
      es el distrito. Anunciar la unidad equivocada convierte la leyenda en una fuente
@@ -84,7 +96,7 @@ export function bloqueLeyenda({
     const eTitulo = { familia: 'Poppins', variante: 'SemiBold', pt: tipografia.leyendaTitulo.pt * esc };
     const eItem = { familia: 'Poppins', variante: 'Regular', pt: tipografia.leyendaItem.pt * esc };
     const eSub = { familia: 'Poppins', variante: 'SemiBold', pt: tipografia.leyendaItem.pt * esc };
-    const icono = tamanoIconoMm * Math.max(0.72, escala);
+    const icono = ICONO_LEYENDA_MM * factor * Math.max(0.72, escala);
 
     const altoFila = Math.max(icono, medidor.alto(eItem)) * 1.15;
     const altoTituloBloque = medidor.alto(eTitulo) * 1.6;

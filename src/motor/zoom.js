@@ -37,14 +37,14 @@
  */
 import { geoBounds, geoPath } from 'd3-geo';
 import { crearProyeccion, crearRuta } from './proyeccion.js';
-import { claseDe, repartirIconos } from './servicios.js';
+import { claseDe, repartirGrupo, cifraDeGrupo } from './servicios.js';
 import { dibujarIcono, cajaEnPunto } from '../iconos/index.js';
 import {
   mayorRectanguloLibre, rectangulo, recolectorDeAnillos, polosDeInaccesibilidad,
-  puntoEnAnillos,
+  pruebaDentro,
 } from './ocupacion.js';
 import { crearIndice } from './colisiones.js';
-import { colocarEtiquetas, crearSolicitud } from './etiquetas.js';
+import { colocarEtiquetas, crearSolicitud, medirRotulo } from './etiquetas.js';
 import {
   color, trazoMm, ptAmm, opacidad, tipografia,
 } from '../estilo/tokens.js';
@@ -127,6 +127,16 @@ const AIRE_MM = 2.5;
 export const LIMA_METROPOLITANA = '1501';
 export const CALLAO = '07';
 export const LIMA = '15';
+
+/**
+ * Zonas cuyos íconos van SÓLO en su recuadro cuando éste está en la lámina.
+ *
+ * Lima Metropolitana y Callao: en el mapa del país son una mancha de grupos que se
+ * pisan entre sí y con los de alrededor, y el recuadro, que los separa, ya los cuenta
+ * todos. Quedarse con los dos dibujos sólo añade ruido junto a la costa. Si el recuadro
+ * no cupiera, los íconos se quedan en el mapa: no pueden desaparecer de la lámina.
+ */
+export const SOLO_EN_RECUADRO = new Set(['lima-callao']);
 
 /**
  * La zona es SIEMPRE el nivel inmediatamente superior a la unidad que se dibuja.
@@ -358,12 +368,15 @@ function regionesManuales({ seleccion, agregado, unidades, anillos, zonas: def, 
 /**
  * Construye los recuadros de zoom, ya dimensionados y colocados.
  *
- * @returns {{colocados, referencias, regiones, avisos, capacidad}}
+ * `soloEnRecuadro` son las unidades que el mapa principal tiene que dejar sin íconos:
+ * las de una zona de SOLO_EN_RECUADRO cuyo recuadro se ha colocado y las ha dibujado.
+ *
+ * @returns {{colocados, referencias, regiones, avisos, capacidad, soloEnRecuadro: Set<string>}}
  */
 export function construirRecuadros({
   modo = 'auto', seleccion = [], grupos, umbral, unidades, zonas, anillos, agregado,
   clases, rampa, estiloIconos, medidor, factor, tamanoIcono, marco, ocupacion, maximo,
-  modoSimbolos = 'agregado', centros = [], entorno = null, trazos = null,
+  modoSimbolos = 'agregado', centros = [], entorno = null, trazos = null, disposicion,
 }) {
   const tope = maximo ?? maximoPorFormato(factor);
   const vacio = {
@@ -372,6 +385,7 @@ export function construirRecuadros({
     regiones: [],
     avisos: [],
     capacidad: { tope, colocados: 0, cabeOtro: false },
+    soloEnRecuadro: new Set(),
   };
   if (modo === 'ninguno') return vacio;
 
@@ -385,8 +399,10 @@ export function construirRecuadros({
   if (!candidatas.length) return vacio;
 
   const eTitulo = { familia: 'Poppins', variante: 'SemiBold', pt: 7 * Math.sqrt(factor) };
-  const eCifra = { familia: 'SourceSans3', variante: 'Semibold', pt: 5.2 * Math.sqrt(factor) };
-  const altoCifra = medidor.alto(eCifra) * 0.95;
+  /* La misma cifra que en el mapa principal (servicios.js). */
+  const cifra = cifraDeGrupo(factor);
+  const eCifra = cifra.estilo;
+  const altoCifra = cifra.alto;
   const cabecera = medidor.alto(eTitulo) * 1.5;
   const borde = trazoMm.recuadroZoom;
 
@@ -507,6 +523,7 @@ export function construirRecuadros({
   const referencias = [];
   const resumen = [];
   const avisos = [];
+  const soloEnRecuadro = new Set();
 
   for (const region of candidatas) {
     if (colocados.length >= tope) {
@@ -580,41 +597,42 @@ export function construirRecuadros({
     const x = hueco.x + AIRE_MM / 2;
     const y = hueco.y + AIRE_MM / 2;
 
-    colocados.push({
-      nombre: `zoom-${region.clave}`,
+    const dibujo = dibujarRecuadro({
       x,
       y,
       ancho,
       alto,
-      svg: dibujarRecuadro({
-        x,
-        y,
-        ancho,
-        alto,
-        anchoMapa,
-        altoMapa,
-        cabecera,
-        borde,
-        etiqueta,
-        sub,
-        miembros,
-        protagonistas,
-        agregado,
-        clases,
-        rampa,
-        estiloIconos,
-        tamanoIcono,
-        altoCifra,
-        eTitulo,
-        eCifra,
-        medidor,
-        factor,
-        modoSimbolos,
-        centros,
-        entorno,
-        trazos,
-      }),
+      anchoMapa,
+      altoMapa,
+      cabecera,
+      borde,
+      etiqueta,
+      sub,
+      miembros,
+      protagonistas,
+      agregado,
+      clases,
+      rampa,
+      estiloIconos,
+      tamanoIcono,
+      altoCifra,
+      cifra,
+      eTitulo,
+      eCifra,
+      medidor,
+      factor,
+      modoSimbolos,
+      disposicion,
+      centros,
+      entorno,
+      trazos,
     });
+    colocados.push({ nombre: `zoom-${region.clave}`, x, y, ancho, alto, svg: dibujo.svg });
+    /* Sólo las unidades que el recuadro ha dibujado de verdad: una que se saliera del
+       encuadre perdería sus íconos en los dos sitios. */
+    if (SOLO_EN_RECUADRO.has(region.clave)) {
+      for (const u of dibujo.conIconos) soloEnRecuadro.add(u);
+    }
     ocupacion.marcarBloque(rectangulo.expandir({ x, y, ancho, alto }, AIRE_MM / 2));
 
     /* El rectángulo de referencia marca el ENCUADRE que se ha ampliado, que cuando la
@@ -661,6 +679,7 @@ export function construirRecuadros({
     regiones: resumen,
     avisos,
     capacidad: { tope, colocados: colocados.length, cabeOtro },
+    soloEnRecuadro,
   };
 }
 
@@ -668,9 +687,9 @@ export function construirRecuadros({
 /** Dibuja un recuadro ya dimensionado. */
 function dibujarRecuadro({
   x, y, ancho, alto, anchoMapa, altoMapa, cabecera, borde, etiqueta,
-  sub, miembros, protagonistas, agregado, clases, rampa, estiloIconos, tamanoIcono, altoCifra,
+  sub, miembros, protagonistas, agregado, clases, rampa, estiloIconos, tamanoIcono, altoCifra, cifra,
   eTitulo, eCifra, medidor, factor, modoSimbolos = 'agregado', centros = [],
-  entorno = null, trazos = null,
+  entorno = null, trazos = null, disposicion,
 }) {
   const marcoInterno = { x: x + borde, y: y + cabecera, ancho: anchoMapa, alto: altoMapa };
   const proy = crearProyeccion(sub, marcoInterno, 1.2);
@@ -763,7 +782,13 @@ function dibujarRecuadro({
     if (!anillos.length) continue;
     const caja = recorteDeCaja(anillos, marcoInterno);
     if (!caja) continue;
-    const polos = polosDeInaccesibilidad(anillos, caja, 1, 8);
+    let polos = polosDeInaccesibilidad(anillos, caja, 1, 8);
+    /* Un distrito más chico que la celda de 1 mm se quedaría sin polo, y con él sin
+       íconos. Con Lima y Callao eso ya no es un detalle: sus íconos sólo están aquí.
+       Se reintenta con una rejilla a su medida, como en el mapa principal. */
+    if (!polos.length) {
+      polos = polosDeInaccesibilidad(anillos, caja, Math.max(0.1, Math.min(caja.ancho, caja.alto) / 20), 8);
+    }
     if (!polos.length) continue;
     geometria.set(f, { anillos, polos });
   }
@@ -777,6 +802,8 @@ function dibujarRecuadro({
 
   const simbolos = [];
   const cajasSimbolos = [];
+  // Unidades cuyos íconos se han dibujado aquí (ver SOLO_EN_RECUADRO).
+  const conIconos = new Set();
 
   /* El recuadro dibuja LO MISMO que el mapa principal, sólo que más grande. Si el mapa
      pinta cada centro en su sitio y el recuadro los agregara en un grupo con cifras, la
@@ -801,6 +828,7 @@ function dibujarRecuadro({
         tamanoMm: tamanoIcono,
         estilo: estiloIconos,
       }));
+      conIconos.add(c.ubigeo);
       cajasSimbolos.push({
         x: punto[0] - tamanoIcono / 2,
         y: base - tamanoIcono,
@@ -819,17 +847,16 @@ function dibujarRecuadro({
     const tipos = [...datos.tipos.keys()].sort(
       (a, b) => agregado.porTipo.get(b) - agregado.porTipo.get(a) || a.localeCompare(b, 'es'),
     );
-    const reparto = repartirIconos(
-      tipos.length, { x: centro[0], y: centro[1] }, tamanoIcono, altoCifra,
-    );
-    const { posiciones } = reparto;
-    cajasSimbolos.push({
-      x: centro[0] - reparto.ancho / 2,
-      y: centro[1] - reparto.alto / 2,
-      ancho: reparto.ancho,
-      alto: reparto.alto,
-      etiqueta: `símbolos ${f.properties.nombre}`,
+    geo.dentro = geo.dentro || pruebaDentro(geo.anillos);
+    const reparto = repartirGrupo(tipos.length, { x: centro[0], y: centro[1] }, tamanoIcono, altoCifra, disposicion, {
+      dentro: geo.dentro,
+      rotulo: medirRotulo(f.properties.nombre, estiloDeRotuloEnRecuadro(factor), medidor),
+      puntos: geo.polos,
     });
+    const { posiciones } = reparto;
+    conIconos.add(f.properties.ubigeo);
+    geo.grupo = { caja: reparto.caja };
+    for (const c of reparto.celdas) cajasSimbolos.push({ ...c, etiqueta: `símbolos ${f.properties.nombre}` });
     tipos.forEach((tipo, i) => {
       simbolos.push(dibujarIcono({
         tipo,
@@ -840,7 +867,7 @@ function dibujarRecuadro({
       }));
       simbolos.push(textoConHalo(String(datos.tipos.get(tipo)), {
         x: posiciones[i].x,
-        y: posiciones[i].y + altoCifra * 0.82,
+        y: posiciones[i].y + cifra.base,
         'text-anchor': 'middle',
         fill: color.tinta,
         'font-family': eCifra.familia,
@@ -848,7 +875,7 @@ function dibujarRecuadro({
         'font-weight': 600,
       }, {
         colorHalo: color.halo,
-        grosorMm: trazoMm.haloRotulo * factor * 0.7,
+        grosorMm: cifra.halo,
         medidor,
         estilo: eCifra,
       }));
@@ -881,7 +908,7 @@ function dibujarRecuadro({
     'fill-rule': 'evenodd',
   });
 
-  return grupo({ id: `bloque-${etiqueta.replace(/\s+/g, '-').toLowerCase()}` }, [
+  const svg = grupo({ id: `bloque-${etiqueta.replace(/\s+/g, '-').toLowerCase()}` }, [
     el('defs', {}, el('clipPath', { id: idRecorte }, rect(marcoInterno))),
     rect({ x, y, ancho, alto }, {
       fill: color.fondoHoja, stroke: color.mimpRojo, 'stroke-width': borde,
@@ -902,6 +929,7 @@ function dibujarRecuadro({
       fill: 'none', stroke: color.marco, 'stroke-width': trazoMm.marcoInterior,
     }),
   ]);
+  return { svg, conIconos };
 }
 
 /** Caja envolvente de unos anillos ya proyectados. */
@@ -928,11 +956,7 @@ function rotularMiembros({ geometria, cajasSimbolos, marcoInterno, medidor, fact
   const indice = crearIndice();
   for (const c of cajasSimbolos) indice.agregar(c);
 
-  const estilo = {
-    familia: tipografia.rotuloProvincia.familia,
-    variante: 'Semibold',
-    pt: tipografia.rotuloProvincia.pt * Math.sqrt(factor) * 1.15,
-  };
+  const estilo = estiloDeRotuloEnRecuadro(factor);
 
   const solicitudes = [];
   for (const [f, geo] of geometria) {
@@ -944,7 +968,8 @@ function rotularMiembros({ geometria, cajasSimbolos, marcoInterno, medidor, fact
       peso: geo.polos[0].radioMm,
       puntos: geo.polos,
       estilo,
-      dentro: (x, y) => puntoEnAnillos(x, y, geo.anillos),
+      dentro: geo.dentro || pruebaDentro(geo.anillos),
+      ...(geo.grupo ? { grupo: geo.grupo } : {}),
     }));
   }
 
@@ -953,6 +978,13 @@ function rotularMiembros({ geometria, cajasSimbolos, marcoInterno, medidor, fact
   });
   return svg;
 }
+
+/** Estilo de los nombres de un recuadro; la rejilla de íconos lo usa para dejarles sitio. */
+const estiloDeRotuloEnRecuadro = (factor) => ({
+  familia: tipografia.rotuloProvincia.familia,
+  variante: 'Semibold',
+  pt: tipografia.rotuloProvincia.pt * Math.sqrt(factor) * 1.15,
+});
 
 /** Caja envolvente de unos anillos, recortada al marco interno del recuadro. */
 function recorteDeCaja(anillos, marcoInterno) {

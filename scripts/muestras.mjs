@@ -31,23 +31,64 @@ const opcion = (nombre) => {
 const fechaFija = opcion('fecha');
 
 /**
+ * El recuadro con el que la web abre el mapa del país (src/ui/config.js,
+ * zoomPorDefecto): Lima y Callao juntos, con sus íconos sólo ahí. Las muestras del país
+ * que retratan lo que sale por omisión lo llevan; sin él el motor amplía en automático.
+ */
+const LIMA_Y_CALLAO = { modo: 'manual', seleccion: ['1501', '07'] };
+
+/**
  * Muestras. La Fase 1 pedía los tres formatos verticales; la Fase 2 añade A4 y A0
  * horizontales, que es donde se comprueba que el layout se recoloca de verdad y no
  * está clavado a una plantilla vertical.
  */
 const MUESTRAS = [
-  { nombre: 'nacional_A4_vertical', hoja: { tamano: 'A4', orientacion: 'vertical' } },
+  {
+    nombre: 'nacional_A4_vertical',
+    hoja: { tamano: 'A4', orientacion: 'vertical' },
+    opciones: { zoom: LIMA_Y_CALLAO },
+  },
   /* El A1 vertical es el formato del mapa de 2020: es la muestra que se pone al lado
      de la referencia para comparar. */
-  { nombre: 'nacional_A1_vertical', hoja: { tamano: 'A1', orientacion: 'vertical' } },
-  { nombre: 'nacional_A4_horizontal', hoja: { tamano: 'A4', orientacion: 'horizontal' } },
-  { nombre: 'nacional_A3_vertical', hoja: { tamano: 'A3', orientacion: 'vertical' } },
-  { nombre: 'nacional_A0_vertical', hoja: { tamano: 'A0', orientacion: 'vertical' } },
-  { nombre: 'nacional_A0_horizontal', hoja: { tamano: 'A0', orientacion: 'horizontal' } },
+  {
+    nombre: 'nacional_A1_vertical',
+    hoja: { tamano: 'A1', orientacion: 'vertical' },
+    opciones: { zoom: LIMA_Y_CALLAO },
+  },
+  {
+    nombre: 'nacional_A4_horizontal',
+    hoja: { tamano: 'A4', orientacion: 'horizontal' },
+    opciones: { zoom: LIMA_Y_CALLAO },
+  },
+  {
+    nombre: 'nacional_A3_vertical',
+    hoja: { tamano: 'A3', orientacion: 'vertical' },
+    opciones: { zoom: LIMA_Y_CALLAO },
+  },
+  {
+    nombre: 'nacional_A0_vertical',
+    hoja: { tamano: 'A0', orientacion: 'vertical' },
+    opciones: { zoom: LIMA_Y_CALLAO },
+  },
+  /* Las dos horizontales grandes siguen con los recuadros automáticos: es donde caben
+     varios y se comprueba cómo elige el motor qué ampliar. */
+  {
+    nombre: 'nacional_A0_horizontal',
+    hoja: { tamano: 'A0', orientacion: 'horizontal' },
+    opciones: { zoom: { modo: 'auto' } },
+  },
   /* Fase 10. Los múltiplos del A0: el doble y el cuádruple de su área. Uno en cada
      orientación, para ver que el layout y el tope del ícono escalan más allá del A0. */
-  { nombre: 'nacional_2A0_horizontal', hoja: { tamano: '2A0', orientacion: 'horizontal' } },
-  { nombre: 'nacional_4A0_vertical', hoja: { tamano: '4A0', orientacion: 'vertical' } },
+  {
+    nombre: 'nacional_2A0_horizontal',
+    hoja: { tamano: '2A0', orientacion: 'horizontal' },
+    opciones: { zoom: { modo: 'auto' } },
+  },
+  {
+    nombre: 'nacional_4A0_vertical',
+    hoja: { tamano: '4A0', orientacion: 'vertical' },
+    opciones: { zoom: LIMA_Y_CALLAO },
+  },
   /* Con un solo tipo activo se comprueba que el filtro llega hasta el final: el
      coropletas se recalcula, la leyenda pierde las diecinueve entradas que sobran y
      las clases altas desaparecen porque ninguna provincia llega a ellas. */
@@ -63,7 +104,9 @@ const MUESTRAS = [
   {
     nombre: 'nacional_A2_solo_CEM',
     hoja: { tamano: 'A2', orientacion: 'vertical' },
-    opciones: { tipos: ['Centro Emergencia Mujer y Familia'] },
+    /* En automático: con un solo tipo los símbolos dejan de estorbarse y los
+       recuadros tienen que desaparecer solos. */
+    opciones: { tipos: ['Centro Emergencia Mujer y Familia'], zoom: { modo: 'auto' } },
     textos: { subtitulo: 'Centros Emergencia Mujer y Familia' },
   },
 
@@ -133,8 +176,15 @@ const MUESTRAS = [
   {
     nombre: 'nacional_A2_EC_y_HRT',
     hoja: { tamano: 'A2', orientacion: 'vertical' },
-    opciones: { tipos: ['Educadores de Calle', 'Hogares de Refugio Temporal - HRT'] },
+    opciones: { tipos: ['Educadores de Calle', 'Hogares de Refugio Temporal - HRT'], zoom: LIMA_Y_CALLAO },
     textos: { subtitulo: 'Educadores de Calle y Hogares de Refugio Temporal' },
+  },
+  /* Fase 20. Los íconos se disponen por omisión en rejilla, que sigue la forma de las
+     unidades angostas; ésta guarda el anillo de QGIS, que sigue siendo una opción. */
+  {
+    nombre: 'nacional_A3_anillo',
+    hoja: { tamano: 'A3', orientacion: 'vertical' },
+    opciones: { disposicion: 'anillo', zoom: LIMA_Y_CALLAO },
   },
   {
     nombre: 'distrito_Carabayllo_A4',
@@ -147,12 +197,15 @@ const MUESTRAS = [
   ...Object.entries(VICEMINISTERIOS).map(([vm, nombre]) => ({
     nombre: `nacional_A3_${vm}`,
     hoja: { tamano: 'A3', orientacion: 'vertical' },
-    opciones: { tipos: Object.keys(ICONOS).filter((t) => ICONOS[t].viceministerio === vm) },
+    opciones: {
+      tipos: Object.keys(ICONOS).filter((t) => ICONOS[t].viceministerio === vm),
+      zoom: LIMA_Y_CALLAO,
+    },
     textos: { subtitulo: `Servicios del ${nombre}` },
   })),
   /* Fase 15. El nivel de división. El país por departamentos en la hoja más pequeña,
      que es donde esa lámina tiene sentido; por distritos en A1, la menor en la que se
-     leen, con el color por distrito y los íconos todavía por provincia; y Cusco por
+     leen, con el color y los íconos por distrito; y Cusco por
      provincias, el mapa departamental sin distritos. */
   {
     nombre: 'nacional_A4_departamentos',
@@ -162,7 +215,7 @@ const MUESTRAS = [
   {
     nombre: 'nacional_A1_distritos',
     hoja: { tamano: 'A1', orientacion: 'vertical' },
-    opciones: { division: 'distrito' },
+    opciones: { division: 'distrito', zoom: LIMA_Y_CALLAO },
   },
   {
     nombre: 'departamento_Cusco_A3_provincias',
@@ -473,7 +526,8 @@ for (const { muestra, salida } of resultados) {
   const cap = s3.capacidadRecuadros;
   console.log(`    recuadros: ${s3.recuadros.length
     ? s3.recuadros.map((z) => `${z.etiqueta} ${z.anchoMm}×${z.altoMm} mm (${z.unidades} unid., x${z.ampliacion}${z.completa ? "" : ", núcleo"})`).join(' · ')
-    : 'ninguno'}`);
+    : 'ninguno'}${s3.unidadesSoloEnRecuadro
+    ? ` · ${s3.unidadesSoloEnRecuadro} unidad(es) con los íconos sólo en su recuadro` : ''}`);
   console.log(`    capacidad: ${cap.colocados} de ${cap.tope} permitidos en esta hoja`
     + `${cap.cabeOtro ? ' · aún cabría otro' : ' · sin hueco para más'}`);
   for (const a of s3.avisosRecuadros || []) console.log(`    ! ${a}`);
@@ -486,7 +540,7 @@ let fallosRotulos = 0;
 for (const { muestra, salida } of resultados) {
   const e = salida.meta.etiquetas;
   const niveles = Object.entries(e.porNivel)
-    .map(([n, v]) => `${n}s ${v.colocados}/${v.total}`)
+    .map(([n, v]) => `${n}${n.endsWith('r') ? 'es' : 's'} ${v.colocados}/${v.total}`)
     .join(' · ');
   console.log(`  ${muestra.nombre.padEnd(24)} ${niveles}`);
   if (e.omitidos.length) {
@@ -500,10 +554,10 @@ for (const { muestra, salida } of resultados) {
 
      - símbolo contra símbolo, que es el APIÑAMIENTO. Se mide aparte y se resuelve
        ampliando la zona en un recuadro, no borrando símbolos.
-     - un rótulo del mapa sobre un grupo de símbolos. El grupo de íconos de una
-       provincia se ancla justo en el mejor sitio para su nombre, así que tratarlo como
-       obstáculo dejaba a Huancavelica sin rótulo y a LA LIBERTAD arrinconada. Un
-       nombre con halo sobre unos íconos se lee; uno ausente no dice nada.
+     - un rótulo del mapa sobre un grupo de símbolos, como último recurso. Tratarlo
+       como obstáculo dejaba a Huancavelica sin rótulo y a LA LIBERTAD arrinconada.
+       Desde la revisión de la Fase 20 el motor lo acota: fuera del nivel superior,
+       un nombre no puede tener más de un 10 % de su caja bajo íconos.
 
      Todo lo demás —dos rótulos entre sí, un bloque sobre cualquier cosa— sigue siendo
      un fallo. */
@@ -523,6 +577,72 @@ for (const { muestra, salida } of resultados) {
     console.log(`    ✓ ${e.cajas.length} cajas comprobadas por pares, sin superposiciones`);
   }
 }
+
+/* ------------- rótulos territorio por territorio (revisión Fase 20) ------------- */
+
+/* Lo que pidió el área usuaria: revisar cada territorio, uno por uno. Para cada nombre
+   que el mapa intenta poner —departamento, provincia o distrito— se anota si se puso,
+   cuánto sale de su unidad, a qué distancia queda de sus íconos y si tapa alguno, junto
+   con cómo se dispusieron esos íconos. La lista completa va a muestras/territorios.csv
+   (una fila por territorio y lámina); aquí, el resumen. No falla nada: es para mirar. */
+titulo('Rótulos: territorio por territorio');
+const filasTerritorio = [];
+for (const { muestra, salida } of resultados) {
+  const e = salida.meta.etiquetas;
+  const grupoDe = new Map((salida.meta.servicios.grupos || []).map((g) => [g.unidad, g]));
+  const porNivel = {};
+  const anotar = (nivel, clave) => {
+    porNivel[nivel] = porNivel[nivel] || {
+      total: 0, dentro: 0, poco: 0, mucho: 0, sinSitio: 0, pegados: 0, conGrupo: 0, tapan: 0,
+    };
+    porNivel[nivel][clave]++;
+  };
+  for (const c of e.colocados) {
+    if (c.nivel === 'exterior') continue;
+    anotar(c.nivel, 'total');
+    anotar(c.nivel, c.fueraPct === 0 ? 'dentro' : c.fueraPct < 25 ? 'poco' : 'mucho');
+    if (c.aGrupoMm !== null) {
+      anotar(c.nivel, 'conGrupo');
+      if (c.aGrupoMm === 0) anotar(c.nivel, 'pegados');
+    }
+    if (c.sobreSimbolosPct > 0) anotar(c.nivel, 'tapan');
+  }
+  for (const o of e.sinSitio) {
+    if (o.nivel === 'exterior') continue;
+    anotar(o.nivel, 'total');
+    anotar(o.nivel, 'sinSitio');
+  }
+  console.log(`  ${muestra.nombre}`);
+  for (const [nivel, v] of Object.entries(porNivel)) {
+    console.log(`    ${`${nivel}${nivel.endsWith('r') ? 'es' : 's'}`.padEnd(14)} ${v.dentro}/${v.total} dentro de su unidad`
+      + ` · ${v.poco} asoman menos de un cuarto · ${v.mucho} más · ${v.sinSitio} sin sitio`
+      + (v.conGrupo ? ` · ${v.pegados}/${v.conGrupo} pegados a sus íconos` : '')
+      + (v.tapan ? ` · ${v.tapan} rozan íconos` : ''));
+  }
+
+  const fila = (nivel, id, nombre, r) => {
+    const g = grupoDe.get(id);
+    filasTerritorio.push([
+      muestra.nombre, nivel, id, nombre, r ? 'puesto' : 'sin sitio',
+      r ? r.lineas : '', r ? r.fueraPct : '', r && r.aGrupoMm !== null ? r.aGrupoMm : '',
+      r ? r.sobreSimbolosPct : '', g ? g.iconos : '', g && g.dentro !== null ? g.dentro : '',
+      g ? g.forma : '', g ? (g.conNombre ? 'sí' : 'no') : '',
+    ]);
+  };
+  for (const c of e.colocados) if (c.nivel !== 'exterior') fila(c.nivel, c.id, c.texto, c);
+  for (const o of e.sinSitio) if (o.nivel !== 'exterior') fila(o.nivel, o.id, o.texto, null);
+}
+const CABECERA_TERRITORIOS = [
+  'muestra', 'nivel', 'ubigeo', 'nombre', 'rótulo', 'líneas', 'fuera de su unidad (%)',
+  'distancia a sus íconos (mm)', 'tapa íconos (%)', 'íconos', 'íconos dentro', 'rejilla',
+  'rejilla junto a su nombre',
+];
+/* Con punto y coma y la marca BOM, que es como una hoja de cálculo en español abre un
+   CSV con tildes sin preguntar. */
+const celda = (v) => (/[;"\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+fs.writeFileSync(path.join(DESTINO, 'territorios.csv'), `﻿${[CABECERA_TERRITORIOS, ...filasTerritorio]
+  .map((f) => f.map(celda).join(';')).join('\n')}\n`);
+console.log(`\n  ${filasTerritorio.length} territorios, uno por fila, en muestras/territorios.csv`);
 
 titulo('Layout: solapamientos y escala gráfica');
 let fallosLayout = 0;
