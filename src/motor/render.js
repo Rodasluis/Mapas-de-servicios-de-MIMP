@@ -21,7 +21,7 @@ import { geoPath, geoDistance, geoBounds as geoBoundsDe } from 'd3-geo';
 import { marcoDelMapa, TAMANOS } from './hoja.js';
 import { crearProyeccion, medirEscala, nivelPara, crearRuta, RADIO_TERRESTRE_M } from './proyeccion.js';
 import { construirGrilla, anguloDelNorte } from './grilla.js';
-import { crearOcupacion, recolectorDeAnillos } from './ocupacion.js';
+import { crearOcupacion, recolectorDeAnillos, rectangulo } from './ocupacion.js';
 import { crearMedidor } from './texto.js';
 import { rotulosDeContexto, dibujarGrilla, bandaDeGrilla } from './rotulos.js';
 import {
@@ -29,25 +29,25 @@ import {
 } from './piezas.js';
 import {
   colocarPiezas, buscarSitio, posicionEnAnclaje, PLANTILLAS, PRIORIDAD, CABECERA, ANTES_DE_ROTULOS,
-  SITIO_FIJO,
+  SITIO_FIJO, SEPARACION_MM, sitioJunto, sitioAbajo,
 } from './layout.js';
 import {
-  agregarCentros, claseDe, clasesUsadas, repartirIconos, medirApinamiento,
-  CLASES_POR_DEFECTO,
+  agregarCentros, claseDe, clasesUsadas, repartirGrupo, medirApinamiento, cifraDeGrupo,
+  CLASES_POR_DEFECTO, DISPOSICIONES,
 } from './servicios.js';
 import {
   normalizarAmbito, encajeDeTanteo, cargarAmbito, divisionPara,
 } from './ambito.js';
 import { mapaDeUbicacion, resaltePara } from './localizador.js';
-import { bloqueLeyenda } from './leyenda.js';
+import { bloqueLeyenda, bloqueClases, ESCALAS_LEYENDA } from './leyenda.js';
 import { bloqueTabla, numeroDeCentro, esDudosa } from './tabla.js';
 import { construirRecuadros, maximoPorFormato, UMBRAL_APINAMIENTO } from './zoom.js';
 import {
   dibujarIcono, comprobarCobertura, cajaEnPunto, ESTILO_POR_DEFECTO, TAMANO_MINIMO_MM,
 } from '../iconos/index.js';
-import { poloDeInaccesibilidad, polosDeInaccesibilidad, puntoEnAnillos } from './ocupacion.js';
+import { poloDeInaccesibilidad, polosDeInaccesibilidad, pruebaDentro } from './ocupacion.js';
 import { crearIndice } from './colisiones.js';
-import { colocarEtiquetas, crearSolicitud } from './etiquetas.js';
+import { colocarEtiquetas, crearSolicitud, medirRotulo } from './etiquetas.js';
 import { color, trazoMm, tipografia, layoutMm, rampaNaranjas, ptAmm } from '../estilo/tokens.js';
 import { el, grupo, texto, textoConHalo, rect, documento, num } from './svg.js';
 import { fechaDelMapa } from './fecha.js';
@@ -84,6 +84,9 @@ export const CAPAS = [
   'territorio',    // relleno del ámbito
   'limites',       // límites administrativos
   'grilla',        // retícula UTM
+  /* Las líneas que unen cada zona ampliada con su recuadro cruzan el mapa: van por
+     debajo de nombres e íconos para no tapar ningún dato. */
+  'enlacesZoom',
   /* Los nombres de departamento y provincia van DEBAJO de los símbolos. Encima, un
      rótulo tapaba el ícono y la cifra de sedes que tiene al lado, y esa cifra es un
      dato del mapa mientras que el nombre casi siempre se deduce de la posición. Debajo,
@@ -122,6 +125,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
   /* Un solo estilo de íconos, el círculo (src/iconos/estilos.js). Ya no se elige: un
      enlace antiguo con ?iconos=casa sale igual que uno sin el parámetro. */
   const estiloIconos = ESTILO_POR_DEFECTO;
+  /* Disposición de los íconos de cada grupo: en anillo, como el «desplazamiento de
+     puntos» de QGIS (por omisión), o en rejilla. Una desconocida cae en la de por
+     omisión: viene de la URL. */
+  const disposicion = DISPOSICIONES.includes(opciones.disposicion) ? opciones.disposicion : DISPOSICIONES[0];
 
   /* Filtro de tipos. null es «todos»; un conjunto vacío no dibujaría nada, así que se
      trata como todos y se anota, en vez de devolver un mapa en blanco sin explicación. */
@@ -226,9 +233,16 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
 
      Los 6 mm se midieron en A0. En 2A0 y 4A0 el mapa está a una escala mayor —las
      provincias miden 1,4 y 2 veces más— y el tope se estira con la raíz de ese
-     crecimiento: 7 mm en 2A0 y 8 mm en 4A0. De A4 a A0 no cambia nada. */
+     crecimiento: 7 mm en 2A0 y 8 mm en 4A0. De A4 a A0 no cambia nada.
+
+     Desde la revisión de la Fase 20 el ícono del mapa va a la MITAD de ese tamaño
+     (ESCALA_ICONO_MAPA): 1,7 mm en A4 y 3 mm en A0. Lo pidió el área usuaria para que
+     los grupos no se choquen. Queda por debajo del mínimo en el que el pictograma se
+     lee bien (TAMANO_MINIMO_MM), así que a esa medida los tipos se distinguen sobre
+     todo por el color. La leyenda no cambia: sus íconos tienen su propia medida. */
   const topeIcono = 6 * Math.sqrt(Math.max(1, factor / FACTOR_A0));
-  const tamanoIcono = Math.min(topeIcono, Math.max(TAMANO_MINIMO_MM, 3.4 * Math.sqrt(factor)));
+  const tamanoIcono = ESCALA_ICONO_MAPA
+    * Math.min(topeIcono, Math.max(TAMANO_MINIMO_MM, 3.4 * Math.sqrt(factor)));
   const vacioSimbolos = { svg: '', grupos: [], apinados: [], apinamientoMaximoPct: 0 };
   /* En el ámbito distrital cada centro lleva además un número, que es lo que lo une
      con su fila de la tabla. La numeración se fija aquí, una sola vez, para que el
@@ -266,7 +280,8 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     } else {
       simbolos = dibujarSimbolos({
         unidades: plan.unidades, agregado, anillos, estiloIconos, marco, medidor, factor,
-        tamanoIcono,
+        tamanoIcono, disposicion,
+        nombres: capasVisibles.rotulos ? nombresParaRejilla({ niveles: plan.rotulos, factor, medidor }) : undefined,
       });
     }
   }
@@ -275,9 +290,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
      Se salen de su provincia —el de Lima se adentra en el mar— así que un bloque
      puesto sobre «espacio libre» podía caer encima: la leyenda y un recuadro de zoom
      acabaron sobre los símbolos de Lima, y la escala sobre los de Arequipa. */
-  for (const g of simbolos.grupos) {
-    ocupacion.marcarBloque({ x: g.x, y: g.y, ancho: g.ancho, alto: g.alto });
-  }
+  for (const g of simbolos.grupos) for (const c of g.celdas || [g]) ocupacion.marcarBloque(c);
 
   const grilla = capasVisibles.grilla
     ? construirGrilla(proyeccion, marco, escala.denominador)
@@ -315,26 +328,33 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     anchoMaximo: marco.ancho * (hoja.orientacion === 'horizontal' ? 0.24 : 0.38),
   });
 
+  const barraDeEscala = escalaGrafica({ denominador: escala.denominador, factor, medidor });
+  /* La leyenda y, en su propia caja, las clases del coropletas. Se eligen juntas y
+     contando con la escala, que tiene que caber después en la fila de abajo. */
+  const leyendaYClases = ajustarLeyenda({
+    agregado,
+    unidad: plan.agregacion,
+    /* Sin coropleta no hay clases que explicar: la leyenda se queda con los tipos
+       de servicio y no anuncia una comparación que este mapa no hace. */
+    clasesUsadas: plan.coropleta === false ? [] : clasesVisibles,
+    clases,
+    estiloIconos,
+    medidor,
+    factor,
+    rampa,
+    marco,
+    ocupacion,
+    escala: piezasVisibles.escala !== false ? barraDeEscala : null,
+    anclajesEscala: plantilla.escala,
+  });
+
   const piezas = {
     institucional: bloqueInstitucional({ logos: logos.logos, factor }),
     titulo: titulo.pieza,
-    escala: escalaGrafica({ denominador: escala.denominador, factor, medidor }),
+    escala: barraDeEscala,
     norte: rosaDeLosVientos({ factor, anguloNorte: norte, medidor }),
-    leyenda: ajustarLeyenda({
-      agregado,
-      unidad: plan.agregacion,
-      /* Sin coropleta no hay clases que explicar: la leyenda se queda con los tipos
-         de servicio y no anuncia una comparación que este mapa no hace. */
-      clasesUsadas: plan.coropleta === false ? [] : clasesVisibles,
-      clases,
-      estiloIconos,
-      medidor,
-      factor,
-      rampa,
-      tamanoIconoMm: Math.min(5, tamanoIcono),
-      marco,
-      ocupacion,
-    }),
+    leyenda: leyendaYClases ? leyendaYClases.leyenda : null,
+    clases: leyendaYClases ? leyendaYClases.clases : null,
     /* El localizador sólo existe fuera del nacional: un mapa del Perú con una miniatura
        del Perú al lado no localiza nada. */
     ubicacion: elAmbito.nivel === 'nacional' ? null : mapaDeUbicacion({
@@ -359,10 +379,14 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     // Cabecera de sitio fijo: el logotipo y el título no se mudan de esquina.
     soloPreferidos: SITIO_FIJO.includes(n),
     ...(CABECERA.includes(n) ? { margen: margenCabecera } : {}),
+    // Las clases, junto a la leyenda; la escala, en la fila de abajo (layout.js).
+    ...(n === 'clases' ? { junto: 'leyenda' } : {}),
+    ...(n === 'escala' ? { abajo: true } : {}),
   });
 
-  /* Una pieza entra si existe para este ámbito Y la interfaz no la ha apagado. */
-  const entra = (n) => Boolean(piezas[n]) && piezasVisibles[n] !== false;
+  /* Una pieza entra si existe para este ámbito Y la interfaz no la ha apagado. Las
+     clases van con la leyenda: apagar la leyenda las apaga también. */
+  const entra = (n) => Boolean(piezas[n]) && piezasVisibles[n === 'clases' ? 'leyenda' : n] !== false;
 
   /* La cabecera reserva su sitio ANTES que los rótulos del mapa. Al revés, el rótulo
      «COLOMBIA» ocupaba la esquina superior derecha y el título, al no poder pisarlo,
@@ -392,9 +416,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
        departamento, los distritos por provincia. */
     zonas: plan.zonas,
     /* El recuadro dibuja lo mismo que el mapa principal: si éste pinta cada centro en
-       su sitio, el zoom también. La excepción la declara el ámbito: partido hasta
-       distritos, el recuadro desagrega lo que el mapa acumula (ver ambito.js). */
-    modoSimbolos: plan.simbolosZoom || plan.simbolos,
+       su sitio, el zoom también, y si agrupa por distrito con sus cifras, el zoom
+       agrupa por distrito con sus cifras. */
+    modoSimbolos: plan.simbolos,
+    disposicion,
     centros: agregado.centros,
     /* Las mismas capas que dibuja el mapa, para que el recuadro sea un recorte
        ampliado y no una isla sobre el mar. */
@@ -418,6 +443,18 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     ocupacion,
     maximo: opciones.maximoRecuadros,
   });
+
+  /* Lima Metropolitana y Callao llevan los íconos SÓLO en su recuadro (zoom.js,
+     SOLO_EN_RECUADRO): en el mapa son una mancha de grupos que se pisan, y repetirlos
+     al lado del recuadro que los separa sólo añade ruido. Se quitan después de colocar
+     el recuadro, no antes, porque si no cupiera en la hoja esos servicios no
+     aparecerían en ninguna parte. Su reserva en la rejilla de ocupación se queda: ya
+     ha servido para colocar la leyenda y los recuadros, y quitarla ahora no movería
+     nada. */
+  const soloEnRecuadro = plan.simbolos === 'agregado' ? recuadros.soloEnRecuadro : new Set();
+  if (soloEnRecuadro.size) {
+    simbolos = resumirSimbolos(simbolos.grupos.filter((g) => !soloEnRecuadro.has(g.unidad)));
+  }
 
   const etiquetas = capasVisibles.contexto
     ? rotulosDeContexto({ contexto, anillosPorRasgo: anillos, marco, ocupacion, medidor, factor })
@@ -448,11 +485,15 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
   for (const z of recuadros.colocados) {
     indiceRotulos.agregar({ x: z.x, y: z.y, ancho: z.ancho, alto: z.alto, etiqueta: z.nombre });
   }
+  /* Celda por celda: un grupo que sigue la forma de su unidad no estorba en los huecos
+     de su caja envolvente, y es justo ahí donde suele caber su nombre. */
   for (const g of simbolos.grupos) {
-    indiceRotulos.agregar({
-      x: g.x, y: g.y, ancho: g.ancho, alto: g.alto,
-      etiqueta: `símbolos ${g.nombre}`, nivel: 'simbolos',
-    });
+    for (const c of g.celdas || [g]) {
+      indiceRotulos.agregar({
+        x: c.x, y: c.y, ancho: c.ancho, alto: c.alto,
+        etiqueta: `símbolos ${g.nombre}`, nivel: 'simbolos',
+      });
+    }
   }
   for (const c of etiquetas.cajas || []) indiceRotulos.agregar(c);
 
@@ -461,6 +502,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       solicitudes: solicitudesDeRotulos({
         niveles: plan.rotulos, anillos, simbolos, factor, marco,
       }),
+      /* Los huecos que cada rejilla dejó a su nombre: un departamento, que se coloca
+         antes, no debe quitárselo a su provincia teniendo otro sitio. */
+      reservas: simbolos.grupos.filter((g) => g.reservaNombre)
+        .map((g) => ({ ...g.reservaNombre, id: g.unidad })),
       indice: indiceRotulos,
       medidor,
       marco,
@@ -495,6 +540,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     etiquetas: etiquetas.svg,
     simbolos: simbolos.svg,
     recuadros: recuadros.referencias,
+    enlaces: recuadros.enlaces,
   });
 
   const idRecorte = 'recorte-marco';
@@ -509,7 +555,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       ...colocacion.colocadas.map((c) => c.pieza.dibujar(c.x, c.y)),
       ...recuadros.colocados.map((z) => z.svg),
     ]),
-    dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor, fechaPie }),
+    dibujarPie({ marco, pie, banda, version, escala, nivel, medidor, fechaPie }),
   ].join('\n');
 
   return {
@@ -553,10 +599,23 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
         clasesUsadas: clasesVisibles.map((i) => clases[i].etiqueta),
         filtro: tiposActivos ? [...tiposActivos] : null,
         tamanoIconoMm: Number(tamanoIcono.toFixed(2)),
+        disposicion,
         gruposApinados: simbolos.apinados,
         recuadros: recuadros.regiones,
         capacidadRecuadros: recuadros.capacidad,
         avisosRecuadros: recuadros.avisos,
+        // Unidades cuyos íconos van sólo en su recuadro (Lima Metropolitana y Callao).
+        unidadesSoloEnRecuadro: soloEnRecuadro.size,
+        /* Cada grupo del mapa, para revisarlos uno por uno: cómo se dispuso (rejilla
+           compacta, alargada o siguiendo la forma) y cuántos íconos caben en su unidad. */
+        grupos: simbolos.grupos.filter((g) => g.forma).map((g) => ({
+          unidad: g.unidad,
+          nombre: g.nombre,
+          iconos: g.tipos,
+          forma: g.forma,
+          dentro: g.iconosDentro,
+          conNombre: g.conNombre,
+        })),
         apinamientoMaximoPct: simbolos.apinamientoMaximoPct,
         iconosSinUso: cobertura.sinUso,
       },
@@ -579,6 +638,14 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
         })),
         omitidas: colocacion.omitidas,
         forzadas: colocacion.forzadas,
+        /* Cómo se compuso la leyenda: con los nombres completos de los CAR y del SAIPD
+           es más ancha, y lo que cede primero es esto. */
+        leyenda: piezas.leyenda ? {
+          columnas: piezas.leyenda.columnas,
+          abreviada: piezas.leyenda.abreviada,
+          escalaTexto: piezas.leyenda.escalaTexto,
+          nombresPartidos: piezas.leyenda.nombresPartidos,
+        } : null,
       },
       rotulos: { colocados: etiquetas.colocados, omitidos: etiquetas.omitidos, motivos: etiquetas.motivos },
       etiquetas: {
@@ -589,6 +656,15 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
         omitidos: rotulos.omitidos
           .filter((o) => !plan.rotulos.some((r) => r.opcional && r.nivel === o.nivel))
           .map((o) => o.texto),
+        /* Cada nombre puesto, con cuánto sale de su unidad y a qué distancia queda de
+           sus íconos (etiquetas.js), y cada uno sin sitio, opcionales incluidos: con
+           los dos se revisan los territorios uno por uno (muestras/territorios.csv). */
+        colocados: rotulos.colocados,
+        sinSitio: rotulos.omitidos.map(({
+          id, texto, nivel, motivo,
+        }) => ({
+          id, texto, nivel, motivo,
+        })),
         cajas: indiceRotulos.lista().map((c) => ({
           etiqueta: c.etiqueta || c.id || '',
           nivel: c.nivel || 'bloque',
@@ -643,6 +719,10 @@ function ajustarTitulo({ textos, medidor, factor, marco, ocupacion, margen, anch
   };
 }
 
+/** A qué fracción se dibuja la leyenda elegida, y el cuerpo por debajo del que no baja. */
+const REDUCCION_LEYENDA = 0.7;
+const CUERPO_MINIMO_LEYENDA_PT = 4;
+
 /**
  * Busca la composición mayor con la que la leyenda cabe abajo a la izquierda sin
  * tapar el país.
@@ -653,21 +733,44 @@ function ajustarTitulo({ textos, medidor, factor, marco, ocupacion, margen, anch
  * que menos territorio tape. Se compara el área ABSOLUTA tapada y no la fracción,
  * porque una caja grande reparte el mismo estorbo sobre más superficie y saldría
  * ganando siempre.
+ *
+ * Esa leyenda, alta y de una columna, es el repliegue. Después se busca, con el mismo
+ * cuerpo, una más ancha y más baja con cada nombre en una línea (ver más abajo).
+ *
+ * Devuelve la leyenda y la caja de las clases, que va aparte (bloqueClases) con el
+ * mismo cuerpo de letra.
+ *
+ * @param {object} [escala]          la barra de escala, que tiene que caber después
+ *                                   en la fila de abajo
+ * @param {string[]} [anclajesEscala] sus anclajes preferidos
+ * @returns {{leyenda, clases}|null}
  */
-function ajustarLeyenda({ marco, ocupacion, ...resto }) {
+function ajustarLeyenda({
+  marco, ocupacion, clasesUsadas, clases, rampa, unidad, escala = null, anclajesEscala = [], ...resto
+}) {
+  const clasesPara = (leyenda) => bloqueClases({
+    clasesUsadas, clases, rampa, unidad, medidor: resto.medidor, factor: resto.factor,
+    escalaTexto: leyenda.escalaExacta,
+  });
+  /* Acotada en las dos dimensiones: sin el límite de ancho, los nombres largos
+     («Centro de Atención Residencial para Personas Adultas Mayores - CARPAM») estiraban
+     la leyenda hasta media hoja. */
+  const conCaja = (ceñido, reducida) => bloqueLeyenda({
+    ...resto,
+    altoMaximoMm: marco.alto * 0.45 * ceñido,
+    anchoMaximoMm: marco.ancho * 0.33 * ceñido,
+    ...(reducida ? { reduccion: REDUCCION_LEYENDA, cuerpoMinimoPt: CUERPO_MINIMO_LEYENDA_PT } : {}),
+  });
+
+  /* La caja se elige con la leyenda ENTERA y después se reduce al 70 % (con un mínimo
+     de 4 pt de texto), a pedido del área usuaria en la revisión de la Fase 20 para
+     dejar más sitio al recuadro de zoom. Elegirla con la leyenda ya reducida daba una
+     caja más holgada, que la leyenda llenaba con un cuerpo mayor, y acababa casi igual
+     de grande. */
   let mejor = null;
-  let primera = null;
   for (const ceñido of [1, 0.85, 0.72, 0.6, 0.5, 0.42, 0.36, 0.3]) {
-    const pieza = bloqueLeyenda({
-      ...resto,
-      /* Acotada en las dos dimensiones: sin el límite de ancho, los nombres largos
-         («Centro de Atención Residencial para Personas Adultas Mayores - CARPAM»)
-         estiraban la leyenda hasta media hoja. */
-      altoMaximoMm: marco.alto * 0.45 * ceñido,
-      anchoMaximoMm: marco.ancho * 0.33 * ceñido,
-    });
+    const pieza = conCaja(ceñido, false);
     if (!pieza) return null;
-    primera = primera || pieza;
     /* El tamaño sólo vale si la caja tiene dónde ir. Se busca sitio igual que lo
        buscará después colocarPiezas() —en su esquina, deslizándose por el borde, sin
        pisar los grupos de íconos—, y un tamaño sin sitio se descarta aunque no tape
@@ -680,7 +783,7 @@ function ajustarLeyenda({ marco, ocupacion, ...resto }) {
     });
     if (!sitio) continue;
     const tapadoMm2 = sitio.tapado * pieza.ancho * pieza.alto;
-    if (!mejor || tapadoMm2 < mejor.tapadoMm2 - 1e-6) mejor = { pieza, tapadoMm2 };
+    if (!mejor || tapadoMm2 < mejor.tapadoMm2 - 1e-6) mejor = { ceñido, tapadoMm2 };
     /* Se acepta que la leyenda pise algo de territorio antes que encogerla hasta
        hacerla ilegible. En el nacional su esquina cae sobre el Pacífico y no tapa
        nada, pero en un ámbito departamental puede tocar tierra, y exigir cero dejaría
@@ -690,8 +793,73 @@ function ajustarLeyenda({ marco, ocupacion, ...resto }) {
   }
   /* Si ningún tamaño encuentra sitio se devuelve el mayor y colocarPiezas() lo
      declarará omitido: el informe tiene que decirlo, no esconderlo. */
-  return (mejor || { pieza: primera }).pieza;
+  const vertical = conCaja(mejor ? mejor.ceñido : 1, true);
+  if (!vertical) return null;
+
+  /* ¿Caben, detrás de esta leyenda, sus clases al lado y la escala en la fila de
+     abajo? Se prueba sobre una copia de la ocupación con las mismas búsquedas que
+     usará colocarPiezas() (sitioJunto, sitioAbajo), así que lo que aquí cabe allí
+     cae en el mismo sitio. */
+  const cabeConLasDemas = (leyenda, sitio) => {
+    const prueba = ocupacion.clonar();
+    prueba.marcarBloque(rectangulo.expandir(sitio.r, SEPARACION_MM / 2));
+    const deClases = clasesPara(leyenda);
+    if (deClases) {
+      const junto = sitioJunto({ ancho: deClases.ancho, alto: deClases.alto, ref: sitio.r, marco, ocupacion: prueba });
+      if (!junto) return false;
+      prueba.marcarBloque(rectangulo.expandir(junto.r, SEPARACION_MM / 2));
+    }
+    return !escala || Boolean(sitioAbajo({
+      ancho: escala.ancho, alto: escala.alto, anclajes: anclajesEscala, marco, ocupacion: prueba,
+    }));
+  };
+
+  /* Y después, ANCHA Y BAJA. Lo pidió el área usuaria en la revisión de la Fase 20:
+     cada nombre en una línea, y la leyenda tan baja como se pueda, porque abajo a la
+     izquierda sobra ancho y lo que le falta al recuadro de zoom, que va encima, es
+     alto. Con una condición: que detrás quepan las clases a su lado y la escala en la
+     fila de abajo, que si no se iba encima de la leyenda y le quitaba al recuadro lo
+     mismo que la leyenda le había dado. Para cada cuerpo, desde el de la de arriba, se
+     prueban de una a cuatro columnas y se queda la más baja que cumple. Un cuerpo
+     menor sólo gana si deja la leyenda al menos un 15 % más baja (MEJORA_POR_CUERPO):
+     el área usuaria prefiere la letra algo menor y la escala abajo a una leyenda alta,
+     pero no a cambio de unos milímetros. La de arriba sigue siendo el repliegue: en un
+     mapa departamental la esquina puede ser tierra y no admitir nada ancho. */
+  const masBajaQueCumple = (e) => {
+    const candidatas = COLUMNAS_LEYENDA
+      .map((columnas) => bloqueLeyenda({
+        ...resto,
+        disposicion: { columnas, escala: e },
+        reduccion: REDUCCION_LEYENDA,
+        cuerpoMinimoPt: CUERPO_MINIMO_LEYENDA_PT,
+      }))
+      .sort((a, b) => a.alto - b.alto || a.ancho - b.ancho);
+    for (const p of candidatas) {
+      const sitio = buscarSitio({
+        ancho: p.ancho, alto: p.alto, anclajes: ['abajo-izquierda'], soloPreferidos: true, marco, ocupacion,
+      });
+      /* Más estricta que la de arriba: el 8 % de una caja de medio metro de ancho son
+         centímetros de país tapados, y en A0 la leyenda ancha se montaba sobre la costa
+         sur. Ancha, sólo si va por mar o por fuera del ámbito. */
+      if (!sitio || sitio.tapado > TERRITORIO_TOLERADO_LEYENDA_ANCHA) continue;
+      if (cabeConLasDemas(p, sitio)) return p;
+    }
+    return null;
+  };
+  let elegida = null;
+  for (const e of ESCALAS_LEYENDA.filter((x) => x <= vertical.escalaBase + 1e-9)) {
+    const p = masBajaQueCumple(e);
+    if (p && (!elegida || p.alto < elegida.alto * (1 - MEJORA_POR_CUERPO))) elegida = p;
+  }
+  const leyenda = elegida || vertical;
+  return { leyenda, clases: clasesPara(leyenda) };
 }
+
+/** Lo que tiene que bajar la leyenda para que valga la pena un cuerpo de letra menor. */
+const MEJORA_POR_CUERPO = 0.15;
+
+/** En cuántas columnas se puede repartir la leyenda ancha. */
+const COLUMNAS_LEYENDA = [1, 2, 3, 4];
 
 /**
  * Tabla de centros, ajustada a lo que deja libre la lámina.
@@ -762,6 +930,9 @@ const CERCANOS_A_LISTAR = 6;
 /** Factor de formato del A0: la hoja en la que se calibraron los topes de tamaño. */
 const FACTOR_A0 = factorFormato({ diagonalMm: Math.hypot(...TAMANOS.A0) });
 
+/** Fracción del tamaño de referencia a la que se dibuja el ícono del mapa (ver componer). */
+const ESCALA_ICONO_MAPA = 0.5;
+
 /**
  * Los centros más cercanos al ámbito, con su distancia en línea recta.
  *
@@ -788,6 +959,9 @@ function centrosMasCercanos({ centrosJson, plan, tiposActivos, cuantos }) {
 
 /** Cuánto territorio puede pisar la leyenda antes de que valga la pena encogerla. */
 const TERRITORIO_TOLERADO_LEYENDA = 0.08;
+
+/** Lo mismo para la leyenda ancha y baja, que sólo se elige si no tapa casi nada. */
+const TERRITORIO_TOLERADO_LEYENDA_ANCHA = 0.005;
 
 /**
  * Mide sobre el terreno la distancia que cubre la barra de escala ya colocada.
@@ -855,21 +1029,46 @@ const ESTILOS_ROTULO = {
 /** Finura del campo de distancias según el nivel: más fino, más lento y más preciso. */
 const CELDA_POR_PRIORIDAD = [2, 1.5, 1.2];
 
+/** Estilo y tinta del rótulo de un nivel, a la medida de la hoja. */
+function estiloDeRotulo(nivel, factor) {
+  const def = ESTILOS_ROTULO[nivel] || ESTILOS_ROTULO.provincia;
+  const t = tipografia[def.tipo];
+  return {
+    estilo: { familia: t.familia, variante: t.peso, pt: t.pt * Math.sqrt(factor) },
+    tinta: color[def.color],
+  };
+}
+
+/** El texto del rótulo de un rasgo, en mayúsculas si su nivel lo pide. */
+const textoDeRotulo = (capa, f) => (capa.mayusculas
+  ? f.properties.nombre.toLocaleUpperCase('es') : f.properties.nombre);
+
+/**
+ * El nombre de cada unidad, ya medido, para que su rejilla de íconos le deje sitio
+ * (servicios.js, repartirEnRejilla).
+ *
+ * Sólo los niveles que se rotulan siempre: en el Perú por distritos los nombres de
+ * distrito son opcionales y casi ninguno cabe, así que apartar sus íconos para ellos
+ * movería el mapa a cambio de nada.
+ */
+function nombresParaRejilla({ niveles, factor, medidor }) {
+  const nombres = new Map();
+  for (const capa of niveles) {
+    if (capa.exterior || capa.opcional) continue;
+    const { estilo } = estiloDeRotulo(capa.estilo || capa.nivel, factor);
+    for (const f of capa.rasgos) {
+      nombres.set(f.properties.ubigeo, medirRotulo(textoDeRotulo(capa, f), estilo, medidor));
+    }
+  }
+  return nombres;
+}
+
 function solicitudesDeRotulos({ niveles, anillos, simbolos, factor, marco }) {
   const solicitudes = [];
-  const polosDe = new Map(simbolos.grupos.map((g) => [g.unidad, g.polos]));
-
-  const estiloDe = (nivel) => {
-    const def = ESTILOS_ROTULO[nivel] || ESTILOS_ROTULO.provincia;
-    const t = tipografia[def.tipo];
-    return {
-      estilo: { familia: t.familia, variante: t.peso, pt: t.pt * Math.sqrt(factor) },
-      tinta: color[def.color],
-    };
-  };
+  const grupoDe = new Map(simbolos.grupos.map((g) => [g.unidad, g]));
 
   for (const capa of niveles) {
-    const { estilo, tinta } = estiloDe(capa.estilo || capa.nivel);
+    const { estilo, tinta } = estiloDeRotulo(capa.estilo || capa.nivel, factor);
     const celda = CELDA_POR_PRIORIDAD[Math.min(capa.prioridad - 1, CELDA_POR_PRIORIDAD.length - 1)];
 
     for (const f of capa.rasgos) {
@@ -879,7 +1078,9 @@ function solicitudesDeRotulos({ niveles, anillos, simbolos, factor, marco }) {
       /* Los polos de las unidades ya los calculó la capa de símbolos. Reaprovecharlos
          ahorra rehacer el campo de distancias y, sobre todo, garantiza que el nombre
          busque sitio alrededor del MISMO punto donde están los íconos. */
-      let polos = capa.exterior ? null : polosDe.get(f.properties.ubigeo);
+      /* Y el nombre se busca pegado a ese grupo, que es lo que nombra. */
+      const g = capa.exterior ? null : grupoDe.get(f.properties.ubigeo);
+      let polos = g ? g.polos : null;
       if (!polos || !polos.length) {
         const caja = cajaDeAnillos(anillosRasgo, marco);
         polos = caja ? polosDeInaccesibilidad(anillosRasgo, caja, celda, PUNTOS_POR_ROTULO) : [];
@@ -888,14 +1089,15 @@ function solicitudesDeRotulos({ niveles, anillos, simbolos, factor, marco }) {
 
       solicitudes.push(crearSolicitud({
         id: f.properties.ubigeo,
-        texto: capa.mayusculas ? f.properties.nombre.toLocaleUpperCase('es') : f.properties.nombre,
+        texto: textoDeRotulo(capa, f),
         nivel: capa.nivel,
         prioridad: capa.prioridad,
         peso: polos[0].radioMm,
         puntos: polos,
         estilo,
         color: tinta,
-        dentro: (x, y) => puntoEnAnillos(x, y, anillosRasgo),
+        dentro: g?.dentro || pruebaDentro(anillosRasgo),
+        ...(g ? { grupo: { caja: { x: g.x, y: g.y, ancho: g.ancho, alto: g.alto } } } : {}),
         ...(capa.estricto ? { estricto: true } : {}),
       }));
     }
@@ -915,18 +1117,20 @@ function solicitudesDeRotulos({ niveles, anillos, simbolos, factor, marco }) {
  *
  * El grupo se ancla en el polo de inaccesibilidad de la provincia, no en su centroide:
  * en una provincia cóncava o partida en islas el centroide cae fuera y el grupo se
- * dibujaría sobre la vecina.
+ * dibujaría sobre la vecina. En rejilla puede correrse a otro punto interior para
+ * dejarle sitio a su nombre, o seguir la forma de la unidad (servicios.js).
  *
  * Todos los íconos tienen el mismo tamaño, el de la hoja: crece o se achica con el
  * papel y con nada más. En la Fase 18 se probó a achicarlos distrito por distrito y el
  * área usuaria prefirió un tamaño único (Fase 19).
  */
 function dibujarSimbolos({
-  unidades, agregado, anillos, estiloIconos, marco, medidor, factor, tamanoIcono,
+  unidades, agregado, anillos, estiloIconos, marco, medidor, factor, tamanoIcono, disposicion,
+  nombres = new Map(),
 }) {
-  const eCifra = { familia: 'SourceSans3', variante: 'Semibold', pt: 5.2 * Math.sqrt(factor) };
-  const altoCifra = medidor.alto(eCifra) * 0.95;
-  const piezas = [];
+  const cifra = cifraDeGrupo(factor);
+  const eCifra = cifra.estilo;
+  const altoCifra = cifra.alto;
   const grupos = [];
 
   for (const f of unidades.features) {
@@ -956,8 +1160,17 @@ function dibujarSimbolos({
     const tipos = [...datos.tipos.keys()].sort(
       (a, b) => agregado.porTipo.get(b) - agregado.porTipo.get(a) || a.localeCompare(b, 'es'),
     );
-    const { posiciones, ancho, alto } = repartirIconos(tipos.length, polo, tamanoIcono, altoCifra);
+    /* La prueba de la unidad va con el grupo: la rejilla la usa para seguir su forma y
+       los rótulos, para saber si caen dentro, sin volver a repartir los lados. Con el
+       nombre medido, la rejilla le deja sitio a su lado dentro de la unidad. */
+    const dentro = pruebaDentro(anillosProv);
+    const {
+      posiciones, celdas, caja: cajaGrupo, forma, iconosDentro, conNombre, nombre,
+    } = repartirGrupo(tipos.length, polo, tamanoIcono, altoCifra, disposicion, {
+      dentro, rotulo: nombres.get(f.properties.ubigeo), puntos: polos,
+    });
 
+    const piezas = [];
     tipos.forEach((tipo, i) => {
       const p = posiciones[i];
       piezas.push(dibujarIcono({
@@ -969,7 +1182,7 @@ function dibujarSimbolos({
       }));
       piezas.push(textoConHalo(String(datos.tipos.get(tipo)), {
         x: p.x,
-        y: p.y + altoCifra * 0.82,
+        y: p.y + cifra.base,
         'text-anchor': 'middle',
         fill: color.tinta,
         'font-family': eCifra.familia,
@@ -977,7 +1190,7 @@ function dibujarSimbolos({
         'font-weight': 600,
       }, {
         colorHalo: color.halo,
-        grosorMm: trazoMm.haloRotulo * factor * 0.7,
+        grosorMm: cifra.halo,
         medidor,
         estilo: eCifra,
       }));
@@ -986,23 +1199,37 @@ function dibujarSimbolos({
     grupos.push({
       unidad: f.properties.ubigeo,
       nombre: f.properties.nombre,
-      x: polo.x - ancho / 2,
-      y: polo.y - alto / 2,
-      ancho,
-      alto,
+      ...cajaGrupo,
+      celdas,
+      dentro,
+      forma,
+      iconosDentro,
+      conNombre,
+      // El hueco que la rejilla dejó a su nombre, para que no se lo quite otro rótulo.
+      reservaNombre: nombre ? nombre.caja : null,
       // Los polos ya están calculados; los rótulos los reutilizan en vez de rehacerlos.
       polo: { x: polo.x, y: polo.y, radioMm: polo.radioMm },
       polos: polos.map((p) => ({ x: p.x, y: p.y, radioMm: p.radioMm })),
       tipos: tipos.length,
       centros: datos.total,
+      // El dibujo va con su grupo para poder quitarlo después (Lima y Callao, ver componer).
+      svg: piezas.join('\n'),
     });
   }
 
+  return resumirSimbolos(grupos);
+}
+
+/**
+ * Dibujo e informe de unos grupos de íconos: el apiñamiento se mide entre los que
+ * quedan, porque un grupo deja de estorbar cuando se quita el de al lado.
+ */
+function resumirSimbolos(grupos) {
   const medidos = medirApinamiento(grupos);
   const apinados = medidos.filter((g) => g.apinamiento > UMBRAL_APINAMIENTO);
 
   return {
-    svg: piezas.join('\n'),
+    svg: medidos.map((g) => g.svg).join('\n'),
     grupos: medidos,
     apinados: apinados.map((g) => ({
       nombre: g.nombre,
@@ -1152,7 +1379,7 @@ function anillosPorRasgo(proyeccion, rasgos) {
 
 function dibujarCapas({
   plan, agregado, clases, rampa, contexto, ruta, marco,
-  grilla, etiquetas, rotulos, simbolos, recuadros, conColor = true,
+  grilla, etiquetas, rotulos, simbolos, recuadros, enlaces = '', conColor = true,
 }) {
   const porCapa = (nombre) => contexto.features.filter((f) => f.properties.capa === nombre);
   const rasgos = {};
@@ -1237,6 +1464,7 @@ function dibujarCapas({
     territorio: [],
     limites,
     grilla: [grilla],
+    enlacesZoom: [enlaces],
     rotulos: [rotulos],
     simbolos: [simbolos],
     recuadros: [recuadros],
@@ -1257,18 +1485,31 @@ function dibujarMarco(marco) {
 
 /* -------------------------------- pie ----------------------------------- */
 
+/**
+ * Medidas del pie: dos líneas, a la mitad del cuerpo con que se calibró (ESCALA_PIE),
+ * y el aire de debajo también a la mitad. Desde la revisión de la Fase 20 el área
+ * usuaria lo quiso así para dar ese alto al mapa.
+ */
 function medidasDelPie(medidor, factor) {
-  const estilo = { familia: 'Poppins', variante: 'Regular', pt: tipografia.pie.pt * factor };
+  const estilo = { familia: 'Poppins', variante: 'Regular', pt: tipografia.pie.pt * factor * ESCALA_PIE };
   const interlinea = medidor.alto(estilo) * 1.18;
-  return { estilo, interlinea, lineas: 3, alturaMm: interlinea * 3 + 2.5 * factor };
+  return { estilo, interlinea, lineas: 2, alturaMm: interlinea * 2 + 2.5 * factor * ESCALA_PIE };
 }
 
+const ESCALA_PIE = 0.5;
+
 /**
- * Pie obligatorio: de dónde salen los datos, con qué versión, cuándo se generó y el
- * aviso de que la escala sólo vale si se imprime sin reducir. Un mapa impreso sin esa
- * información no se puede auditar meses después.
+ * Pie obligatorio: de dónde salen los datos y la cartografía, a la izquierda, y la
+ * escala, a la derecha.
+ *
+ * Hasta la revisión de la Fase 20 llevaba además la versión del directorio (su fecha
+ * de publicación y el comienzo de su hash), los centros publicados, quién lo elaboró,
+ * la fecha de generación y el aviso «Escala válida al imprimir al 100 %». El área
+ * usuaria pidió dejar sólo las fuentes, la cartografía y la escala. La versión y la fecha no se pierden del todo: van en un <metadata> que
+ * no se dibuja y que aPdf (pdf.js) copia a las propiedades del PDF, así que un archivo
+ * sigue diciendo de qué datos salió aunque la lámina impresa ya no lo diga.
  */
-function dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor, fechaPie }) {
+function dibujarPie({ marco, pie, banda, version, escala, nivel, medidor, fechaPie }) {
   const x = marco.x;
   const derecha = marco.x + marco.ancho;
   /* Por debajo del marco va primero la banda con los números de la retícula; el pie
@@ -1281,35 +1522,26 @@ function dibujarPie({ marco, pie, banda, version, escala, nivel, textos, medidor
   const destacado = { ...comun, 'text-anchor': 'end', 'font-weight': 600, fill: color.tinta };
   const eFuerte = { ...pie.estilo, variante: 'SemiBold' };
 
-  const fecha = fechaPie.texto;
-  const elaborado = textos.elaboradoPor || 'el Ministerio de la Mujer y Poblaciones Vulnerables';
-
-  /* Dos columnas: la procedencia a la izquierda y, a la derecha, la escala y el aviso
-     de impresión. La izquierda se recorta al ancho libre para no montarse nunca. */
-  const NOTA = 'Escala válida al imprimir al 100 %';
-  const anchoDerecha = Math.max(
-    medidor.ancho(NOTA, eFuerte),
-    medidor.ancho(`Escala ${escala.texto}`, eFuerte),
-  );
+  /* Dos columnas: la procedencia a la izquierda y la escala a la derecha. La izquierda
+     se recorta al ancho libre para no montarse nunca. */
+  const anchoDerecha = medidor.ancho(`Escala ${escala.texto}`, eFuerte);
   const anchoIzquierda = marco.ancho - anchoDerecha - 6;
 
-  /* La versión es la fecha de publicación del directorio y el comienzo de su hash:
-     la URL del MIMP no cambia entre versiones, así que el hash es lo único que
-     identifica de qué archivo salió una lámina impresa. */
   const izquierda = [
-    `Fuente: ${version.fuente} · Versión ${version.generado} (${version.datosTagCorto})`
-    + ` · ${version.totalCentros} centros publicados`,
-    'Límites: INEI · Contexto: Natural Earth 1:10 m'
-    + ' · Proyección: Mercator transversa 75° O (UTM 18S) · Retícula UTM 18S',
-    `Elaborado por ${elaborado} · Generado el ${fecha}`,
+    'Fuentes: MIMP (Directorio Nacional de Servicios), INEI (Límites), Natural Earth 1:10m (Contexto).',
+    'Cartografía: Proyección UTM Zona 18S (Meridiano Central 75° O). Retícula UTM 18S.',
   ].map((t) => medidor.recortar(t, pie.estilo, anchoIzquierda));
 
   return grupo({ id: 'capa-pie' }, [
     ...izquierda.map((t, i) => texto(t, { ...comun, x, y: base + pie.interlinea * i })),
     texto(`Escala ${escala.texto}`, { ...destacado, x: derecha, y: base }, { medidor, estilo: eFuerte }),
-    texto(NOTA, { ...destacado, x: derecha, y: base + pie.interlinea * 2 }, { medidor, estilo: eFuerte }),
     /* Rastro del nivel geométrico: permite explicar, ante un mapa impreso, por qué un
        contorno tiene el detalle que tiene. */
     el('metadata', { id: 'detalle-geometrico' }, `nivel=${nivel} escala=${num(escala.denominador, 0)}`),
+    /* La procedencia que el pie ya no imprime. La versión es la fecha de publicación
+       del directorio y el comienzo de su hash: la URL del MIMP no cambia entre
+       versiones, así que el hash es lo único que identifica de qué archivo salió. */
+    el('metadata', { id: 'procedencia' }, `Directorio ${version.generado} (${version.datosTagCorto})`
+      + ` · ${version.totalCentros} centros publicados · generado el ${fechaPie.texto}`),
   ]);
 }

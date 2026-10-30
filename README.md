@@ -76,8 +76,10 @@ archivo. Para saber si el MIMP publicó otra versión:
    MIMP queda fuera hasta que se decida en `scripts/lib/criterios.mjs`).
 4. `npm run build` y vuelve a aprobar las referencias visuales.
 
-La versión queda registrada en `public/data/version.json` y aparece en el pie de cada
-PDF, para que un mapa impreso siempre diga de qué corte de datos salió.
+La versión queda registrada en `public/data/version.json` y va en las propiedades de
+cada PDF (palabras clave), para que un archivo siempre diga de qué corte de datos
+salió. Hasta la revisión de la Fase 20 también se imprimía en el pie; el área usuaria
+pidió un pie con sólo las fuentes y la cartografía (ver «El pie»).
 
 ### Criterio de publicación
 
@@ -249,6 +251,68 @@ muda, encoge — más columnas, siglas en lugar de nombres y cuerpos menores, en
 orden, porque un nombre completo en cuerpo pequeño se lee mejor que «CARPAM» en cuerpo
 grande.
 
+**Los tipos que el directorio escribe abreviados van enteros**: «CAR» es Centro de
+Acogida Residencial, «SAIPD» Servicio de Atención Integral de Personas con Discapacidad
+y «PCD» personas con discapacidad (`nombre` en `src/iconos/catalogo.js`; lo pidió el
+área usuaria en la revisión de la Fase 20). Del mismo modo, «Centro de Atencion
+Institucional», que el directorio escribe sin tilde, lleva su tilde en la leyenda. El
+tipo sigue siendo la clave del directorio: sólo cambia lo que se lee. Estos tipos no se
+abrevian nunca, y para que la leyenda no se
+ensanche **un nombre más largo que su columna se parte en líneas**, con el ícono a la
+altura de la primera. Así en A4 la leyenda pasó de dos columnas con siglas a una con
+los nombres completos.
+
+**Y se dibuja al 70 %** (`REDUCCION_LEYENDA` en `src/motor/render.js`), para dejar más
+sitio al recuadro de zoom; también lo pidió el área usuaria. El tamaño se elige como
+siempre, con la leyenda entera, y sólo después se reduce: elegirlo ya reducida daba
+una caja más holgada que la leyenda llenaba con un cuerpo mayor. El texto no baja de
+4 pt (`CUERPO_MINIMO_LEYENDA_PT`), así que en A4, donde ya iba a ese cuerpo, apenas
+encoge.
+
+**Dos cajas: los tipos y, aparte, las clases.** «Presencia de servicios por …» va en
+una caja propia (`bloqueClases`), más pequeña, a la derecha de la leyenda y alineada
+por abajo (`sitioJunto` en `src/motor/layout.js`), con el mismo cuerpo de letra. Juntas
+eran una caja tan alta como la columna de los tipos.
+
+**La fila de abajo: leyenda, clases y escala.** Abajo a la izquierda sobra ancho —es el
+Pacífico— y lo que le falta al recuadro de zoom, que va encima, es alto. Por eso la
+leyenda procura ser ancha y baja, con cada nombre en una línea: se prueban de una a
+cuatro columnas, cada columna tan ancha como su nombre más largo y con el aire de un
+ícono hasta la siguiente. Una disposición sólo vale si detrás caben, en la fila de
+abajo, la caja de las clases y la **escala gráfica** (`sitioAbajo`), que con la leyenda
+ancha se iba encima de ella y le quitaba al recuadro lo que la leyenda le daba. Se
+empieza por el cuerpo de la leyenda de una columna, y un cuerpo menor sólo gana si deja
+la leyenda al menos un 15 % más baja (`MEJORA_POR_CUERPO`): el área usuaria prefiere la
+letra algo menor y la escala abajo a una leyenda alta. A la leyenda ancha no se le
+tolera tapar más de un 0,5 % de país (`TERRITORIO_TOLERADO_LEYENDA_ANCHA`): un 8 % de
+una caja de medio metro son centímetros de costa. Si nada de eso cabe —en un mapa
+departamental la esquina puede ser tierra—, queda la de una columna con los nombres
+partidos. Los títulos en negrita llevan sólo el aire de su línea: antes dejaban otra
+media en blanco.
+
+Con la leyenda reducida y baja, las clases aparte y el pie a la mitad, el recuadro de
+Lima y Callao gana el alto que ellos dejan:
+
+| Hoja | Leyenda | Recuadro de Lima y Callao, antes → ahora |
+|---|---|---|
+| A3 | 67 × 65 mm, una columna | 39 × 67 → 60 × 108 mm |
+| A1 | 212 × 65 mm, dos columnas | 89 × 150 → 148 × 258 mm |
+| A0 | 361 × 97 mm, dos columnas | 121 × 205 → 216 × 372 mm |
+| 2A0 por distritos | 537 × 94 mm, tres columnas | 286 × 492 → 310 × 532 mm |
+
+`npm run muestras` dice qué composición eligió cada lámina.
+
+Hasta la revisión de la Fase 20 la leyenda llevaba al pie una nota sobre los centros
+dibujados en su distrito y no en su sede; se quitó a pedido del área usuaria. La marca
+de ubicación no exacta sigue en los datos y en la tabla de los mapas distritales.
+
+Sus íconos crecen con la hoja **igual que su texto**: 3,4 mm en A4 y lo mismo
+multiplicado por el factor del formato en las demás (`ICONO_LEYENDA_MM` en
+`src/motor/leyenda.js`). Hasta la Fase 20 tomaban el tamaño del ícono del mapa con un
+tope de 5 mm; el del mapa crece sólo con la raíz del formato, porque tiene que caber en
+las provincias, y en un A0 el ícono de la leyenda medía la mitad que la letra de al
+lado.
+
 ### Los íconos
 
 Los servicios se dibujan con **círculos** de color y pictograma blanco, centrados en el
@@ -265,15 +329,66 @@ bastón—, y `estilos.js` anota también las diferencias del archivo que no son
 y se dejaron como estaban. **Educadores de Calle** sigue sin estar en el archivo y lleva
 un ícono **provisional** hasta que diseño entregue el suyo.
 
-El tamaño se fija en milímetros reales de impresión, con un mínimo de 3 mm, y ningún
-trazo baja de 0,1 mm, que es lo que una imprenta offset garantiza.
+El tamaño se fija en milímetros reales de impresión y ningún trazo baja de 0,1 mm, que
+es lo que una imprenta offset garantiza. El de referencia es 3,4 mm en A4, crece con la
+raíz del formato, nunca baja de 3 mm y tiene un tope de 6 mm en A0. **En el mapa los
+íconos se dibujan a la mitad de esa medida** (`ESCALA_ICONO_MAPA` en
+`src/motor/render.js`): 1,7 mm en A4, 2 mm en A3, 2,7 mm en A1 y 3 mm en A0. Lo pidió
+el área usuaria en la revisión de la Fase 20, para que los grupos no se choquen. Es
+menos que los 3 mm en los que el pictograma se lee bien, así que a ese tamaño los tipos
+se distinguen sobre todo por el color. La leyenda no se reduce: tiene su propia medida.
 `muestras/iconos.pdf` imprime cada ícono a 3, 4,5 y 6 mm junto a su tipo, sigla y color:
 es a la vez la documentación de la correspondencia y la comprobación de que a tamaño
 real siguen distinguiéndose.
 
 Un aviso sobre la paleta, que es la del diseño: CAR Básico, CAR de Urgencia y
 Plataforma de Atención llevan tres azules casi iguales (#0066c5, #0069cc y #0067c7) y se
-distinguen sólo por el pictograma.
+distinguen sólo por el pictograma. Con el ícono del mapa a 1,7 mm, en un A4 apenas se
+distinguen: es la contrapartida de reducirlo.
+
+### Cómo se reparten los íconos de un grupo
+
+Por omisión, los íconos de cada unidad van **en rejilla, adaptada a la forma de la
+unidad** (`repartirEnRejilla` en `src/motor/servicios.js`). Es el punto medio entre la
+cuadrícula fija de antes y el anillo de QGIS: se lee como una tabla —de izquierda a
+derecha y de arriba abajo, el tipo más frecuente primero— siempre que la unidad lo
+permite y, cuando no, sigue su forma. Cada ícono ocupa una celda, él y su cifra debajo.
+Se prueba, por este orden:
+
+1. **La rejilla junto a su nombre.** El nombre de la unidad, medido igual que lo mide el
+   motor de rótulos (`medirRotulo`), se pone encima de la rejilla, debajo o a un lado,
+   en una línea o en dos, y el bloque entero se corre por los puntos interiores de la
+   unidad hasta que cabe dentro. Si no cabe entero, vale el que deje el nombre menos
+   fuera, hasta la mitad. Ese hueco queda **reservado** para el nombre: otro rótulo que
+   lo pise paga un coste, así que un departamento no se lo quita a su provincia teniendo
+   otro sitio.
+2. **La rejilla compacta**, la más cuadrada, en el punto de la unidad, si cabe entera.
+3. **Las demás rejillas**, de la más cuadrada a la más alargada —dos filas, una fila,
+   una columna—, centradas y algo corridas, para las unidades angostas pero rectas.
+4. **La forma.** Si ninguna cabe, las celdas se toman de una en una a partir del punto,
+   siempre la más cercana que toque a las ya puestas y caiga dentro: en una provincia
+   angosta y torcida el grupo se estira a lo largo de ella en vez de salirse por los
+   lados. Huancayo en A1 tiende sus íconos por el brazo norte de la provincia, y
+   Arequipa en A4 los escalona según su contorno.
+
+Gana la que deja más íconos dentro de la unidad; a igualdad, la que va antes. En una
+unidad donde no cabe ni un ícono queda la compacta. Como un grupo que sigue la forma no
+es un rectángulo, los rótulos, la ocupación y el apiñamiento lo miden **celda por
+celda**, no por su caja envolvente.
+
+En la Fase 20 la disposición por omisión fue el **anillo**, como el «desplazamiento de
+puntos» de QGIS, y el área usuaria prefirió la rejilla. El anillo sigue disponible en el
+panel («Íconos de cada grupo») o con `?disposicion=anillo` (`repartirEnAnillo`): de 2 a
+6 íconos, un solo anillo del radio justo; con siete o más, el más frecuente en el centro
+y los demás en anillos concéntricos, el empaquetado del panal.
+
+**La cifra bajo cada ícono** (cuántas sedes de ese tipo hay) va en 3,8 pt, pegada al
+borde inferior del círculo, y sólo reserva el alto real de un dígito más un hilo de aire
+(`cifraDeGrupo`, el mismo para el mapa y los recuadros). Iba en 5,2 pt y reservaba una
+línea entera de texto, con su sitio para acentos y descendentes que una cifra no tiene:
+cada ícono con su número ocupaba casi una vez y media su propio alto. Con la cifra
+compacta los grupos que se tocan en el Perú A4 bajan de 142 a 108 en anillo y de 89 a
+65 en rejilla; en A1, de 34 a 18 y de 5 a 2.
 
 ### Los recuadros de zoom
 
@@ -307,7 +422,18 @@ tamaño del mapa: una reducción rotulada como ampliación. En A0 horizontal, do
 sí da, Cusco sale completo con sus trece provincias a ×1,9; en A2 sale su núcleo —las
 provincias del entorno de la ciudad— a ×4,3. El rectángulo rojo sobre el mapa principal
 marca exactamente el trozo ampliado, y cuando es parcial el informe avisa de que hace
-falta una hoja mayor para verlo completo. El criterio vale para cualquier hoja y
+falta una hoja mayor para verlo completo.
+
+**Cómo se ve qué zona amplía cada recuadro.** El nombre va sólo en el recuadro, no
+sobre el rectángulo rojo del mapa: hasta la revisión de la Fase 20 lo llevaban los dos, y
+el del mapa tapaba los íconos de la unidad vecina («Lima Metropolitana y Callao» caía
+sobre los de Huaral). Lo que une cada rectángulo con su recuadro son **dos líneas en
+degradado** entre esquinas iguales —las dos de fuera, que no atraviesan ninguno de los
+rectángulos—, a plena tinta junto a cada uno y casi transparentes a mitad de camino
+(`lineasDeEnlace` en `src/motor/zoom.js`). Van por debajo de nombres e íconos, así que
+cruzan el mapa sin tapar ningún dato. El degradado se hace por tramos con su propia
+opacidad y no con un gradiente SVG, que es lo que svg2pdf pasa al PDF como trazo
+vectorial sin sorpresas. El criterio vale para cualquier hoja y
 cualquier filtro; con un solo tipo activo los símbolos dejan de estorbarse y no se
 dibuja ninguno. También se pueden **elegir a mano** por ubigeo de provincia o de
 departamento, y entonces el motor avisa si la selección abarca demasiado para que
@@ -320,6 +446,16 @@ llegan a 257 × 247 mm, en A4 apenas a 55 × 51— y **la forma de la zona decid
 ubicación**: una provincia alargada en vertical encaja en el mar, que es alto y
 estrecho, y una alargada en horizontal sobre Brasil, que es ancho. Cuando se acaba el
 hueco se dejan de dibujar, y eso es el máximo dinámico: A4 admite uno, A0 hasta cuatro.
+
+Cada recuadro tiene un tope del 48 % del lado menor del marco, para que el primero no
+se quede con todo el hueco. Cuando es **el único** —el de Lima Metropolitana y Callao
+que el mapa del país lleva por omisión— no hay con quién repartir: el tope sube al 75 %
+y el hueco se busca de abajo arriba, así que el recuadro queda pegado a la leyenda en
+vez de arriba con un vacío debajo (`LADO_MAXIMO_SI_ES_UNO` y `desdeAbajo`; revisión de
+la Fase 20). Crece lo que permite la costa: Lima es alta y estrecha y el recuadro guarda
+su proporción, así que para ser más alto tendría que ser más ancho, y en A3 y A1 su
+esquina de arriba ya toca la costa de Áncash. En 2A0 horizontal, donde sí había sitio,
+pasó de unos 306 × 526 a 427 × 717 mm.
 
 | Hoja | Recuadros | Tamaño del mayor |
 |---|---:|---|
@@ -357,12 +493,12 @@ coordenada real. El círculo se centra en ella: lo que señala el punto es el í
 un borde del dibujo.
 
 Los recuadros de zoom dibujan **lo mismo** que el mapa principal: si éste pinta cada
-centro en su sitio, el recuadro también. Un zoom que agregara lo que el mapa desagrega
-estaría contando dos cosas distintas del mismo lugar en la misma lámina. La única
-excepción va en sentido contrario y la declara el ámbito (`simbolosZoom`): partido
-hasta distritos —el país o un departamento—, el recuadro pone cada centro en su sitio
-en vez de repetir los grupos con sus cifras. El mapa da el reparto y el recuadro, que
-tiene la escala para hacerlo, dice dónde está cada uno.
+centro en su sitio, el recuadro también, y si agrupa por distrito con sus cifras, el
+recuadro agrupa por distrito con sus cifras. Un zoom que contara de otra manera estaría
+diciendo dos cosas distintas del mismo lugar en la misma lámina. Entre las Fases 17 y 20
+hubo una excepción —partido hasta distritos, el recuadro ponía cada centro en su sitio,
+sin cifras— y se retiró cuando Lima y Callao pasaron a llevar los íconos sólo en su
+recuadro: ahí es el único sitio donde se pueden contar.
 
 Dentro del recuadro sólo la **zona ampliada** —el departamento, la provincia o el
 distrito— lleva íconos. Lo que la rodea se sigue dibujando, para que el recorte no
@@ -372,8 +508,9 @@ vecinos ya están en el mapa principal. El velo es un
 trazado vectorial con opacidad (`opacidad.veloZoom` en los tokens), no un desenfoque,
 que acabaría rasterizado en el PDF.
 
-En la web los recuadros no se dibujan por omisión: se piden, automáticos
-(`?zoom=auto`) o eligiendo las zonas.
+En la web los recuadros automáticos no se dibujan por omisión: se piden con
+`?zoom=auto`, o se eligen las zonas. El único que se pone solo es el de Lima y Callao
+en el mapa del país (ver más abajo).
 
 ### El nivel de división
 
@@ -417,8 +554,30 @@ departamento, y con trazos propios: el distrito al mínimo imprimible en el gris
 
 Los recuadros de zoom arman sus zonas con las unidades de los íconos, que son las que
 se estorban: el Perú por departamentos amplía departamentos, y el Perú por distritos,
-departamentos, provincias o distritos. Hasta distritos, además, el recuadro dibuja cada
-centro en su sitio y al tamaño normal (ver arriba).
+departamentos, provincias o distritos.
+
+### Lima y Callao, en su recuadro
+
+En la web, el mapa del Perú —hasta provincias y hasta distritos— abre con un recuadro de
+**Lima Metropolitana y Callao** juntos (`zoomPorDefecto` en `src/ui/config.js`): son
+156 centros en unos pocos milímetros, en 2 provincias o en 41 de sus 50 distritos, y sin
+ampliarlos el mapa enseña ahí una mancha de grupos que se pisan. Se pone sólo si no hay
+otro zoom pedido, se quita al pasar a *hasta departamentos* o a otro ámbito, y vuelve al
+regresar; un enlace con `zoom=ninguno` lo desactiva. Hasta departamentos no se ofrece:
+sus unidades son departamentos y Lima Metropolitana es sólo una parte del de Lima.
+
+Mientras ese recuadro está en la lámina, **los íconos de Lima Metropolitana y Callao se
+dibujan sólo en él** (`SOLO_EN_RECUADRO` en `src/motor/zoom.js`); en el mapa queda el
+color y el rectángulo rojo que dice dónde está. Se quitan después de colocar el recuadro
+y sólo los de las unidades que el recuadro ha dibujado: si no cupiera, se quedan en el
+mapa, porque no pueden desaparecer de la lámina. El apiñamiento se vuelve a medir sin
+ellos, y el resumen dice cuántas unidades van sólo en el recuadro
+(`unidadesSoloEnRecuadro`). Pasa igual con un recuadro automático o elegido a mano que
+amplíe esa zona.
+
+En el Perú por distritos el recuadro amplía unas tres veces en A1, y el centro de Lima
+—Cercado, Breña, La Victoria, Lince y alrededores— sigue apretado: son una veintena de
+grupos en unos 15 km.
 
 ### Lo que rodea al ámbito
 
@@ -624,64 +783,139 @@ El problema no es escribir nombres: es decidir cuáles caben. Hay 25 departament
 mapa con rótulos superpuestos es ilegible y uno que los omita en silencio es engañoso,
 así que el motor coloca lo que cabe **por prioridad** y deja constancia de lo que no.
 
-**Los rótulos van debajo de los símbolos, y los ceden sólo si no hay más remedio.** El
-grupo de íconos de una provincia se ancla en su polo de inaccesibilidad, que es
-justamente el mejor sitio para su nombre. Tratarlo como obstáculo insalvable empujaba
-cada rótulo hacia el borde de su provincia o lo dejaba fuera del todo —Huancavelica
-desaparecía y LA LIBERTAD acababa arrinconada en un extremo en vez de en el centro—,
-pero permitirlo sin más escondía el nombre bajo las insignias, porque los rótulos se
-dibujan por debajo: la cifra de sedes es un dato del mapa y el nombre casi siempre se
-deduce de la posición.
+### El método de QGIS
 
-Se resuelve en dos pasadas. En la primera los íconos sí estorban, de modo que el nombre
-busca un hueco limpio dentro de su propia unidad; sólo si no encuentra ninguno se admite
-montarlo, que es preferible a omitirlo. Y en esa segunda pasada **no vale la primera
-posición que encaje**: se prueban todas y se elige la que menos tape. Valía la primera,
-que por el orden de búsqueda es la del polo, y el polo es justamente donde está el grupo
-de íconos; en un mapa provincial eso dejaba tapados tres de cada cinco nombres teniendo
-sitio mejor a un milímetro. Cada punto interior se prueba además a tres distancias
-crecientes, porque con una sola un nombre no lograba apartarse del grupo aunque su
-unidad tuviera sitio de sobra unos milímetros más allá.
+Desde la Fase 20 `src/motor/etiquetas.js` sigue el método del motor de etiquetado de
+QGIS (PAL), **reescrito aquí y no copiado**: QGIS es GPL y este proyecto no comparte su
+licencia, pero las ideas no tienen dueño.
 
-**Y se prueban antes todas las posiciones interiores.** Se recorrían mezcladas, punto
-por punto, así que una posición que se salía del distrito se probaba antes que otra
-interior del punto siguiente, y muchos nombres acababan fuera de su área teniendo sitio
-dentro. Se recorren ahora en dos bloques: primero las que caen dentro del polígono y
-sólo después las que asoman. La separación entre el nombre y su punto baja además de
-0,55 a 0,3 interlineados: cuanto más aire, más fácil es salirse, y el halo ya separa el
-nombre de lo que tiene debajo.
+1. **Candidatos con coste.** Cada nombre genera sus posiciones posibles, en una línea o
+   partido en dos. Si su unidad tiene íconos, las primeras van **pegadas a su rejilla**,
+   a un hilo de ella: encima, debajo o a un lado, centradas o alineadas con un borde, y
+   en las esquinas. Después, centrado sobre cada uno de hasta diez puntos interiores de
+   la unidad y en las ocho direcciones de alrededor, a tres distancias. Cada una lleva
+   un coste: la parte del nombre que sale de su unidad, la distancia a sus íconos,
+   partirlo en dos líneas, pisar el hueco reservado a otro nombre o montarse sobre
+   íconos cuestan más. Las que pisan la leyenda, un recuadro u otro bloque no son
+   candidatas. Se guardan las 36 más baratas.
+2. **Solución inicial.** Por prioridad —departamento, provincia, distrito— y, dentro de
+   cada nivel, primero los que tienen **menos** posiciones posibles, que son los que se
+   pierden si otro les quita el hueco. Cada uno toma su candidato libre más barato.
+3. **Mejora por cadenas.** Un nombre que se quedó fuera prueba sus candidatos y, si
+   choca con otros ya puestos, intenta moverlos a otra de sus posiciones. Nunca desplaza
+   a uno más importante, y a uno menos importante puede dejarlo fuera: un nombre de
+   provincia vale más que uno de distrito.
+4. **Pulido.** Cada nombre colocado baja al candidato libre más barato que le quede.
 
-| | antes | ahora |
-|---|---|---|
-| Provincia de Lima en A2 | 59 % tapados | **12 %** |
-| Perú en A1 | 31 % | **16 %** |
-| Departamento de Cusco en A3 | 8 % | 9 % | La leyenda, los recuadros y la cabecera
-siguen siendo intocables: los símbolos no se sacan del índice de colisiones, se ignoran
-al preguntar.
+El motor anterior colocaba uno por uno y el primero que encontraba sitio se lo quedaba
+para siempre. Ahora un nombre puede apartarse un poco para que entre otro, que es lo que
+hace QGIS y lo que le permite nombrar más con menos choques.
 
-Cada rótulo prueba hasta diez puntos interiores de su polígono y, en cada uno, la
-posición centrada más las ocho de alrededor, primero en una línea y luego partido en dos. Se mide con las
-métricas reales de la tipografía incrustada y se comprueba el choque con **rectángulos
-exactos**, no con la rejilla de ocupación: su celda de 2 mm sirve para decidir si un
-bloque cabe en una esquina, pero no para garantizar que dos rótulos no se tocan.
+### Dentro de su territorio y junto a sus íconos
 
-El orden es determinista —prioridad, luego superficie, luego ubigeo— porque la Fase 8
-compara PDF contra PDF.
+**Los nombres de los territorios van al 60 % del cuerpo con que se calibraron**
+(`ESCALA_NOMBRES` en `src/estilo/tokens.js`): una provincia, 3,9 pt en A4, 4,6 pt en A3
+y 6,2 pt en A1; un departamento, 5,4 pt en A4. Vale también para los recuadros de zoom y
+para los nombres de fuera del ámbito. Lo pidió el área usuaria, después de reducir los
+íconos a la mitad, para que el nombre cupiera dentro de su territorio; en A4 queda por
+debajo de lo que se lee con comodidad a simple vista.
 
-| Hoja | Departamentos | Provincias |
+En la revisión de la Fase 20 el área usuaria pidió que los nombres se ubicaran mejor
+dentro de su territorio y más cerca de su rejilla. Hasta entonces cada nombre buscaba
+sitio alrededor del centro del grupo a la distancia de su propio alto, así que un grupo
+más alto que el nombre lo empujaba lejos; y lo que salía de la unidad se medía sólo
+por las cuatro esquinas. Ahora:
+
+- **Lo que sale se mide en el contorno del nombre**, con puntos repartidos por sus
+  bordes (`fraccionFuera`), y pesa más que partirlo en dos líneas: un nombre largo que
+  dentro sólo cabe en dos líneas va en dos.
+- **El nombre se pega a su rejilla** y la rejilla le deja sitio (ver «Cómo se reparten
+  los íconos de un grupo»).
+- **Un nombre no tapa más del 10 % de su caja con íconos** (`TAPADO_MAXIMO`), salvo el
+  nivel superior del mapa. Los rótulos van debajo de los símbolos y uno con media caja
+  bajo una rejilla dejaba ver unas letras sueltas. Si sólo cabe así, se omite y queda
+  anotado.
+
+Con los íconos a la mitad y los nombres al 60 %, las provincias del Perú con el nombre
+entero dentro de su territorio:
+
+| Hoja | Nombradas | Enteras dentro | Antes de reducir los nombres |
+|---|---:|---:|---|
+| A0 | 196/196 | 188 | 196 nombradas, 159 dentro |
+| A1 | 196/196 | 183 | 195 nombradas, 124 dentro |
+| A3 | 194/195 | 127 | 176 nombradas, 55 dentro |
+| A4 | 191/195 | 82 | 145 nombradas, 27 dentro |
+
+En las hojas chicas el límite sigue siendo de superficie: en un A4 muchas provincias
+miden menos que su nombre más sus íconos. Ahí el nombre va pegado a su rejilla aunque
+asome y, si sólo cabe tapándola, se omite.
+
+`npm run muestras` revisa los territorios **uno por uno**: escribe en
+`muestras/territorios.csv` una fila por cada departamento, provincia o distrito de cada
+lámina, con si se puso su nombre, cuánto sale de su unidad, a qué distancia queda de sus
+íconos, si los toca y cómo se dispusieron, e imprime el resumen por lámina.
+
+Dos nombres en la misma línea necesitan además **un tercio de letra de aire** entre
+ellos, no sólo la holgura de 0,35 mm: «Santiago» y «San Sebastián», en el recuadro de
+Cusco, se leían como un solo nombre. Con media letra el mapa nacional en A4 perdía una
+docena de provincias.
+
+La prueba de «¿cae este punto dentro de la unidad?», que el motor hace miles de veces
+por nombre, ya no recorre todo el contorno: `pruebaDentro` reparte los lados en franjas
+horizontales una sola vez y cada consulta mira sólo los de su franja, con el mismo
+resultado. Era casi la mitad del tiempo de composición; con ella, el motor nuevo es más
+rápido que el anterior aunque pruebe más posiciones.
+
+### Los nombres de distrito del mapa del país
+
+En el Perú por distritos, los nombres de distrito sólo se ponen si caben dentro de su
+distrito sin tocar íconos (son *estrictos* y opcionales: hay más de 1.800). El área
+usuaria vio, sobre todo en hojas mayores que A1, distritos sin servicios —sin íconos que
+estorbaran— y con sitio, pero sin nombre (revisión de la Fase 20). El motor descartaba
+cualquier posición en la que la caja del texto tocara el límite, y tres cosas lo hacían
+demasiado estricto:
+
+- **Se medía la caja y no las letras.** La caja incluye el aire de acentos y colas, que
+  casi nunca se ocupa. Ahora se mide la franja de las letras (`fraccionFuera`).
+- **Rozar el borde lo descartaba.** Ahora las letras pueden rozarlo, hasta un 10 % de
+  los puntos de su contorno (`FUERA_TOLERADA_ESTRICTO`), con el centro siempre dentro.
+- **Sólo se escribía en horizontal.** Muchos distritos de la sierra son altos y
+  estrechos: Huachocolpa mide 8 mm de ancho y su nombre, 10. Como último recurso, el
+  nombre se prueba girado un cuarto de vuelta, leyéndose de abajo arriba, como los
+  números de la retícula y como hace QGIS con las unidades alargadas (`COSTE.VERTICAL`).
+
+| Perú por distritos | Distritos nombrados antes | Ahora |
 |---|---:|---:|
-| A0 vertical | 25/25 | 196/196 |
-| A1 vertical | 25/25 | 195/196 |
-| A3 vertical | 24/24 | 177/195 |
-| A4 vertical | 24/24 | 146/195 |
+| A1 | 573 | 768 |
+| A0 | 824 | 1.042 (107 en vertical) |
+| 2A0 | — | 1.290 de 1.868 |
+
+Los que siguen sin nombre no caben de ninguna de esas formas o se quedaron sin hueco
+porque otros nombres ocuparon sus posiciones. El CSV de territorios lo dice para cada
+uno: «no cabe» o «sin hueco libre».
+
+### Lo que no cambia
+
+**Los rótulos van debajo de los símbolos, y los ceden sólo si no hay más remedio.** El
+grupo de íconos de una unidad se ancla en su polo de inaccesibilidad, que es justamente
+el mejor sitio para su nombre. Tratarlo como obstáculo insalvable dejaba nombres fuera;
+permitirlo sin más los escondía bajo las insignias. Por eso montarse sobre íconos no
+está prohibido pero cuesta más que todo lo demás junto: sólo ocurre cuando no queda una
+posición libre, y nunca pasando del 10 % de la caja fuera del nivel superior. La
+leyenda, los recuadros y la cabecera siguen siendo intocables.
+
+Se mide con las métricas reales de la tipografía incrustada y se comprueba el choque con
+**rectángulos exactos**, no con la rejilla de ocupación. Todo es determinista —la
+generación y los empates siguen siempre el mismo orden— porque la Fase 8 compara PDF
+contra PDF.
 
 Las provincias que el mapa principal no llega a nombrar son las que su propio grupo de
 íconos llena por completo: Lima, Callao, Huamanga. Son justamente las que acaban en un
-recuadro de zoom, así que **los recuadros también rotulan sus provincias** y esos
-nombres no se pierden.
+recuadro de zoom, así que **los recuadros también rotulan sus unidades** con el mismo
+motor y esos nombres no se pierden.
 
 El comando de muestras comprueba por pares que ninguna caja se superpone a otra, sin
-fiarse del índice que las colocó.
+fiarse del motor que las colocó.
 
 ## El layout se coloca solo
 
@@ -716,7 +950,10 @@ mientras que un país mal nombrado engaña.
 ### Jerarquía de los límites
 
 El salto entre el límite departamental y el provincial es deliberado y grande, en color
-y en grosor a la vez: 0,5 mm casi negro frente a 0,15 mm de gris claro. Con los dos en
+y en grosor a la vez: 0,5 mm casi negro frente a 0,18 mm de gris claro. Desde la
+revisión de la Fase 20 los límites provinciales y distritales van un 20 % más gruesos
+que como se calibraron (`GROSOR_LIMITES` en `src/estilo/tokens.js`), para que las
+unidades se sigan leyendo con los íconos y los nombres reducidos. Con los dos en
 grises parecidos no se distinguía a qué departamento pertenece cada provincia, que es la
 primera lectura que se le pide a este mapa.
 
@@ -739,6 +976,24 @@ departamental mide 0,3 mm en A4 y en A0. Las piezas del layout sí crecen con la
 —A4 1,0 · A3 1,37 · A2 1,87 · A1 2,56 · A0 3,50 · 2A0 4,76 · 4A0 6,50—, porque un
 cartel se mira de lejos y con el cuerpo de un A4 el título se perdería.
 
+### El pie
+
+Dos líneas a la izquierda y la escala a la derecha, a la mitad del cuerpo con que se
+calibró (`ESCALA_PIE` en `src/motor/render.js`), para dar ese alto al mapa:
+
+```
+Fuentes: MIMP (Directorio Nacional de Servicios), INEI (Límites), Natural Earth 1:10m (Contexto).   Escala 1:5,451,994
+Cartografía: Proyección UTM Zona 18S (Meridiano Central 75° O). Retícula UTM 18S.
+```
+
+Es el pie que pidió el área usuaria en la revisión de la Fase 20. Antes llevaba
+también la versión del directorio, los centros publicados, quién lo elaboró, la fecha
+de generación y la nota «Escala válida al imprimir al 100 %», que sigue siendo cierta
+aunque ya no se imprima. **La versión y la fecha siguen en el archivo**: el compositor las deja en
+un `<metadata id="procedencia">` que no se dibuja y `aPdf` las copia a las palabras
+clave del PDF. Una lámina impresa ya no dice de qué corte de datos salió; el PDF sí. El
+campo «Elaborado por» del panel se retiró con su línea.
+
 ### 2A0 y 4A0
 
 Son los múltiplos del A0 que define la norma ISO 216: 1189 × 1682 mm (el doble de área)
@@ -748,7 +1003,8 @@ los 28 s y 11 MB del A0 nacional vertical.
 
 Lo único que se ajustó es el tope del ícono. Los 6 mm se calibraron en A0; en 2A0 y 4A0
 el mapa está a una escala 1,4 y 2 veces mayor, y el tope crece con la raíz de ese
-factor: 7 mm en 2A0 y 8,2 mm en 4A0. De A4 a A0 no cambia nada.
+factor: 7 mm en 2A0 y 8,2 mm en 4A0. De A4 a A0 no cambia nada. En el mapa se dibujan a
+la mitad (ver «Los íconos»): 3,5 mm en 2A0 y 4,1 mm en 4A0.
 
 Para imprimirlos hace falta un plóter con rollo de al menos 1,2 m (2A0) o 1,7 m (4A0).
 
@@ -804,7 +1060,8 @@ aparece señala una decisión que alguien tomó, y el enlace se puede corregir a
 mandar por correo y volver a abrir meses después.
 
 El parámetro opcional `fecha=AAAA-MM-DD` fija la fecha de generación: con él, repetir
-un enlace produce el **mismo PDF byte a byte**, incluida la línea «Generado el» del pie.
+un enlace produce el **mismo PDF byte a byte**, incluida la fecha de generación que
+guardan sus propiedades.
 
 La composición tiene freno: escribir un título dispararía un mapa nacional por cada
 tecla, y en A0 cada uno tarda trece segundos. Se espera a que la escritura se detenga y,

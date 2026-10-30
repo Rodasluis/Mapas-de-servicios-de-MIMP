@@ -48,8 +48,9 @@ export const CASOS = [
     parametros: { hoja: 'A3', fecha: FECHA },
     esperado: {
       paginaMm: MEDIDAS.A3,
-      /* Sin recuadros por omisión (Fase 10). */
-      controles: { tamano: 'A3', orientacion: 'vertical', 'zoom-modo': 'ninguno' },
+      /* Ningún recuadro automático por omisión (Fase 10): sólo el de Lima y Callao,
+         que el país lleva por provincias y por distritos (Fase 20). */
+      controles: { tamano: 'A3', orientacion: 'vertical', 'zoom-modo': 'manual' },
       marcadas: ['capa-grilla', 'pieza-norte', 'pieza-leyenda'],
       desmarcadas: [],
     },
@@ -78,13 +79,37 @@ export const CASOS = [
       desmarcadas: [],
     },
   },
-  /* Fase 15: el nivel de división viaja en la URL, se ve en su selector y llega al PDF. */
+  /* Fase 20: la disposición de los íconos se elige en la web y llega al PDF. */
+  {
+    nombre: 'íconos en anillo, A3',
+    parametros: { hoja: 'A3', disposicion: 'anillo', fecha: FECHA },
+    esperado: {
+      paginaMm: MEDIDAS.A3,
+      controles: { tamano: 'A3', disposicion: 'anillo' },
+      marcadas: ['capa-simbolos'],
+      desmarcadas: [],
+    },
+  },
+  /* Fase 20: el país hasta distritos también abre con Lima y Callao ampliados en un
+     bloque. */
+  {
+    nombre: 'el país por distritos, A3',
+    parametros: { hoja: 'A3', division: 'distrito', fecha: FECHA },
+    esperado: {
+      paginaMm: MEDIDAS.A3,
+      controles: { tamano: 'A3', division: 'distrito', 'zoom-modo': 'manual' },
+      marcadas: ['capa-simbolos'],
+      desmarcadas: [],
+    },
+  },
+  /* Fase 15: el nivel de división viaja en la URL, se ve en su selector y llega al PDF.
+     Por departamentos no hay recuadro de Lima y Callao: no es una de sus unidades. */
   {
     nombre: 'el país por departamentos, A4',
     parametros: { hoja: 'A4', division: 'departamento', fecha: FECHA },
     esperado: {
       paginaMm: MEDIDAS.A4,
-      controles: { tamano: 'A4', division: 'departamento' },
+      controles: { tamano: 'A4', division: 'departamento', 'zoom-modo': 'ninguno' },
       marcadas: ['pieza-leyenda'],
       desmarcadas: [],
     },

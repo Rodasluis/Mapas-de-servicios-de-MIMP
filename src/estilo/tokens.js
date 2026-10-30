@@ -92,6 +92,9 @@ export const rampaNaranjas = ['#fff7e6', '#ffebbe', '#ffa77f', '#ff5500', '#a838
 
 /* ------------------------------ tipografía ------------------------------ */
 
+/** Fracción de su cuerpo de calibración a la que van los nombres de los territorios. */
+const ESCALA_NOMBRES = 0.6;
+
 /**
  * Cuerpos en PUNTOS REALES de impresión: un rótulo de 7 pt mide lo mismo en A4 que
  * en A0. Lo que cambia con la hoja es cuántos rótulos caben, no su tamaño.
@@ -109,13 +112,20 @@ export const tipografia = {
   pie: { familia: 'Poppins', peso: 'Regular', pt: 6.5 },
   tabla: { familia: 'Poppins', peso: 'Regular', pt: 6.5 },
 
-  rotuloDepartamento: { familia: 'SourceSans3', peso: 'Bold', pt: 9, versalitas: true },
-  rotuloProvincia: { familia: 'SourceSans3', peso: 'Regular', pt: 6.5 },
-  rotuloDistrito: { familia: 'SourceSans3', peso: 'Regular', pt: 5.5 },
+  /* Los nombres de los territorios —departamento, provincia, distrito, también en los
+     recuadros de zoom y fuera del ámbito— van al 60 % de los cuerpos con que se
+     calibraron (ESCALA_NOMBRES). Lo pidió el área usuaria en la revisión de la Fase 20:
+     con los íconos ya a la mitad, el nombre ocupaba más que su rejilla y casi nunca
+     cabía dentro de su provincia. En A4 una provincia queda en 3,9 pt y un distrito en
+     3,3 pt, por debajo de lo que se lee a simple vista con comodidad; en A1, en 6,2 y
+     5,3 pt. */
+  rotuloDepartamento: { familia: 'SourceSans3', peso: 'Bold', pt: 9 * ESCALA_NOMBRES, versalitas: true },
+  rotuloProvincia: { familia: 'SourceSans3', peso: 'Regular', pt: 6.5 * ESCALA_NOMBRES },
+  rotuloDistrito: { familia: 'SourceSans3', peso: 'Regular', pt: 5.5 * ESCALA_NOMBRES },
   /* Distritos en el mapa del PAÍS: un punto menos que el distrital y en gris claro
      (color.rotuloDistritoNacional). Con el cuerpo y el gris de las provincias, «Purús»
      provincia y «Purus» distrito se leían iguales uno al lado del otro. */
-  rotuloDistritoNacional: { familia: 'SourceSans3', peso: 'Regular', pt: 4.6 },
+  rotuloDistritoNacional: { familia: 'SourceSans3', peso: 'Regular', pt: 4.6 * ESCALA_NOMBRES },
   rotuloCentro: { familia: 'SourceSans3', peso: 'Semibold', pt: 5.5 },
   rotuloPais: { familia: 'SourceSans3', peso: 'Bold', pt: 11 },
   rotuloAgua: { familia: 'SourceSans3', peso: 'It', pt: 9 },
@@ -136,6 +146,9 @@ export const fuentes = {
 
 /* --------------------------------- trazo -------------------------------- */
 
+/** Cuánto más gruesos que su calibración van los límites provinciales y distritales. */
+const GROSOR_LIMITES = 1.2;
+
 /**
  * Grosores en MILÍMETROS REALES de impresión, por el mismo motivo que los cuerpos.
  * Por debajo de 0,08 mm una imprenta offset ya no garantiza el trazo.
@@ -143,11 +156,15 @@ export const fuentes = {
 export const trazoMm = {
   limiteNacional: 0.5,
   limiteDepartamental: 0.5,
-  limiteProvincial: 0.15,
+  /* Los límites provinciales y distritales van un 20 % más gruesos que como se
+     calibraron (GROSOR_LIMITES), a pedido del área usuaria en la revisión de la Fase
+     20: con los íconos y los nombres reducidos, el dibujo de las unidades quedaba
+     demasiado tenue. */
+  limiteProvincial: 0.15 * GROSOR_LIMITES,
   limiteProvincialDestacado: 0.4,
-  limiteDistrital: 0.1,
-  limiteDistritalNacional: 0.08,
-  limiteProvincialSobreDistritos: 0.2,
+  limiteDistrital: 0.1 * GROSOR_LIMITES,
+  limiteDistritalNacional: 0.08 * GROSOR_LIMITES,
+  limiteProvincialSobreDistritos: 0.2 * GROSOR_LIMITES,
   costa: 0.25,
   paisVecino: 0.15,
   marco: 0.6,

@@ -72,13 +72,20 @@ export function colocarPiezas(solicitudes, marco, ocupacion) {
 
   for (const {
     pieza, anclajes, obligatoria = true, soloPreferidos = false, margen = SEPARACION_MM,
+    junto = null, abajo = false,
   } of solicitudes) {
     if (!pieza || !(pieza.ancho > 0) || !(pieza.alto > 0)) continue;
 
-    const sitio = buscarSitio({
-      ancho: pieza.ancho, alto: pieza.alto, anclajes, soloPreferidos, margen, marco, ocupacion,
-      deslizamientos,
-    });
+    /* Las dos excepciones a la búsqueda general, y las dos con repliegue a ella: una
+       pieza que va JUNTO a otra ya colocada (las clases, a la derecha de la leyenda) y
+       una que va ABAJO, en la fila del borde inferior (la escala). */
+    const ref = junto ? colocadas.find((c) => c.pieza.nombre === junto) : null;
+    const sitio = (ref && sitioJunto({ ancho: pieza.ancho, alto: pieza.alto, ref, marco, ocupacion }))
+      || (abajo && sitioAbajo({ ancho: pieza.ancho, alto: pieza.alto, anclajes, margen, marco, ocupacion }))
+      || buscarSitio({
+        ancho: pieza.ancho, alto: pieza.alto, anclajes, soloPreferidos, margen, marco, ocupacion,
+        deslizamientos,
+      });
     if (!sitio) {
       if (obligatoria) omitidas.push(pieza.nombre);
       continue;
@@ -138,6 +145,63 @@ export function buscarSitio({
   return respaldo;
 }
 
+/** ¿Sirve este rectángulo? Dentro del marco, sin pisar bloques y casi sin tapar país. */
+function sirve(r, marco, ocupacion) {
+  if (!rectangulo.contiene(marco, r)) return null;
+  if (ocupacion.chocaConBloque(rectangulo.expandir(r, SEPARACION_MM / 2))) return null;
+  const tapado = ocupacion.sobreTerritorio(r);
+  return tapado <= TERRITORIO_TOLERADO ? tapado : null;
+}
+
+/**
+ * Sitio para una caja JUNTO a otra ya colocada: a su derecha, alineada por abajo, y si
+ * no, encima, alineada por la izquierda. Es el de la caja de las clases, que va al lado
+ * de la leyenda (revisión de la Fase 20): se leen juntas, y a la derecha y por abajo
+ * no le quita alto al recuadro de zoom, que va encima de la leyenda. Hacia la derecha
+ * se desliza hasta un tercio del marco por si lo primero que encuentra es país.
+ *
+ * @returns {{r, anclaje, tapado, forzada: false}|null}
+ */
+export function sitioJunto({ ancho, alto, ref, marco, ocupacion }) {
+  const paso = Math.min(marco.ancho, marco.alto) * 0.02;
+  const candidatos = [];
+  for (let dx = 0; dx <= marco.ancho / 3; dx += paso) {
+    candidatos.push({ x: ref.x + ref.ancho + SEPARACION_MM + dx, y: ref.y + ref.alto - alto });
+  }
+  candidatos.push({ x: ref.x, y: ref.y - SEPARACION_MM - alto });
+  for (const { x, y } of candidatos) {
+    const r = { x, y, ancho, alto };
+    const tapado = sirve(r, marco, ocupacion);
+    if (tapado !== null) return { r, anclaje: 'junto', tapado, forzada: false };
+  }
+  return null;
+}
+
+/**
+ * Sitio en la fila de ABAJO del marco: en sus anclajes de abajo y deslizándose sólo
+ * en horizontal. Es el de la escala gráfica. Con la búsqueda general, cuando la leyenda
+ * ocupaba la esquina se iba encima de ella y le quitaba al recuadro de zoom el alto que
+ * más falta le hace (revisión de la Fase 20).
+ *
+ * @returns {{r, anclaje, tapado, forzada: false}|null}
+ */
+export function sitioAbajo({ ancho, alto, anclajes = [], margen = SEPARACION_MM, marco, ocupacion }) {
+  const deAbajo = (a) => a.startsWith('abajo');
+  const orden = [...anclajes.filter(deAbajo), ...ANCLAJES.filter((a) => deAbajo(a) && !anclajes.includes(a))];
+  const paso = Math.min(marco.ancho, marco.alto) * 0.04;
+  for (const anclaje of orden) {
+    const base = posicion(anclaje, marco, ancho, alto, margen);
+    for (let i = 0; i * paso <= marco.ancho; i++) {
+      for (const signo of i ? [1, -1] : [1]) {
+        const r = { ...base, x: base.x + signo * i * paso };
+        const tapado = sirve(r, marco, ocupacion);
+        if (tapado !== null) return { r, anclaje, tapado, forzada: false };
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * Plantillas por orientación.
  *
@@ -156,6 +220,8 @@ export const PLANTILLAS = {
     norte: ['centro-derecha', 'arriba-derecha', 'centro-izquierda'],
     escala: ['abajo-derecha', 'abajo-izquierda', 'abajo-centro'],
     leyenda: ['abajo-izquierda'],
+    // Junto a la leyenda (sitioJunto); éstos, sólo si ahí no cabe.
+    clases: ['abajo-izquierda', 'abajo-centro', 'abajo-derecha'],
     ubicacion: ['abajo-derecha', 'arriba-izquierda', 'centro-derecha'],
     tabla: ['centro-derecha', 'abajo-derecha', 'centro-izquierda'],
   },
@@ -173,13 +239,14 @@ export const PLANTILLAS = {
        numérica, que se mide en el centro del marco. */
     escala: ['abajo-centro', 'abajo-derecha', 'abajo-izquierda'],
     leyenda: ['abajo-izquierda'],
+    clases: ['abajo-izquierda', 'abajo-centro', 'abajo-derecha'],
     ubicacion: ['abajo-derecha', 'arriba-izquierda', 'centro-derecha'],
     tabla: ['centro-derecha', 'abajo-derecha', 'centro-izquierda'],
   },
 };
 
 /** Orden de prioridad: quien va antes elige sitio antes. */
-export const PRIORIDAD = ['titulo', 'institucional', 'tabla', 'leyenda', 'ubicacion', 'escala', 'norte'];
+export const PRIORIDAD = ['titulo', 'institucional', 'tabla', 'leyenda', 'clases', 'ubicacion', 'escala', 'norte'];
 
 /** Piezas de cabecera: sitio fijo y margen propio. */
 export const CABECERA = ['titulo', 'institucional'];
@@ -213,4 +280,4 @@ export const SITIO_FIJO = [...CABECERA, 'leyenda'];
    la barra, no. */
 /* La tabla entra con ellos: es la pieza más alta de la lámina distrital y si pidiera
    sitio después de los rótulos, un topónimo podría dejarla sin el único hueco. */
-export const ANTES_DE_ROTULOS = [...CABECERA, 'tabla', 'leyenda', 'ubicacion', 'escala'];
+export const ANTES_DE_ROTULOS = [...CABECERA, 'tabla', 'leyenda', 'clases', 'ubicacion', 'escala'];

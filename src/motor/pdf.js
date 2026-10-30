@@ -107,11 +107,17 @@ export async function aPdf({ svg, hoja, leerTtf, propiedades = {}, fecha }) {
 
   const registradas = await registrarFuentes(doc, leerTtf);
 
+  /* La procedencia —versión del directorio y fecha de generación— va en las palabras
+     clave del PDF. El pie dejó de imprimirla en la revisión de la Fase 20; el
+     compositor la deja en un <metadata id="procedencia"> que no se dibuja, y leerla de
+     ahí hace que la web y las muestras escriban exactamente lo mismo. */
+  const procedencia = svg.match(/<metadata id="procedencia">([^<]*)<\/metadata>/);
   doc.setProperties({
     title: propiedades.titulo || 'Servicios del MIMP',
     subject: propiedades.asunto || 'Mapa de los servicios del MIMP',
     author: propiedades.autor || 'Ministerio de la Mujer y Poblaciones Vulnerables',
     creator: 'Mapas imprimibles del MIMP',
+    ...(procedencia ? { keywords: procedencia[1] } : {}),
   });
   /* Con fecha fija el PDF queda reproducible byte a byte, que es lo que necesita la
      comparación de regresión. Además de la fecha hay que fijar el identificador de

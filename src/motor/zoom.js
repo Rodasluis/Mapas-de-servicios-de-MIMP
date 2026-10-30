@@ -37,14 +37,14 @@
  */
 import { geoBounds, geoPath } from 'd3-geo';
 import { crearProyeccion, crearRuta } from './proyeccion.js';
-import { claseDe, repartirIconos } from './servicios.js';
+import { claseDe, repartirGrupo, cifraDeGrupo } from './servicios.js';
 import { dibujarIcono, cajaEnPunto } from '../iconos/index.js';
 import {
   mayorRectanguloLibre, rectangulo, recolectorDeAnillos, polosDeInaccesibilidad,
-  puntoEnAnillos,
+  pruebaDentro,
 } from './ocupacion.js';
 import { crearIndice } from './colisiones.js';
-import { colocarEtiquetas, crearSolicitud } from './etiquetas.js';
+import { colocarEtiquetas, crearSolicitud, medirRotulo } from './etiquetas.js';
 import {
   color, trazoMm, ptAmm, opacidad, tipografia,
 } from '../estilo/tokens.js';
@@ -104,6 +104,10 @@ export function maximoPorFormato(factor) {
 /** Separación entre el recuadro y lo que lo rodea. */
 const AIRE_MM = 2.5;
 
+/** Tope del lado de un recuadro cuando es el único de la lámina, en fracción del lado
+    menor del marco (con varios, 0,48: ver construirRecuadros). */
+const LADO_MAXIMO_SI_ES_UNO = 0.75;
+
 /**
  * Zonas ampliables: una por DEPARTAMENTO, con dos excepciones en Lima.
  *
@@ -127,6 +131,16 @@ const AIRE_MM = 2.5;
 export const LIMA_METROPOLITANA = '1501';
 export const CALLAO = '07';
 export const LIMA = '15';
+
+/**
+ * Zonas cuyos íconos van SÓLO en su recuadro cuando éste está en la lámina.
+ *
+ * Lima Metropolitana y Callao: en el mapa del país son una mancha de grupos que se
+ * pisan entre sí y con los de alrededor, y el recuadro, que los separa, ya los cuenta
+ * todos. Quedarse con los dos dibujos sólo añade ruido junto a la costa. Si el recuadro
+ * no cupiera, los íconos se quedan en el mapa: no pueden desaparecer de la lámina.
+ */
+export const SOLO_EN_RECUADRO = new Set(['lima-callao']);
 
 /**
  * La zona es SIEMPRE el nivel inmediatamente superior a la unidad que se dibuja.
@@ -358,20 +372,25 @@ function regionesManuales({ seleccion, agregado, unidades, anillos, zonas: def, 
 /**
  * Construye los recuadros de zoom, ya dimensionados y colocados.
  *
- * @returns {{colocados, referencias, regiones, avisos, capacidad}}
+ * `soloEnRecuadro` son las unidades que el mapa principal tiene que dejar sin íconos:
+ * las de una zona de SOLO_EN_RECUADRO cuyo recuadro se ha colocado y las ha dibujado.
+ *
+ * @returns {{colocados, referencias, regiones, avisos, capacidad, soloEnRecuadro: Set<string>}}
  */
 export function construirRecuadros({
   modo = 'auto', seleccion = [], grupos, umbral, unidades, zonas, anillos, agregado,
   clases, rampa, estiloIconos, medidor, factor, tamanoIcono, marco, ocupacion, maximo,
-  modoSimbolos = 'agregado', centros = [], entorno = null, trazos = null,
+  modoSimbolos = 'agregado', centros = [], entorno = null, trazos = null, disposicion,
 }) {
   const tope = maximo ?? maximoPorFormato(factor);
   const vacio = {
     colocados: [],
     referencias: '',
+    enlaces: '',
     regiones: [],
     avisos: [],
     capacidad: { tope, colocados: 0, cabeOtro: false },
+    soloEnRecuadro: new Set(),
   };
   if (modo === 'ninguno') return vacio;
 
@@ -385,13 +404,22 @@ export function construirRecuadros({
   if (!candidatas.length) return vacio;
 
   const eTitulo = { familia: 'Poppins', variante: 'SemiBold', pt: 7 * Math.sqrt(factor) };
-  const eCifra = { familia: 'SourceSans3', variante: 'Semibold', pt: 5.2 * Math.sqrt(factor) };
-  const altoCifra = medidor.alto(eCifra) * 0.95;
+  /* La misma cifra que en el mapa principal (servicios.js). */
+  const cifra = cifraDeGrupo(factor);
+  const eCifra = cifra.estilo;
+  const altoCifra = cifra.alto;
   const cabecera = medidor.alto(eTitulo) * 1.5;
   const borde = trazoMm.recuadroZoom;
 
   /* Tope por recuadro para que el primero no se quede con todo el hueco libre. */
   const ladoMaximo = Math.min(marco.ancho, marco.alto) * 0.48;
+  /* Cuando hay una sola zona que ampliar —el recuadro de Lima Metropolitana y Callao
+     que el mapa del país lleva por omisión— no hay con quién repartir el hueco: el
+     tope sube y el recuadro se busca de abajo arriba, pegado a la leyenda. Con el tope
+     de siempre se quedaba en A1, A0 y 2A0 un palmo por debajo de lo que cabía, y arriba
+     del hueco, con un vacío entre él y la leyenda (revisión de la Fase 20). */
+  const unoSolo = candidatas.length === 1;
+  const ladoMaximoDelRecuadro = unoSolo ? Math.min(marco.ancho, marco.alto) * LADO_MAXIMO_SI_ES_UNO : ladoMaximo;
 
   /**
    * Busca el mayor hueco libre con la proporción de un encuadre y mide cuánto amplía.
@@ -451,7 +479,8 @@ export function construirRecuadros({
       aspecto: aspectoDe(altura),
       region,
       minLadoMm: LADO_MINIMO_MM,
-      maxLadoMm: ladoMaximo,
+      maxLadoMm: ladoMaximoDelRecuadro,
+      ...(unoSolo ? { desdeAbajo: true } : {}),
     });
 
     let hueco = null;
@@ -505,8 +534,10 @@ export function construirRecuadros({
 
   const colocados = [];
   const referencias = [];
+  const enlaces = [];
   const resumen = [];
   const avisos = [];
+  const soloEnRecuadro = new Set();
 
   for (const region of candidatas) {
     if (colocados.length >= tope) {
@@ -580,59 +611,56 @@ export function construirRecuadros({
     const x = hueco.x + AIRE_MM / 2;
     const y = hueco.y + AIRE_MM / 2;
 
-    colocados.push({
-      nombre: `zoom-${region.clave}`,
+    const dibujo = dibujarRecuadro({
       x,
       y,
       ancho,
       alto,
-      svg: dibujarRecuadro({
-        x,
-        y,
-        ancho,
-        alto,
-        anchoMapa,
-        altoMapa,
-        cabecera,
-        borde,
-        etiqueta,
-        sub,
-        miembros,
-        protagonistas,
-        agregado,
-        clases,
-        rampa,
-        estiloIconos,
-        tamanoIcono,
-        altoCifra,
-        eTitulo,
-        eCifra,
-        medidor,
-        factor,
-        modoSimbolos,
-        centros,
-        entorno,
-        trazos,
-      }),
+      anchoMapa,
+      altoMapa,
+      cabecera,
+      borde,
+      etiqueta,
+      sub,
+      miembros,
+      protagonistas,
+      agregado,
+      clases,
+      rampa,
+      estiloIconos,
+      tamanoIcono,
+      altoCifra,
+      cifra,
+      eTitulo,
+      eCifra,
+      medidor,
+      factor,
+      modoSimbolos,
+      disposicion,
+      centros,
+      entorno,
+      trazos,
     });
+    colocados.push({ nombre: `zoom-${region.clave}`, x, y, ancho, alto, svg: dibujo.svg });
+    /* Sólo las unidades que el recuadro ha dibujado de verdad: una que se saliera del
+       encuadre perdería sus íconos en los dos sitios. */
+    if (SOLO_EN_RECUADRO.has(region.clave)) {
+      for (const u of dibujo.conIconos) soloEnRecuadro.add(u);
+    }
     ocupacion.marcarBloque(rectangulo.expandir({ x, y, ancho, alto }, AIRE_MM / 2));
 
     /* El rectángulo de referencia marca el ENCUADRE que se ha ampliado, que cuando la
        zona no cabe entera es sólo una parte de ella. Dibujar la zona completa mientras
-       el recuadro enseña un trozo señalaría un sitio que no es el que se amplió. */
-    referencias.push(grupo({}, [
-      rect(caja, {
-        fill: 'none', stroke: color.mimpRojo, 'stroke-width': trazoMm.recuadroZoom * 0.7,
-      }),
-      texto(etiqueta, {
-        x: caja.x,
-        y: caja.y - medidor.alto(eTitulo) * 0.25,
-        fill: color.mimpRojo,
-        'font-family': eTitulo.familia,
-        'font-size': ptAmm(eTitulo.pt * 0.8),
-        'font-weight': 600,
-      }),
-    ]));
+       el recuadro enseña un trozo señalaría un sitio que no es el que se amplió.
+
+       Sin título: hasta la revisión de la Fase 20 llevaba encima el nombre de la zona,
+       que tapaba los íconos de la unidad vecina (el de Lima Metropolitana y Callao caía
+       sobre los de Huaral). El nombre ya va en el recuadro, y lo que dice cuál es su
+       zona son las líneas que unen las esquinas de los dos rectángulos. */
+    referencias.push(rect(caja, {
+      fill: 'none', stroke: color.mimpRojo, 'stroke-width': trazoMm.recuadroZoom * 0.7,
+    }));
+    enlaces.push(...lineasDeEnlace(caja, { x, y, ancho, alto }, trazoMm.recuadroZoom * 0.7));
 
     resumen.push({
       etiqueta,
@@ -658,9 +686,11 @@ export function construirRecuadros({
   return {
     colocados,
     referencias: referencias.join('\n'),
+    enlaces: enlaces.join('\n'),
     regiones: resumen,
     avisos,
     capacidad: { tope, colocados: colocados.length, cabeOtro },
+    soloEnRecuadro,
   };
 }
 
@@ -668,9 +698,9 @@ export function construirRecuadros({
 /** Dibuja un recuadro ya dimensionado. */
 function dibujarRecuadro({
   x, y, ancho, alto, anchoMapa, altoMapa, cabecera, borde, etiqueta,
-  sub, miembros, protagonistas, agregado, clases, rampa, estiloIconos, tamanoIcono, altoCifra,
+  sub, miembros, protagonistas, agregado, clases, rampa, estiloIconos, tamanoIcono, altoCifra, cifra,
   eTitulo, eCifra, medidor, factor, modoSimbolos = 'agregado', centros = [],
-  entorno = null, trazos = null,
+  entorno = null, trazos = null, disposicion,
 }) {
   const marcoInterno = { x: x + borde, y: y + cabecera, ancho: anchoMapa, alto: altoMapa };
   const proy = crearProyeccion(sub, marcoInterno, 1.2);
@@ -763,7 +793,13 @@ function dibujarRecuadro({
     if (!anillos.length) continue;
     const caja = recorteDeCaja(anillos, marcoInterno);
     if (!caja) continue;
-    const polos = polosDeInaccesibilidad(anillos, caja, 1, 8);
+    let polos = polosDeInaccesibilidad(anillos, caja, 1, 8);
+    /* Un distrito más chico que la celda de 1 mm se quedaría sin polo, y con él sin
+       íconos. Con Lima y Callao eso ya no es un detalle: sus íconos sólo están aquí.
+       Se reintenta con una rejilla a su medida, como en el mapa principal. */
+    if (!polos.length) {
+      polos = polosDeInaccesibilidad(anillos, caja, Math.max(0.1, Math.min(caja.ancho, caja.alto) / 20), 8);
+    }
     if (!polos.length) continue;
     geometria.set(f, { anillos, polos });
   }
@@ -777,6 +813,8 @@ function dibujarRecuadro({
 
   const simbolos = [];
   const cajasSimbolos = [];
+  // Unidades cuyos íconos se han dibujado aquí (ver SOLO_EN_RECUADRO).
+  const conIconos = new Set();
 
   /* El recuadro dibuja LO MISMO que el mapa principal, sólo que más grande. Si el mapa
      pinta cada centro en su sitio y el recuadro los agregara en un grupo con cifras, la
@@ -801,6 +839,7 @@ function dibujarRecuadro({
         tamanoMm: tamanoIcono,
         estilo: estiloIconos,
       }));
+      conIconos.add(c.ubigeo);
       cajasSimbolos.push({
         x: punto[0] - tamanoIcono / 2,
         y: base - tamanoIcono,
@@ -819,17 +858,16 @@ function dibujarRecuadro({
     const tipos = [...datos.tipos.keys()].sort(
       (a, b) => agregado.porTipo.get(b) - agregado.porTipo.get(a) || a.localeCompare(b, 'es'),
     );
-    const reparto = repartirIconos(
-      tipos.length, { x: centro[0], y: centro[1] }, tamanoIcono, altoCifra,
-    );
-    const { posiciones } = reparto;
-    cajasSimbolos.push({
-      x: centro[0] - reparto.ancho / 2,
-      y: centro[1] - reparto.alto / 2,
-      ancho: reparto.ancho,
-      alto: reparto.alto,
-      etiqueta: `símbolos ${f.properties.nombre}`,
+    geo.dentro = geo.dentro || pruebaDentro(geo.anillos);
+    const reparto = repartirGrupo(tipos.length, { x: centro[0], y: centro[1] }, tamanoIcono, altoCifra, disposicion, {
+      dentro: geo.dentro,
+      rotulo: medirRotulo(f.properties.nombre, estiloDeRotuloEnRecuadro(factor), medidor),
+      puntos: geo.polos,
     });
+    const { posiciones } = reparto;
+    conIconos.add(f.properties.ubigeo);
+    geo.grupo = { caja: reparto.caja };
+    for (const c of reparto.celdas) cajasSimbolos.push({ ...c, etiqueta: `símbolos ${f.properties.nombre}` });
     tipos.forEach((tipo, i) => {
       simbolos.push(dibujarIcono({
         tipo,
@@ -840,7 +878,7 @@ function dibujarRecuadro({
       }));
       simbolos.push(textoConHalo(String(datos.tipos.get(tipo)), {
         x: posiciones[i].x,
-        y: posiciones[i].y + altoCifra * 0.82,
+        y: posiciones[i].y + cifra.base,
         'text-anchor': 'middle',
         fill: color.tinta,
         'font-family': eCifra.familia,
@@ -848,7 +886,7 @@ function dibujarRecuadro({
         'font-weight': 600,
       }, {
         colorHalo: color.halo,
-        grosorMm: trazoMm.haloRotulo * factor * 0.7,
+        grosorMm: cifra.halo,
         medidor,
         estilo: eCifra,
       }));
@@ -881,7 +919,7 @@ function dibujarRecuadro({
     'fill-rule': 'evenodd',
   });
 
-  return grupo({ id: `bloque-${etiqueta.replace(/\s+/g, '-').toLowerCase()}` }, [
+  const svg = grupo({ id: `bloque-${etiqueta.replace(/\s+/g, '-').toLowerCase()}` }, [
     el('defs', {}, el('clipPath', { id: idRecorte }, rect(marcoInterno))),
     rect({ x, y, ancho, alto }, {
       fill: color.fondoHoja, stroke: color.mimpRojo, 'stroke-width': borde,
@@ -902,6 +940,7 @@ function dibujarRecuadro({
       fill: 'none', stroke: color.marco, 'stroke-width': trazoMm.marcoInterior,
     }),
   ]);
+  return { svg, conIconos };
 }
 
 /** Caja envolvente de unos anillos ya proyectados. */
@@ -928,11 +967,7 @@ function rotularMiembros({ geometria, cajasSimbolos, marcoInterno, medidor, fact
   const indice = crearIndice();
   for (const c of cajasSimbolos) indice.agregar(c);
 
-  const estilo = {
-    familia: tipografia.rotuloProvincia.familia,
-    variante: 'Semibold',
-    pt: tipografia.rotuloProvincia.pt * Math.sqrt(factor) * 1.15,
-  };
+  const estilo = estiloDeRotuloEnRecuadro(factor);
 
   const solicitudes = [];
   for (const [f, geo] of geometria) {
@@ -944,7 +979,8 @@ function rotularMiembros({ geometria, cajasSimbolos, marcoInterno, medidor, fact
       peso: geo.polos[0].radioMm,
       puntos: geo.polos,
       estilo,
-      dentro: (x, y) => puntoEnAnillos(x, y, geo.anillos),
+      dentro: geo.dentro || pruebaDentro(geo.anillos),
+      ...(geo.grupo ? { grupo: geo.grupo } : {}),
     }));
   }
 
@@ -953,6 +989,78 @@ function rotularMiembros({ geometria, cajasSimbolos, marcoInterno, medidor, fact
   });
   return svg;
 }
+
+/**
+ * Las líneas que unen la zona ampliada con su recuadro, como en los mapas de ArcGIS o
+ * QGIS: de cada esquina del rectángulo de referencia a la misma esquina del recuadro.
+ *
+ * Sólo las que no atraviesan ninguno de los dos rectángulos, que son las dos de fuera:
+ * las que los cruzan por dentro se leerían como parte del dibujo. Van en degradado, a
+ * plena tinta junto a cada rectángulo y casi transparentes a mitad de camino, porque
+ * cruzan el mapa por encima de territorio y lo que importa es dónde empiezan y dónde
+ * acaban. El degradado se hace por tramos con su propia opacidad, no con un gradiente
+ * SVG: es lo que svg2pdf pasa al PDF como trazo vectorial sin sorpresas.
+ *
+ * @returns {string[]} los tramos, ya dibujados
+ */
+function lineasDeEnlace(zona, recuadro, grosorMm) {
+  const esquinas = (r) => [[r.x, r.y], [r.x + r.ancho, r.y], [r.x + r.ancho, r.y + r.alto], [r.x, r.y + r.alto]];
+  const a = esquinas(zona);
+  const b = esquinas(recuadro);
+  // Si se tocan, no hay nada que unir.
+  if (!(zona.x + zona.ancho < recuadro.x || recuadro.x + recuadro.ancho < zona.x
+    || zona.y + zona.alto < recuadro.y || recuadro.y + recuadro.alto < zona.y)) return [];
+
+  const tramos = [];
+  for (let i = 0; i < 4; i++) {
+    const [x0, y0] = a[i];
+    const [x1, y1] = b[i];
+    if (cruzaPorDentro(x0, y0, x1, y1, zona) || cruzaPorDentro(x0, y0, x1, y1, recuadro)) continue;
+    for (let k = 0; k < TRAMOS_DEL_ENLACE; k++) {
+      const t0 = k / TRAMOS_DEL_ENLACE;
+      const t1 = (k + 1) / TRAMOS_DEL_ENLACE;
+      // Opacidad del tramo según lo lejos que está su centro de los dos extremos.
+      const lejania = 1 - Math.abs((t0 + t1) - 1);
+      tramos.push(el('line', {
+        x1: num(x0 + (x1 - x0) * t0), y1: num(y0 + (y1 - y0) * t0),
+        x2: num(x0 + (x1 - x0) * t1), y2: num(y0 + (y1 - y0) * t1),
+        stroke: color.mimpRojo,
+        'stroke-width': num(grosorMm, 3),
+        'stroke-opacity': num(OPACIDAD_ENLACE[0] + (OPACIDAD_ENLACE[1] - OPACIDAD_ENLACE[0]) * lejania, 2),
+      }));
+    }
+  }
+  return tramos;
+}
+
+/** Tramos de cada línea de enlace y su opacidad en los extremos y a mitad de camino. */
+const TRAMOS_DEL_ENLACE = 16;
+const OPACIDAD_ENLACE = [0.9, 0.12];
+
+/**
+ * ¿Pasa el segmento por el INTERIOR del rectángulo? Recorte de Liang-Barsky contra el
+ * rectángulo encogido un hilo, para que salir de una de sus esquinas no cuente.
+ */
+function cruzaPorDentro(x0, y0, x1, y1, r) {
+  const e = Math.min(r.ancho, r.alto) * 0.01;
+  const xmin = r.x + e; const xmax = r.x + r.ancho - e;
+  const ymin = r.y + e; const ymax = r.y + r.alto - e;
+  const dx = x1 - x0; const dy = y1 - y0;
+  let t0 = 0; let t1 = 1;
+  for (const [p, q] of [[-dx, x0 - xmin], [dx, xmax - x0], [-dy, y0 - ymin], [dy, ymax - y0]]) {
+    if (p === 0) { if (q < 0) return false; continue; }
+    const t = q / p;
+    if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+  }
+  return t1 - t0 > 1e-6;
+}
+
+/** Estilo de los nombres de un recuadro; la rejilla de íconos lo usa para dejarles sitio. */
+const estiloDeRotuloEnRecuadro = (factor) => ({
+  familia: tipografia.rotuloProvincia.familia,
+  variante: 'Semibold',
+  pt: tipografia.rotuloProvincia.pt * Math.sqrt(factor) * 1.15,
+});
 
 /** Caja envolvente de unos anillos, recortada al marco interno del recuadro. */
 function recorteDeCaja(anillos, marcoInterno) {

@@ -162,6 +162,76 @@ export function puntoEnAnillos(x, y, anillos) {
   return dentro;
 }
 
+/**
+ * La misma prueba que puntoEnAnillos, preparada para preguntarle muchas veces.
+ *
+ * El motor de rótulos pregunta miles de veces por la misma unidad —cada posición
+ * candidata de su nombre, con sus esquinas— y recorrer cada vez los miles de lados de
+ * un contorno al nivel alto se llevaba casi la mitad del tiempo de composición. Aquí
+ * los lados se reparten una sola vez en franjas horizontales y cada consulta mira sólo
+ * los de su franja. El resultado es idéntico: un lado que no cruza la altura del punto
+ * no cambia nunca la paridad, y los que sí la cruzan están todos en su franja.
+ *
+ * Los lados se guardan en arreglos numéricos y no como objetos: con los contornos de un
+ * A0 eran muchos megas por pestaña en un equipo que ya iba justo de memoria.
+ *
+ * @returns {(x: number, y: number) => boolean}
+ */
+export function pruebaDentro(anillos, franjas = 64) {
+  let m = 0;
+  for (const anillo of anillos) m += anillo.length;
+  if (!m) return () => false;
+
+  // Lados como [xi, yi, xj, yj] seguidos, y la caja de todos los vértices.
+  const lados = new Float64Array(m * 4);
+  let x0 = Infinity; let x1 = -Infinity; let y0 = Infinity; let y1 = -Infinity;
+  let k = 0;
+  for (const anillo of anillos) {
+    for (let i = 0, j = anillo.length - 1; i < anillo.length; j = i++) {
+      const [xi, yi] = anillo[i];
+      const [xj, yj] = anillo[j];
+      lados[k++] = xi; lados[k++] = yi; lados[k++] = xj; lados[k++] = yj;
+      if (xi < x0) x0 = xi; if (xi > x1) x1 = xi;
+      if (yi < y0) y0 = yi; if (yi > y1) y1 = yi;
+    }
+  }
+  const alto = Math.max((y1 - y0) / franjas, 1e-9);
+  const franjaDe = (y) => Math.min(franjas - 1, Math.max(0, Math.floor((y - y0) / alto)));
+  const tramo = (e) => {
+    const ya = lados[e * 4 + 1];
+    const yb = lados[e * 4 + 3];
+    return [franjaDe(Math.min(ya, yb)), franjaDe(Math.max(ya, yb))];
+  };
+
+  /* Qué lados toca cada franja, en dos arreglos planos: `inicio[f]` dice dónde empiezan
+     los de la franja f dentro de `indices`. */
+  const inicio = new Int32Array(franjas + 1);
+  for (let e = 0; e < m; e++) {
+    const [a, b] = tramo(e);
+    for (let f = a; f <= b; f++) inicio[f + 1]++;
+  }
+  for (let f = 0; f < franjas; f++) inicio[f + 1] += inicio[f];
+  const indices = new Int32Array(inicio[franjas]);
+  const cursor = inicio.slice(0, franjas);
+  for (let e = 0; e < m; e++) {
+    const [a, b] = tramo(e);
+    for (let f = a; f <= b; f++) indices[cursor[f]++] = e;
+  }
+
+  return (x, y) => {
+    // Fuera de la caja no hay nada que contar: a la izquierda los cruces son pares.
+    if (x < x0 || x > x1 || y < y0 || y > y1) return false;
+    let dentro = false;
+    const f = franjaDe(y);
+    for (let t = inicio[f]; t < inicio[f + 1]; t++) {
+      const e = indices[t] * 4;
+      const xi = lados[e]; const yi = lados[e + 1]; const xj = lados[e + 2]; const yj = lados[e + 3];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dentro = !dentro;
+    }
+    return dentro;
+  };
+}
+
 /** Rectángulos: utilidades que también usará el motor de rótulos. */
 export const rectangulo = {
   seSolapan(a, b, holgura = 0) {
@@ -318,10 +388,12 @@ export function polosDeInaccesibilidad(anillos, caja, celdaMm = 1.5, cuantos = 1
  * @param {object} opciones.region      dónde buscar, en milímetros
  * @param {number} opciones.minLadoMm   por debajo de esto no merece la pena
  * @param {number} opciones.maxLadoMm   tope, para que uno no se coma el hueco entero
+ * @param {boolean} [opciones.desdeAbajo] de los sitios donde cabe, el más bajo en vez
+ *        del más alto: el recuadro de zoom único va así pegado a la leyenda
  * @returns {{x, y, ancho, alto}|null}
  */
 export function mayorRectanguloLibre(ocupacion, {
-  aspecto, region, minLadoMm, maxLadoMm,
+  aspecto, region, minLadoMm, maxLadoMm, desdeAbajo = false,
 }) {
   const { celdaMm } = ocupacion;
   const ocupado = ocupacion.__mascaraOcupada();
@@ -349,7 +421,10 @@ export function mayorRectanguloLibre(ocupacion, {
   /** ¿Cabe en algún sitio un rectángulo de estas celdas? Devuelve dónde. */
   const buscar = (anchoCeldas, altoCeldas) => {
     if (anchoCeldas < 1 || altoCeldas < 1) return null;
-    for (let f = f0; f + altoCeldas <= f1; f++) {
+    const filasPosibles = [];
+    for (let f = f0; f + altoCeldas <= f1; f++) filasPosibles.push(f);
+    if (desdeAbajo) filasPosibles.reverse();
+    for (const f of filasPosibles) {
       for (let c = c0; c + anchoCeldas <= c1; c++) {
         if (suma(c, f, c + anchoCeldas, f + altoCeldas) === 0) {
           return { x: c * celdaMm, y: f * celdaMm, ancho: anchoCeldas * celdaMm, alto: altoCeldas * celdaMm };

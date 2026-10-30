@@ -12,6 +12,7 @@
  */
 import {
   TAMANOS, ORIENTACIONES, siglaDe, subtituloDe, divisionesDe, divisionPorDefecto,
+  zoomPorDefecto, esZoomLimaCallao,
 } from './config.js';
 import { dibujarIcono, ICONOS, VICEMINISTERIOS } from '../iconos/index.js';
 
@@ -153,6 +154,13 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   };
   selDivision.addEventListener('change', () => {
     config.division = selDivision.value === divisionPorDefecto(config.ambito) ? null : selDivision.value;
+    /* Pasar el país a «hasta departamentos» quita el recuadro de Lima y Callao si
+       seguía siendo ése, y volver a provincias o distritos lo pone si no había ninguno
+       pedido. Lo que haya elegido una persona no se toca. */
+    if (config.zoom.modo === 'ninguno' || esZoomLimaCallao(config.zoom)) {
+      config.zoom = zoomPorDefecto(config.ambito, config.division);
+      sincronizarZoom();
+    }
     /* La división cambia qué se puede ampliar: el país por departamentos no tiene
        provincias que poner en un recuadro. */
     llenarZonas();
@@ -193,6 +201,12 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
        «provincias» en el país es lo normal, no una elección. */
     config.division = null;
     llenarDivision();
+    /* El recuadro de Lima y Callao puesto por omisión no viaja a otro ámbito, y al
+       volver al país se pone si no había otro pedido. */
+    if (config.zoom.modo === 'ninguno' || esZoomLimaCallao(config.zoom)) {
+      config.zoom = zoomPorDefecto(config.ambito, config.division);
+      sincronizarZoom();
+    }
     sincronizarSubtitulo();
     llenarZonas();
     emitir();
@@ -231,9 +245,8 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     campoTexto('titulo', 'Título', config.textos.titulo, (v) => { config.textos.titulo = v; emitir(); }),
     campoTexto('subtitulo', 'Subtítulo', config.textos.subtitulo, (v) => { config.textos.subtitulo = v; emitir(); }),
     campoTexto('periodo', 'Periodo', config.textos.periodo, (v) => { config.textos.periodo = v; emitir(); }),
-    campoTexto('elaboradoPor', 'Elaborado por', config.textos.elaboradoPor, (v) => {
-      config.textos.elaboradoPor = v; emitir();
-    }),
+    /* «Elaborado por» se retiró en la revisión de la Fase 20, con la línea del pie que
+       lo imprimía. */
   ]);
 
   /* --------------------------- tipos de servicio ----------------------- */
@@ -333,10 +346,36 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     rotulos: 'Nombres de departamentos y provincias',
     contexto: 'Nombres de países y del mar',
   };
-  const bloqueCapas = grupo('Capas', Object.entries(nombresCapa).map(([clave, etiqueta]) => casilla(
-    `capa-${clave}`, etiqueta, config.capas[clave] !== false,
-    (v) => { config.capas[clave] = v; emitir(); },
-  )));
+  /* Cómo se reparten los íconos de cada grupo. En rejilla, la cuadrícula que se estira
+     a lo largo de las unidades angostas (la de por omisión); en anillo, el
+     «desplazamiento de puntos» de QGIS. Botones de opción, como el modo de zoom: son
+     dos y se ven las dos sin abrir nada. */
+  const NOMBRES_DISPOSICION = { rejilla: 'En rejilla, según la forma', anillo: 'En anillo, como QGIS' };
+  const grupoDisposicion = el('fieldset', { clase: 'opciones', id: 'disposicion' }, [
+    el('legend', { texto: 'Íconos de cada grupo' }),
+  ]);
+  for (const valor of Object.keys(NOMBRES_DISPOSICION)) {
+    const input = el('input', {
+      type: 'radio', name: 'disposicion', id: `disposicion-${valor}`, value: valor,
+    });
+    input.checked = config.disposicion === valor;
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      config.disposicion = valor;
+      emitir();
+    });
+    grupoDisposicion.appendChild(el('label', { clase: 'casilla', for: input.id }, [
+      input, el('span', { texto: NOMBRES_DISPOSICION[valor] }),
+    ]));
+  }
+
+  const bloqueCapas = grupo('Capas', [
+    ...Object.entries(nombresCapa).map(([clave, etiqueta]) => casilla(
+      `capa-${clave}`, etiqueta, config.capas[clave] !== false,
+      (v) => { config.capas[clave] = v; emitir(); },
+    )),
+    grupoDisposicion,
+  ]);
 
   /* ------------------------------- piezas ------------------------------ */
   const nombresPieza = {
