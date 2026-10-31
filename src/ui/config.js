@@ -63,7 +63,15 @@ export const POR_DEFECTO = {
 
 /** Sigla ↔ tipo, para que la URL diga «CEM» y no un índice que mañana cambie. */
 const SIGLA_DE = new Map(Object.entries(ICONOS).map(([tipo, i]) => [tipo, i.sigla]));
-const TIPO_DE = new Map(Object.entries(ICONOS).map(([tipo, i]) => [i.sigla, tipo]));
+/* Las siglas de los CAR fueron «CAR B», «CAR E» y «CAR U» hasta después de la Fase
+   20, cuando el área usuaria las pidió como «CAR Básico», «CAR Especializado» y «CAR
+   Urgencia». Un enlace guardado con las de antes tiene que seguir abriendo el mismo
+   mapa. */
+const SIGLAS_ANTERIORES = [['CAR B', 'CAR Básico'], ['CAR E', 'CAR Especializado'], ['CAR U', 'CAR de Urgencia']];
+const TIPO_DE = new Map([
+  ...SIGLAS_ANTERIORES,
+  ...Object.entries(ICONOS).map(([tipo, i]) => [i.sigla, tipo]),
+]);
 
 export const siglaDe = (tipo) => SIGLA_DE.get(tipo) || tipo;
 
@@ -305,7 +313,11 @@ export function nombreDeArchivo(config, fecha = config.fecha ? new Date(config.f
   const partes = [config.ambito && config.ambito.id ? `ubigeo${config.ambito.id}` : 'peru'];
   // Sólo si no es la de siempre: «peru_distritos» se distingue de «peru» a la vista.
   if (config.division) partes.push(`${config.division}s`);
-  if (config.tipos && config.tipos.length === 1) partes.push(siglaDe(config.tipos[0]).toLowerCase());
+  /* La sigla, sin tildes y con guiones: «CAR Básico» da «car-basico» y no «carbsico». */
+  if (config.tipos && config.tipos.length === 1) {
+    partes.push(siglaDe(config.tipos[0]).normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase().replace(/\s+/g, '-'));
+  }
   else if (config.tipos && config.tipos.length) partes.push(`${config.tipos.length}tipos`);
   partes.push(`${config.hoja.tamano}-${config.hoja.orientacion === 'horizontal' ? 'h' : 'v'}`);
   partes.push(fecha.toISOString().slice(0, 10));

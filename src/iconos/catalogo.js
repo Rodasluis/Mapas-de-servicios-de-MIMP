@@ -33,9 +33,9 @@ export const VICEMINISTERIOS = {
 export const ICONOS = {
   'Centro Emergencia Mujer y Familia': { sigla: 'CEM', viceministerio: 'VMM' },
   'Servicio de Atención Rural - SAR': { sigla: 'SAR', viceministerio: 'VMM' },
-  'CAR Básico': { sigla: 'CAR B', nombre: 'Centro de Acogida Residencial Básico', viceministerio: 'VMPV' },
+  'CAR Básico': { sigla: 'CAR Básico', nombre: 'Centro de Acogida Residencial Básico', viceministerio: 'VMPV' },
   'CAR Especializado': {
-    sigla: 'CAR E', nombre: 'Centro de Acogida Residencial Especializado', viceministerio: 'VMPV',
+    sigla: 'CAR Especializado', nombre: 'Centro de Acogida Residencial Especializado', viceministerio: 'VMPV',
   },
   'Unidad de Protección Especial - UPE': { sigla: 'UPE', viceministerio: 'VMPV' },
   'Centro de Desarrollo Integral de La Familia - CEDIF': { sigla: 'CEDIF', viceministerio: 'VMPV' },
@@ -48,7 +48,7 @@ export const ICONOS = {
   },
   'Acercándonos': { sigla: 'ACE', viceministerio: 'VMPV' },
   'Servicio de Atención Urgente - SAU': { sigla: 'SAU', viceministerio: 'VMM' },
-  'CAR de Urgencia': { sigla: 'CAR U', nombre: 'Centro de Acogida Residencial de Urgencia', viceministerio: 'VMPV' },
+  'CAR de Urgencia': { sigla: 'CAR Urgencia', nombre: 'Centro de Acogida Residencial de Urgencia', viceministerio: 'VMPV' },
   'Unidad de Adopción - UA': { sigla: 'UA', viceministerio: 'VMPV' },
   // El directorio lo escribe sin tilde; la leyenda, con ella.
   'Centro de Atencion Institucional - CAI': {
