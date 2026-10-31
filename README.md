@@ -262,6 +262,15 @@ ensanche **un nombre más largo que su columna se parte en líneas**, con el íc
 altura de la primera. Así en A4 la leyenda pasó de dos columnas con siglas a una con
 los nombres completos.
 
+**Y cada nombre lleva su sigla** (`nombreConSigla` en `src/motor/leyenda.js`), con el
+formato del propio directorio: «Centro Emergencia Mujer y Familia - CEM», «Centro de
+Acogida Residencial Básico - CAR Básico». El directorio ya escribe así once tipos
+(«Servicio de Atención Rural - SAR») y a ésos no se les repite. La sigla es la del
+catálogo, la misma de la hoja de íconos y de los enlaces de la web. Lo pidió el área
+usuaria después de la Fase 20, y con ella las siglas de los CAR pasaron de «CAR B»,
+«CAR E» y «CAR U» a «CAR Básico», «CAR Especializado» y «CAR Urgencia». Un enlace
+guardado con las de antes sigue abriendo el mismo mapa.
+
 **Y se dibuja al 70 %** (`REDUCCION_LEYENDA` en `src/motor/render.js`), para dejar más
 sitio al recuadro de zoom; también lo pidió el área usuaria. El tamaño se elige como
 siempre, con la leyenda entera, y sólo después se reduce: elegirlo ya reducida daba

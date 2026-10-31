@@ -51,7 +51,8 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
 
    La leyenda escribe enteros los tipos que el directorio abrevia: *Centro de Acogida
    Residencial* en lugar de CAR, *Servicio de Atención Integral de Personas con
-   Discapacidad* en lugar de SAIPD y *personas con discapacidad* en lugar de PCD. Los
+   Discapacidad* en lugar de SAIPD y *personas con discapacidad* en lugar de PCD. Cada
+   tipo lleva además su sigla, como «Centro Emergencia Mujer y Familia - CEM». Los
    nombres largos van en dos líneas.
 5. **Recuadros de zoom.** El mapa del Perú —hasta provincias o hasta distritos— abre
    con un recuadro de **Lima Metropolitana y Callao** juntos, porque sin ampliarlos ahí

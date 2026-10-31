@@ -58,6 +58,21 @@ function partirEnLineas(textoLargo, anchoMax, estilo, medidor) {
 const ICONO_LEYENDA_MM = 3.4;
 
 /**
+ * El nombre de un tipo en la leyenda, con su sigla: «Centro Emergencia Mujer y Familia
+ * - CEM». Lo pidió el área usuaria después de la Fase 20, para que la leyenda sirva
+ * también para leer las siglas que se usan a diario en el ministerio.
+ *
+ * Con el formato del propio directorio, que ya escribe así once tipos («Servicio de
+ * Atención Rural - SAR»): a ésos no se les repite. La sigla es la del catálogo, la
+ * misma de la hoja de íconos (catalogo.js).
+ */
+export function nombreConSigla(tipo) {
+  const { nombre = tipo, sigla } = ICONOS[tipo] || {};
+  if (!sigla || nombre === sigla || nombre.endsWith(` - ${sigla}`)) return nombre;
+  return `${nombre} - ${sigla}`;
+}
+
+/**
  * Compone la leyenda: los tipos de servicio, cada uno con su ícono y su total.
  *
  * Desde la revisión de la Fase 20 la leyenda lleva sólo los tipos. Las clases del
@@ -126,9 +141,10 @@ export function bloqueLeyenda({
     /* Entre una columna y la siguiente, el aire de un ícono. */
     const aireColumnas = icono;
 
-    /* El nombre de leyenda (catalogo.js) gana a la sigla también al abreviar: esos
-       tipos son abreviaturas en el directorio y el área usuaria pidió verlos enteros. */
-    const etiquetaDe = (t) => ICONOS[t]?.nombre || (abreviar ? (ICONOS[t]?.sigla || t) : t);
+    /* Al abreviar, la sigla sola; si no, el nombre con su sigla. Los que tienen nombre
+       de leyenda (catalogo.js) no se abrevian nunca: son abreviaturas en el directorio
+       y el área usuaria pidió verlos enteros. */
+    const etiquetaDe = (t) => (abreviar && !ICONOS[t]?.nombre ? (ICONOS[t]?.sigla || t) : nombreConSigla(t));
     /* Un nombre más ancho que su columna se parte en líneas en vez de ensanchar la
        leyenda. Con los CAR y el SAIPD escritos enteros, una sola línea pedía más de un
        tercio del mapa y la leyenda no cabía en ninguna hoja. */
