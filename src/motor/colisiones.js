@@ -92,10 +92,61 @@ export function crearIndice() {
       return area;
     },
 
+    /**
+     * ¿Atraviesa el segmento alguno de los rectángulos guardados? Para las líneas que
+     * unen un nombre con su unidad (etiquetas.js): una línea que cruza otro nombre o
+     * un grupo de íconos no dice de quién es.
+     */
+    cruza(segmento, ignorar = null) {
+      const r = {
+        x: Math.min(segmento.x1, segmento.x2), y: Math.min(segmento.y1, segmento.y2),
+        ancho: Math.abs(segmento.x2 - segmento.x1), alto: Math.abs(segmento.y2 - segmento.y1),
+      };
+      const vistos = new Set();
+      for (const k of cubosDe(r)) {
+        for (const otro of cubos.get(k) || []) {
+          if (vistos.has(otro)) continue;
+          vistos.add(otro);
+          if (ignorar && ignorar(otro)) continue;
+          if (segmentoCruzaRectangulo(segmento, otro)) return otro;
+        }
+      }
+      return null;
+    },
+
     /** Todos los rectángulos guardados, para el informe y las comprobaciones. */
     lista: () => todos,
     tamano: () => todos.length,
   };
+}
+
+/**
+ * ¿Pasa el segmento por el INTERIOR del rectángulo? Recorte de Liang-Barsky contra el
+ * rectángulo encogido un hilo (0,05 mm), para que tocar un borde —una línea que
+ * termina justo en la caja de sus íconos— no cuente.
+ */
+export function segmentoCruzaRectangulo({ x1, y1, x2, y2 }, r) {
+  const e = Math.min(0.05, r.ancho / 2, r.alto / 2);
+  const xmin = r.x + e; const xmax = r.x + r.ancho - e;
+  const ymin = r.y + e; const ymax = r.y + r.alto - e;
+  const dx = x2 - x1; const dy = y2 - y1;
+  let t0 = 0; let t1 = 1;
+  for (const [p, q] of [[-dx, x1 - xmin], [dx, xmax - x1], [-dy, y1 - ymin], [dy, ymax - y1]]) {
+    if (p === 0) { if (q < 0) return false; continue; }
+    const t = q / p;
+    if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+  }
+  return t1 - t0 > 1e-6;
+}
+
+/** ¿Se cruzan los dos segmentos? Sólo el cruce franco: tocarse por un extremo no cuenta. */
+export function segmentosSeCruzan(a, b) {
+  const lado = (px, py, qx, qy, rx, ry) => Math.sign((qx - px) * (ry - py) - (qy - py) * (rx - px));
+  const o1 = lado(a.x1, a.y1, a.x2, a.y2, b.x1, b.y1);
+  const o2 = lado(a.x1, a.y1, a.x2, a.y2, b.x2, b.y2);
+  const o3 = lado(b.x1, b.y1, b.x2, b.y2, a.x1, a.y1);
+  const o4 = lado(b.x1, b.y1, b.x2, b.y2, a.x2, a.y2);
+  return o1 !== 0 && o2 !== 0 && o3 !== 0 && o4 !== 0 && o1 !== o2 && o3 !== o4;
 }
 
 /**

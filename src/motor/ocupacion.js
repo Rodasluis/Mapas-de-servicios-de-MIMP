@@ -177,10 +177,15 @@ export function puntoEnAnillos(x, y, anillos) {
  *
  * @returns {(x: number, y: number) => boolean}
  */
-export function pruebaDentro(anillos, franjas = 64) {
+export function pruebaDentro(anillos, franjas = null) {
   let m = 0;
   for (const anillo of anillos) m += anillo.length;
   if (!m) return () => false;
+  /* Tantas franjas como haga falta para que cada consulta mire unas decenas de lados:
+     con 64 fijas, un contorno de veinte mil lados —un departamento en A0— obligaba a
+     recorrer trescientos por punto, y la rejilla y los rótulos preguntan miles de veces
+     por unidad (Fase 21). El resultado es el mismo con cualquier número de franjas. */
+  if (!franjas) franjas = Math.min(4096, Math.max(64, Math.ceil(m / LADOS_POR_FRANJA)));
 
   // Lados como [xi, yi, xj, yj] seguidos, y la caja de todos los vértices.
   const lados = new Float64Array(m * 4);
@@ -454,3 +459,44 @@ export function mayorRectanguloLibre(ocupacion, {
   }
   return mejor;
 }
+
+/**
+ * El eje de una unidad alargada y OBLICUA, para escribir su nombre a lo largo de ella.
+ *
+ * Es el eje principal de sus vértices (el de mayor varianza), en grados y en el
+ * sentido del SVG: 0 es horizontal, positivo gira hacia abajo a la derecha. Sólo se
+ * devuelve si la unidad es claramente alargada —una vez y media más larga que ancha—
+ * y el eje queda lejos de la horizontal y de la vertical, que ya se prueban solas; si
+ * no, null. Los vértices se reparten por el contorno, así que el eje sale de la
+ * forma y no del centroide (Fase 21).
+ *
+ * @returns {number|null} ángulo en grados, entre -75 y 75 sin contar (-15, 15)
+ */
+export function ejeDe(anillos) {
+  let n = 0; let sx = 0; let sy = 0;
+  for (const a of anillos) for (const [x, y] of a) { n++; sx += x; sy += y; }
+  if (n < 3) return null;
+  const mx = sx / n; const my = sy / n;
+  let sxx = 0; let syy = 0; let sxy = 0;
+  for (const a of anillos) {
+    for (const [x, y] of a) {
+      const dx = x - mx; const dy = y - my;
+      sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
+    }
+  }
+  const mitad = (sxx + syy) / 2;
+  const raiz = Math.sqrt(((sxx - syy) / 2) ** 2 + sxy * sxy);
+  const mayor = mitad + raiz; const menor = Math.max(1e-9, mitad - raiz);
+  if (Math.sqrt(mayor / menor) < ELONGACION_MINIMA) return null;
+  let angulo = (Math.atan2(2 * sxy, sxx - syy) / 2) * (180 / Math.PI);
+  if (angulo > 90) angulo -= 180;
+  if (angulo <= -90) angulo += 180;
+  const inclinacion = Math.abs(angulo);
+  return inclinacion < 15 || inclinacion > 75 ? null : angulo;
+}
+
+/** Cuántas veces más larga que ancha tiene que ser una unidad para tener eje. */
+const ELONGACION_MINIMA = 1.5;
+
+/** Lados por franja que se busca en pruebaDentro: los que mira cada consulta. */
+const LADOS_POR_FRANJA = 24;

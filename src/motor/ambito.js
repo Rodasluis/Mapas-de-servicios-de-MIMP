@@ -196,9 +196,10 @@ async function cargarNacional({ cargador, nivel, division }) {
       agregacion: 'distrito',
       claveCentro: (c) => c.ubigeo,
       /* Los nombres de distrito van después de los de departamento y provincia y en modo
-         ESTRICTO: sólo donde caben enteros dentro de su distrito sin tocar íconos ni
-         otros nombres. A esta escala la mayoría no cabe, y escribirlos asomando o sobre
-         los íconos, como se hace con las provincias, llenaría el país de texto. Son
+         ESTRICTO: sólo donde caben enteros dentro de su distrito, sin tocar otros
+         nombres y sin más que un roce de ícono (TAPADO_MAXIMO en etiquetas.js). A esta
+         escala la mayoría no cabe, y escribirlos asomando o sobre los íconos, como se
+         hace con las provincias, llenaría el país de texto. Son
          OPCIONALES: que falten no es un aviso, es lo esperado. */
       rotulos: [
         ...rotulos,

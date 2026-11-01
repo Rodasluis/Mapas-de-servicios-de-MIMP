@@ -593,7 +593,8 @@ for (const { muestra, salida } of resultados) {
   const porNivel = {};
   const anotar = (nivel, clave) => {
     porNivel[nivel] = porNivel[nivel] || {
-      total: 0, dentro: 0, poco: 0, mucho: 0, sinSitio: 0, pegados: 0, conGrupo: 0, tapan: 0, verticales: 0,
+      total: 0, dentro: 0, poco: 0, mucho: 0, sinSitio: 0, pegados: 0, conGrupo: 0, tapan: 0,
+      verticales: 0, diagonales: 0, reducidos: 0, conLinea: 0,
     };
     porNivel[nivel][clave]++;
   };
@@ -607,6 +608,9 @@ for (const { muestra, salida } of resultados) {
     }
     if (c.sobreSimbolosPct > 0) anotar(c.nivel, 'tapan');
     if (c.vertical) anotar(c.nivel, 'verticales');
+    else if (c.giro) anotar(c.nivel, 'diagonales');
+    if (c.reducido) anotar(c.nivel, 'reducidos');
+    if (c.enlace) anotar(c.nivel, 'conLinea');
   }
   for (const o of e.sinSitio) {
     if (o.nivel === 'exterior') continue;
@@ -619,28 +623,39 @@ for (const { muestra, salida } of resultados) {
       + ` · ${v.poco} asoman menos de un cuarto · ${v.mucho} más · ${v.sinSitio} sin sitio`
       + (v.conGrupo ? ` · ${v.pegados}/${v.conGrupo} pegados a sus íconos` : '')
       + (v.tapan ? ` · ${v.tapan} rozan íconos` : '')
-      + (v.verticales ? ` · ${v.verticales} en vertical` : ''));
+      + (v.verticales ? ` · ${v.verticales} en vertical` : '')
+      + (v.diagonales ? ` · ${v.diagonales} en diagonal` : '')
+      + (v.reducidos ? ` · ${v.reducidos} con letra menor` : '')
+      + (v.conLinea ? ` · ${v.conLinea} con línea` : ''));
   }
 
-  /* Puesto (en vertical, si va girado) o el motivo por el que falta: «no cabe» en su
-     unidad, o «sin hueco libre» porque otros nombres le ocuparon las posiciones. */
-  const fila = (nivel, id, nombre, r, motivo) => {
+  /* Puesto (en vertical, si va girado; con letra menor; con línea) o el motivo por el
+     que falta: «no cabe» en su unidad, o «sin hueco libre» porque otros nombres le
+     ocuparon las posiciones. */
+  /* Para los que faltan, cuánto mide el nombre y el mayor círculo interior de la
+     unidad: si el círculo no llega ni al alto del nombre, la unidad es más chica que
+     él y no hay motor que lo coloque; si le sobra, el motor no encontró el hueco. */
+  const fila = (nivel, id, nombre, r, o) => {
     const g = grupoDe.get(id);
     filasTerritorio.push([
       muestra.nombre, nivel, id, nombre,
-      r ? (r.vertical ? 'puesto en vertical' : 'puesto') : `sin sitio: ${motivo || '—'}`,
+      r ? [
+        r.vertical ? 'puesto en vertical' : r.giro ? `puesto en diagonal (${r.giro}°)` : 'puesto',
+        r.reducido ? 'con letra menor' : '', r.enlace ? 'con línea' : '',
+      ].filter(Boolean).join(', ') : `sin sitio: ${o?.motivo || '—'}`,
       r ? r.lineas : '', r ? r.fueraPct : '', r && r.aGrupoMm !== null ? r.aGrupoMm : '',
       r ? r.sobreSimbolosPct : '', g ? g.iconos : '', g && g.dentro !== null ? g.dentro : '',
       g ? g.forma : '', g ? (g.conNombre ? 'sí' : 'no') : '',
+      o ? o.anchoMm : '', o ? o.altoMm : '', o ? o.radioMm : '',
     ]);
   };
   for (const c of e.colocados) if (c.nivel !== 'exterior') fila(c.nivel, c.id, c.texto, c);
-  for (const o of e.sinSitio) if (o.nivel !== 'exterior') fila(o.nivel, o.id, o.texto, null, o.motivo);
+  for (const o of e.sinSitio) if (o.nivel !== 'exterior') fila(o.nivel, o.id, o.texto, null, o);
 }
 const CABECERA_TERRITORIOS = [
   'muestra', 'nivel', 'ubigeo', 'nombre', 'rótulo', 'líneas', 'fuera de su unidad (%)',
   'distancia a sus íconos (mm)', 'tapa íconos (%)', 'íconos', 'íconos dentro', 'rejilla',
-  'rejilla junto a su nombre',
+  'rejilla junto a su nombre', 'nombre: ancho (mm)', 'nombre: alto (mm)', 'círculo interior mayor: radio (mm)',
 ];
 /* Con punto y coma y la marca BOM, que es como una hoja de cálculo en español abre un
    CSV con tildes sin preguntar. */

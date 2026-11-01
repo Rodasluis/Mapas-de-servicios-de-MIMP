@@ -8,8 +8,10 @@
  * en los datos, no existe para el mapa; si aparece uno nuevo, el conteo lo refleja y
  * la comprobación de cobertura de íconos avisa.
  */
-import { ptAmm, trazoMm } from '../estilo/tokens.js';
-import { fraccionFuera } from './etiquetas.js';
+import { ptAmm } from '../estilo/tokens.js';
+import { fraccionFuera, FUERA_TOLERADA_ESTRICTO, DESCUENTO_APILADO } from './etiquetas.js';
+import { factorFormato } from './piezas.js';
+import { TAMANOS } from './hoja.js';
 
 /**
  * Clases del coropletas por número de TIPOS distintos, como el mapa de 2020.
@@ -149,29 +151,78 @@ export function repartirIconos(n, centro, tamanoMm, altoCifraMm, columnas = Math
 }
 
 /**
+ * Lado del ícono del mapa, en milímetros reales de impresión.
+ *
+ * Crece con la raíz del factor de formato desde 1,7 mm en A4 —A3 2,0 · A2 2,3 · A1 2,7—
+ * y en el A1 SE QUEDA: A0, 2A0 y 4A0 llevan el mismo ícono de 2,7 mm. Un ícono crece con
+ * la hoja para verse de más lejos, no en proporción al mapa: de A4 a 4A0 el mapa se
+ * multiplica por ocho y el ícono por 1,6. Hasta la revisión de la Fase 21 seguía
+ * creciendo —3 mm en A0, 3,5 en 2A0 y 4,1 en 4A0, porque el tope de 6 mm medido en A0
+ * se estiraba con la escala del mapa— y el área usuaria vio saturados los grupos del
+ * 4A0: la rejilla de Trujillo, con ocho íconos, medía 14 × 18 mm. Se probó también
+ * achicarlo en todas las hojas (raíz cuarta del factor): en A3 ganaba tres íconos
+ * dentro de su provincia y el racimo de Áncash empeoraba, así que de A4 a A1 no cambia
+ * nada.
+ *
+ * Es la mitad de los 3,4 mm para los que se diseñaron los íconos; lo pidió el área
+ * usuaria en la revisión de la Fase 20 para que los grupos no se choquen. Queda por
+ * debajo de los 3 mm en que el pictograma se lee bien (TAMANO_MINIMO_MM en
+ * iconos/index.js), así que en el mapa los tipos se distinguen sobre todo por el
+ * color. La leyenda no cambia: sus íconos tienen su propia medida.
+ */
+export function tamanoDeIcono(factor) {
+  return ICONO_A4_MM * Math.sqrt(Math.min(factor, FACTOR_TOPE_ICONO));
+}
+
+/** Lado del ícono del mapa en A4. */
+const ICONO_A4_MM = 1.7;
+
+/** Factor de formato del A1: la hoja a partir de la cual el ícono (y su cifra) no crecen. */
+const FACTOR_TOPE_ICONO = factorFormato({ diagonalMm: Math.hypot(...TAMANOS.A1) });
+
+/**
  * La cifra bajo cada ícono: cuántas sedes de ese tipo hay en la unidad.
  *
  * Iba en 5,2 pt y reservaba la altura de una línea entera de texto —con su sitio para
  * acentos y descendentes—, aunque una cifra no tiene ni lo uno ni lo otro: cada ícono
  * con su número ocupaba casi una vez y media su propio alto, y era ese hueco lo que
- * hacía que los grupos se pisaran. Ahora va en 3,8 pt, pegada al borde inferior del
- * círculo, y sólo se reserva el alto real de un dígito más un hilo de aire.
+ * hacía que los grupos se pisaran. En la Fase 20 pasó a 3,8 pt, pegada al borde
+ * inferior del círculo, reservando sólo el alto real de un dígito más un hilo de aire.
+ *
+ * En la revisión de la Fase 21 el área usuaria la vio grande frente al ícono —el dígito
+ * medía algo más de la mitad del diámetro— y pidió un 40 % menos. Se aplica con un
+ * SUELO de 2,8 pt: el 40 % a secas dejaría la cifra en 2,3 pt en A4 y 2,7 en A3, medio
+ * milímetro de alto, que en papel no se lee a ojo. Queda A4 2,8 · A3 2,8 · A2 3,1 ·
+ * A1 3,6 pt (el dígito, en torno al 40 % del diámetro del ícono), y de A0 en adelante
+ * se queda en los 3,6 pt del A1, como el ícono al que acompaña (tamanoDeIcono). El halo
+ * sigue al dígito —un cuarto de su alto— en vez de crecer con la hoja: en A0 rodeaba
+ * una cifra de 1 mm con 0,6 mm de blanco.
  *
  * @returns {{estilo, alto: number, base: number, halo: number}} el estilo del texto; lo
  *          que la cifra suma al alto de la celda del ícono; la distancia de la base del
  *          ícono a la línea base de la cifra; y el grosor de su halo, todo en milímetros
  */
 export function cifraDeGrupo(factor) {
-  const estilo = { familia: 'SourceSans3', variante: 'Semibold', pt: 3.8 * Math.sqrt(factor) };
+  const estilo = {
+    familia: 'SourceSans3',
+    variante: 'Semibold',
+    pt: Math.max(CIFRA_PT_MINIMO, CIFRA_PT_A4 * Math.sqrt(Math.min(factor, FACTOR_TOPE_ICONO))),
+  };
   const digito = ptAmm(estilo.pt) * ALTO_DIGITO;
   const aire = digito * 0.15;
   return {
     estilo,
     alto: digito + aire * 2,
     base: aire + digito,
-    halo: trazoMm.haloRotulo * factor * 0.5,
+    halo: digito * 0.25,
   };
 }
+
+/** Cuerpo de la cifra en A4 antes del suelo: los 3,8 pt de la Fase 20 menos el 40 %. */
+const CIFRA_PT_A4 = 3.8 * 0.6;
+
+/** Por debajo de esto una cifra impresa no se lee a ojo. */
+const CIFRA_PT_MINIMO = 2.8;
 
 /** Alto de un dígito de Source Sans 3, en fracción del cuerpo (las cifras no bajan). */
 const ALTO_DIGITO = 0.66;
@@ -223,8 +274,45 @@ export const DISPOSICIONES = ['rejilla', 'anillo'];
  * @param {object} [unidad.rotulo] su nombre, medido con medirRotulo (etiquetas.js)
  * @param {Array<{x, y}>} [unidad.puntos] puntos interiores donde probar el bloque, el
  *        primero el preferido; por omisión, sólo el centro
+ * @param {object} [unidad.obstaculos] índice de colisiones (colisiones.js) con lo que
+ *        la rejilla no puede pisar
  */
-export function repartirEnRejilla(n, centro, tamanoMm, altoCifraMm, { dentro = null, rotulo = null, puntos = null } = {}) {
+export function repartirEnRejilla(n, centro, tamanoMm, altoCifraMm, unidad = {}) {
+  let reparto = elegirRejilla(n, centro, tamanoMm, altoCifraMm, unidad);
+  /* Los obstáculos BLANDOS son los huecos que las rejillas vecinas dejaron a su nombre
+     apilado cuando ese nombre asoma a esta unidad (render.js). Se esquivan si se puede;
+     si con ellos no caben todos los íconos dentro, se vuelve a probar sin ellos: los
+     íconos de una unidad valen más que el sitio del nombre de la vecina. */
+  if (unidad.obstaculos && unidad.dentro && reparto.iconosDentro < n) {
+    const duros = { choca: (r) => unidad.obstaculos.choca(r, 0, (o) => o.blando) };
+    const otra = elegirRejilla(n, centro, tamanoMm, altoCifraMm, { ...unidad, obstaculos: duros });
+    if (otra.iconosDentro > reparto.iconosDentro) reparto = otra;
+  }
+  /* Lo que se informa es cuántos íconos caen DENTRO de la unidad, a secas: durante la
+     búsqueda «cabe» exige además no pisar un obstáculo, y con eso el informe contaba
+     como fuera un ícono dentro de su unidad que se montaba sobre la rejilla de la
+     vecina, que es un problema distinto. */
+  if (unidad.dentro && reparto.iconosDentro !== null) {
+    reparto.iconosDentro = reparto.posiciones.filter((p) => iconoDentro(p, tamanoMm, altoCifraMm, unidad.dentro)).length;
+  }
+  return reparto;
+}
+
+/**
+ * ¿Cae el ícono dentro de la unidad? Si caen dentro el centro de su círculo, cuatro
+ * puntos de su borde y el centro de su cifra. Se mira el dibujo, no la celda: el aire
+ * entre celdas puede pisar la vecina sin que se note.
+ */
+function iconoDentro({ x, y }, tamanoMm, altoCifraMm, dentro) {
+  const r = tamanoMm * 0.45;
+  const cy = y - tamanoMm / 2;
+  return dentro(x, cy) && dentro(x - r, cy) && dentro(x + r, cy)
+    && dentro(x, cy - r) && dentro(x, y + altoCifraMm / 2);
+}
+
+function elegirRejilla(n, centro, tamanoMm, altoCifraMm, {
+  dentro = null, rotulo: rotuloNormal = null, puntos = null, obstaculos = null,
+} = {}) {
   const compacta = repartirIconos(n, centro, tamanoMm, altoCifraMm);
   /* Cuál salió, cuántos íconos dejó dentro y si se apartó para su nombre: lo que el
      informe necesita para revisar las unidades una por una. */
@@ -235,15 +323,13 @@ export function repartirEnRejilla(n, centro, tamanoMm, altoCifraMm, { dentro = n
 
   const anchoCelda = tamanoMm * ANCHO_CELDA;
   const altoCelda = tamanoMm + altoCifraMm;
-  /* Un ícono cabe si caen dentro el centro de su círculo, cuatro puntos de su borde y
-     el centro de su cifra. Se mira el dibujo, no la celda: el aire entre celdas puede
-     pisar la vecina sin que se note. */
-  const cabe = ({ x, y }) => {
-    const r = tamanoMm * 0.45;
-    const cy = y - tamanoMm / 2;
-    return dentro(x, cy) && dentro(x - r, cy) && dentro(x + r, cy)
-      && dentro(x, cy - r) && dentro(x, y + altoCifraMm / 2);
-  };
+  /* Un ícono cabe si cae dentro de la unidad (iconoDentro) y su celda no pisa un
+     obstáculo: los nombres del nivel previo —los departamentos del mapa del país—,
+     que se colocan antes que las rejillas, y las rejillas ya puestas de las unidades
+     vecinas con el hueco de su nombre (Fase 21). */
+  const libre = (r) => !obstaculos || !obstaculos.choca(r);
+  const cabe = (p) => iconoDentro(p, tamanoMm, altoCifraMm, dentro)
+    && libre({ x: p.x - anchoCelda / 2, y: p.y - tamanoMm, ancho: anchoCelda, alto: altoCelda });
   const cuantosDentro = (posiciones) => posiciones.reduce((s, p) => s + (cabe(p) ? 1 : 0), 0);
 
   /* Las cuadrículas posibles, de la más cuadrada a la más alargada. Sólo las que no
@@ -258,40 +344,68 @@ export function repartirEnRejilla(n, centro, tamanoMm, altoCifraMm, { dentro = n
   }
   formas.sort((a, b) => a.desproporcion - b.desproporcion || a.columnas - b.columnas);
 
+  // Los puntos interiores donde probar, el preferido primero (PUNTOS_POR_ROTULO en render.js).
+  const lugares = puntos && puntos.length ? puntos : [centro];
+
   /* 0. La rejilla con su nombre, como un bloque. El nombre va encima, debajo, a la
         derecha o a la izquierda, centrado: las mismas posiciones que el motor de
         rótulos prueba primero (PEGADAS, en etiquetas.js). Antes en una línea que en
-        dos, y antes la cuadrícula más cuadrada que el sitio exacto. */
-  if (rotulo) {
-    const lugares = (puntos && puntos.length ? puntos : [centro]).slice(0, PUNTOS_DEL_BLOQUE);
+        dos, y antes la cuadrícula más cuadrada que el sitio exacto.
+
+        Para los nombres ESTRICTOS —los distritos del mapa del país—, que sin bloque
+        suelen quedarse sin nombre, dos cosas más (revisión de la Fase 21): el nombre
+        también alineado con un borde de la rejilla y, si a su cuerpo no hay bloque
+        posible, el mismo nombre con letra menor (`reducido`), que es la pasada que el
+        motor de rótulos hará después. Sin ellas la rejilla se plantaba justo donde iría
+        el nombre: el distrito de Ferreñafe lo perdió en 4A0 al achicarse el ícono. */
+  for (const rotulo of rotuloNormal ? [rotuloNormal, ...(rotuloNormal.reducido ? [rotuloNormal.reducido] : [])] : []) {
     const { aire } = rotulo;
     /* Si el bloque no cabe entero, el que deje el nombre MENOS fuera, con todos los
        íconos dentro: en una provincia chica de un A4 el nombre no entra completo, pero
-       correr la rejilla hacia un lado lo deja asomando un poco en vez de casi entero. */
+       correr la rejilla hacia un lado lo deja asomando un poco en vez de casi entero.
+       Lo que sale cuenta a la mitad si el nombre va apilado —encima o debajo de la
+       rejilla—, igual que en el motor de rótulos (DESCUENTO_APILADO): en una provincia
+       más estrecha que su nombre, sobre sus íconos se lee de quién es. */
     let mejorBloque = null;
-    let menosFuera = FUERA_MAXIMA_DEL_BLOQUE;
+    // Un nombre estricto sólo cuenta si queda dentro, como lo exigirá luego el motor.
+    let menosFuera = rotulo.estricto ? FUERA_TOLERADA_ESTRICTO + 1e-9 : FUERA_MAXIMA_DEL_BLOQUE;
+    /* Las formas del nombre: en una línea, en dos y, si el nivel lo admite, en
+       VERTICAL (la de una línea girada un cuarto de vuelta). La vertical va la última:
+       sólo gana cuando ninguna horizontal deja el nombre entero dentro, que es lo que
+       pasa en las unidades altas y estrechas (Fase 21). */
+    const formasDelNombre = [
+      ...rotulo.variantes,
+      ...(rotulo.vertical ? [{ ...rotulo.variantes[0], ancho: rotulo.variantes[0].alto, alto: rotulo.variantes[0].ancho, vertical: true }] : []),
+    ];
     for (const columnas of [columnasCompacta, ...formas.map((f) => f.columnas)]) {
       const altoRejilla = Math.ceil(n / columnas) * altoCelda;
       const anchoRejilla = Math.min(n, columnas) * anchoCelda;
-      for (const v of rotulo.variantes) {
+      for (const v of formasDelNombre) {
         for (const [dx, dy] of [[0, -1], [0, 1], [1, 0], [-1, 0]]) {
-          for (const p of lugares) {
-            // El bloque se centra en el punto: la rejilla a un lado y el nombre al otro.
-            const rejilla = { x: p.x - (dx * (v.ancho + aire)) / 2, y: p.y - (dy * (v.alto + aire)) / 2 };
-            const cx = rejilla.x + dx * (anchoRejilla / 2 + aire + v.ancho / 2);
-            const cy = rejilla.y + dy * (altoRejilla / 2 + aire + v.alto / 2);
-            const nombre = { x: cx - v.ancho / 2, y: cy - v.alto / 2, ancho: v.ancho, alto: v.alto };
-            const fuera = fraccionFuera(nombre, dentro, rotulo.altoLetra);
-            if (fuera > 0 && fuera >= menosFuera) continue;
-            const reparto = repartirIconos(n, rejilla, tamanoMm, altoCifraMm, columnas);
-            if (!reparto.posiciones.every(cabe)) continue;
-            const bloque = {
-              ...con(reparto, columnas === columnasCompacta ? 'compacta' : 'alargada', n, true),
-              nombre: { caja: nombre, lineas: v.lineas, fuera },
-            };
-            if (fuera === 0) return bloque;
-            mejorBloque = bloque;
-            menosFuera = fuera;
+          // Centrado y, si es estricto, alineado con un borde (como las PEGADAS).
+          for (const a of rotulo.estricto ? [0, -1, 1] : [0]) {
+            for (const p of lugares) {
+              // El bloque se centra en el punto: la rejilla a un lado y el nombre al otro.
+              const rejilla = { x: p.x - (dx * (v.ancho + aire)) / 2, y: p.y - (dy * (v.alto + aire)) / 2 };
+              const cx = rejilla.x + dx * (anchoRejilla / 2 + aire + v.ancho / 2) + (dx === 0 ? (a * (anchoRejilla - v.ancho)) / 2 : 0);
+              const cy = rejilla.y + dy * (altoRejilla / 2 + aire + v.alto / 2) + (dy === 0 ? (a * (altoRejilla - v.alto)) / 2 : 0);
+              const nombre = { x: cx - v.ancho / 2, y: cy - v.alto / 2, ancho: v.ancho, alto: v.alto };
+              if (!libre(nombre)) continue;
+              const fuera = fraccionFuera(nombre, dentro, rotulo.altoLetra, Boolean(v.vertical));
+              const cuenta = fuera * (dy !== 0 && !rotulo.estricto ? DESCUENTO_APILADO : 1);
+              if (fuera > 0 && cuenta >= menosFuera) continue;
+              const reparto = repartirIconos(n, rejilla, tamanoMm, altoCifraMm, columnas);
+              if (!reparto.posiciones.every(cabe)) continue;
+              const bloque = {
+                ...con(reparto, columnas === columnasCompacta ? 'compacta' : 'alargada', n, true),
+                nombre: {
+                  caja: nombre, lineas: v.lineas, fuera, vertical: Boolean(v.vertical), apilado: dy !== 0 && a === 0,
+                },
+              };
+              if (fuera === 0) return bloque;
+              mejorBloque = bloque;
+              menosFuera = cuenta;
+            }
           }
         }
       }
@@ -299,25 +413,55 @@ export function repartirEnRejilla(n, centro, tamanoMm, altoCifraMm, { dentro = n
     if (mejorBloque) return mejorBloque;
   }
 
-  /* 1. La compacta, en el punto. */
+  /* 1 y 2. Las cuadrículas, de la compacta a la más alargada, en cada punto interior y
+        corridas hasta una celda alrededor de él. Hasta la Fase 21 sólo se probaban en el
+        centro de la unidad y con medio corrimiento: en una unidad de forma irregular la
+        rejilla cabía entera unos milímetros más allá y se quedaba asomando. Gana la que
+        deja más íconos dentro; a igualdad, la más cuadrada, en el mejor punto y menos
+        corrida. */
   let mejor = con(compacta, 'compacta', cuantosDentro(compacta.posiciones));
   let mejorDentro = mejor.iconosDentro;
   if (mejorDentro === n) return mejor;
-
-  /* 2. Las demás cuadrículas. */
-  const corrimientos = [[0, 0], [-0.5, 0], [0.5, 0], [0, -0.5], [0, 0.5]];
-  for (const { columnas } of formas) {
-    for (const [fx, fy] of corrimientos) {
-      const punto = { x: centro.x + fx * anchoCelda, y: centro.y + fy * altoCelda };
-      const reparto = repartirIconos(n, punto, tamanoMm, altoCifraMm, columnas);
-      const d = cuantosDentro(reparto.posiciones);
-      if (d > mejorDentro) { mejor = con(reparto, 'alargada', d); mejorDentro = d; }
-      if (d === n) return mejor;
+  for (const columnas of [columnasCompacta, ...formas.map((f) => f.columnas)]) {
+    const forma = columnas === columnasCompacta ? 'compacta' : 'alargada';
+    for (const p of lugares) {
+      for (const [fx, fy] of CORRIMIENTOS) {
+        const punto = { x: p.x + fx * anchoCelda, y: p.y + fy * altoCelda };
+        const reparto = repartirIconos(n, punto, tamanoMm, altoCifraMm, columnas);
+        const d = cuantosDentro(reparto.posiciones);
+        if (d > mejorDentro) { mejor = con(reparto, forma, d); mejorDentro = d; }
+        if (d === n) return mejor;
+      }
     }
   }
 
-  /* 3. Rellenar la forma. La base de un ícono está `altoCelda / 2 - altoCifra` por
-        debajo del centro de su celda. */
+  /* 3. Rellenar la forma a partir de cada punto interior, y quedarse con el que más
+        íconos deja dentro. */
+  for (const p of lugares) {
+    const relleno = rellenarLaForma(n, p, anchoCelda, altoCelda, altoCifraMm, cabe);
+    if (relleno.dentro > mejorDentro) {
+      mejor = con(conCeldas(relleno.posiciones, tamanoMm, altoCifraMm), 'forma', relleno.dentro);
+      mejorDentro = relleno.dentro;
+      if (mejorDentro === n) break;
+    }
+  }
+  return mejor;
+}
+
+/** Corrimientos de la rejilla alrededor de un punto, en celdas: el centro primero. */
+const CORRIMIENTOS = [[0, 0], [-0.5, 0], [0.5, 0], [0, -0.5], [0, 0.5], [-1, 0], [1, 0], [0, -1], [0, 1],
+  [-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]];
+
+/**
+ * Las celdas de una cuadrícula sin bordes, tomadas de una en una a partir de un punto:
+ * siempre la libre más cercana que toque a las ya puestas y que caiga dentro. En una
+ * unidad angosta y torcida el grupo se estira a lo largo de ella en vez de salirse. La
+ * base de un ícono está `altoCelda / 2 - altoCifra` por debajo del centro de su celda.
+ *
+ * @returns {{posiciones: Array<{x, y}>, dentro: number}} en orden de lectura, y
+ *          cuántas caen dentro
+ */
+function rellenarLaForma(n, centro, anchoCelda, altoCelda, altoCifraMm, cabe) {
   const baseDe = (i, j) => ({
     x: centro.x + i * anchoCelda,
     y: centro.y + j * altoCelda + altoCelda / 2 - altoCifraMm,
@@ -347,16 +491,9 @@ export function repartirEnRejilla(n, centro, tamanoMm, altoCifraMm, { dentro = n
     elegidas.push(c);
     for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) if (di || dj) mirar(c.i + di, c.j + dj);
   }
-  const forma = elegidas.filter((c) => c.dentro).length;
-  if (forma <= mejorDentro) return mejor;
-
   elegidas.sort((a, b) => a.j - b.j || a.i - b.i);
-  return con(conCeldas(elegidas.map((c) => c.p), tamanoMm, altoCifraMm), 'forma', forma);
+  return { posiciones: elegidas.map((c) => c.p), dentro: elegidas.filter((c) => c.dentro).length };
 }
-
-/** Cuántos puntos interiores de la unidad se prueban para el bloque de rejilla y nombre:
-    todos los que calcula el motor (PUNTOS_POR_ROTULO, en render.js). */
-const PUNTOS_DEL_BLOQUE = 10;
 
 /** Por encima de esta fracción del nombre fuera de su unidad, el bloque no compensa: la
     rejilla se queda en el centro y el nombre busca sitio por su cuenta. */
