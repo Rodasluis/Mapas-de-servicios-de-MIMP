@@ -172,6 +172,8 @@ export const trazoMm = {
   grilla: 0.08,
   recuadroZoom: 0.4,
   haloRotulo: 0.35,
+  // La línea que une un nombre puesto sobre el mar con su distrito (recuadros de zoom).
+  enlaceRotulo: 0.15,
 };
 
 /** Medidas del layout en milímetros. */

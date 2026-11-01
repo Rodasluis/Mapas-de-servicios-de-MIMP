@@ -41,7 +41,7 @@ import { claseDe, repartirGrupo, cifraDeGrupo } from './servicios.js';
 import { dibujarIcono, cajaEnPunto } from '../iconos/index.js';
 import {
   mayorRectanguloLibre, rectangulo, recolectorDeAnillos, polosDeInaccesibilidad,
-  pruebaDentro,
+  pruebaDentro, ejeDe,
 } from './ocupacion.js';
 import { crearIndice } from './colisiones.js';
 import { colocarEtiquetas, crearSolicitud, medirRotulo } from './etiquetas.js';
@@ -815,6 +815,8 @@ function dibujarRecuadro({
   const cajasSimbolos = [];
   // Unidades cuyos íconos se han dibujado aquí (ver SOLO_EN_RECUADRO).
   const conIconos = new Set();
+  // Las rejillas ya puestas, con el hueco de su nombre: las siguientes las esquivan.
+  const estorbos = crearIndice();
 
   /* El recuadro dibuja LO MISMO que el mapa principal, sólo que más grande. Si el mapa
      pinta cada centro en su sitio y el recuadro los agregara en un grupo con cifras, la
@@ -846,6 +848,7 @@ function dibujarRecuadro({
         ancho: tamanoIcono,
         alto: tamanoIcono,
         etiqueta: `símbolos ${c.nombre}`,
+        atravesable: true,
       });
     }
   } else {
@@ -861,13 +864,24 @@ function dibujarRecuadro({
     geo.dentro = geo.dentro || pruebaDentro(geo.anillos);
     const reparto = repartirGrupo(tipos.length, { x: centro[0], y: centro[1] }, tamanoIcono, altoCifra, disposicion, {
       dentro: geo.dentro,
-      rotulo: medirRotulo(f.properties.nombre, estiloDeRotuloEnRecuadro(factor), medidor),
+      rotulo: { ...medirRotulo(f.properties.nombre, estiloDeRotuloEnRecuadro(factor), medidor), vertical: true },
       puntos: geo.polos,
+      obstaculos: estorbos,
     });
     const { posiciones } = reparto;
     conIconos.add(f.properties.ubigeo);
     geo.grupo = { caja: reparto.caja };
-    for (const c of reparto.celdas) cajasSimbolos.push({ ...c, etiqueta: `símbolos ${f.properties.nombre}` });
+    for (const c of reparto.celdas) {
+      /* Obstáculo duro para los nombres del recuadro; la línea de un nombre sí puede
+         pasarle por encima (`atravesable`, etiquetas.js). */
+      cajasSimbolos.push({ ...c, etiqueta: `símbolos ${f.properties.nombre}`, atravesable: true });
+      estorbos.agregar({ ...c, etiqueta: `símbolos ${f.properties.nombre}` });
+    }
+    /* El hueco del nombre: en firme si cae entero dentro; blando si asoma pero va
+       apilado sobre la rejilla (la misma regla que en render.js). */
+    if (reparto.nombre && (reparto.nombre.fuera === 0 || reparto.nombre.apilado)) {
+      estorbos.agregar({ ...reparto.nombre.caja, etiqueta: `nombre ${f.properties.nombre}`, blando: reparto.nombre.fuera > 0 });
+    }
     tipos.forEach((tipo, i) => {
       simbolos.push(dibujarIcono({
         tipo,
@@ -903,7 +917,7 @@ function dibujarRecuadro({
      entorno se reconoce por su forma, y su nombre ya está en el mapa principal. */
   const geometriaDeLaZona = new Map([...geometria].filter(([f]) => esDeLaZona(f.properties.ubigeo)));
   const rotulos = rotularMiembros({
-    geometria: geometriaDeLaZona, cajasSimbolos, marcoInterno, medidor, factor,
+    geometria: geometriaDeLaZona, entorno: geometria, cajasSimbolos, marcoInterno, medidor, factor,
   });
 
   /* El velo: un rectángulo del tamaño del marco con la zona recortada como hueco
@@ -962,12 +976,21 @@ function cajaDe(anillosRasgo) {
  * Usa el mismo motor que el mapa principal, con su propio índice de colisiones
  * sembrado con los grupos de íconos del recuadro. Los nombres van algo mayores que en
  * el mapa grande: un zoom se mira de cerca y es donde se espera poder leerlos.
+ *
+ * El que no cabe en su distrito de ningún modo puede ir acostado sobre el mar, con una
+ * línea hasta sus íconos (`enlace`): en Lima y Callao los distritos de la costa son
+ * más chicos que su nombre, y de pie sobre el mar no se sabía cuál era de quién
+ * (revisión de la Fase 21). «Despejado» es lo que no es ninguna unidad del recuadro,
+ * de la zona o de su entorno: el mar, o nada, en un recuadro de tierra adentro.
  */
-function rotularMiembros({ geometria, cajasSimbolos, marcoInterno, medidor, factor }) {
+function rotularMiembros({ geometria, entorno, cajasSimbolos, marcoInterno, medidor, factor }) {
   const indice = crearIndice();
   for (const c of cajasSimbolos) indice.agregar(c);
 
   const estilo = estiloDeRotuloEnRecuadro(factor);
+  const dentroDe = (geo) => { geo.dentro = geo.dentro || pruebaDentro(geo.anillos); return geo.dentro; };
+  const unidades = [...entorno.values()].map(dentroDe);
+  const despejado = (x, y) => !unidades.some((dentro) => dentro(x, y));
 
   const solicitudes = [];
   for (const [f, geo] of geometria) {
@@ -979,16 +1002,24 @@ function rotularMiembros({ geometria, cajasSimbolos, marcoInterno, medidor, fact
       peso: geo.polos[0].radioMm,
       puntos: geo.polos,
       estilo,
-      dentro: geo.dentro || pruebaDentro(geo.anillos),
+      dentro: dentroDe(geo),
       ...(geo.grupo ? { grupo: geo.grupo } : {}),
+      // Los nombres del recuadro van en minúsculas: pueden ir girados si no caben.
+      vertical: true,
+      giro: ejeDe(geo.anillos),
+      enlace: true,
+      despejado,
     }));
   }
 
   const { svg } = colocarEtiquetas({
-    solicitudes, indice, medidor, marco: marcoInterno, factor,
+    solicitudes, indice, medidor, marco: marcoInterno, factor, reduccion: REDUCCION_EN_RECUADRO,
   });
   return svg;
 }
+
+/** Lo mismo que REDUCCION_NOMBRES en render.js: un nombre que no cabe se prueba un 15 % menor. */
+const REDUCCION_EN_RECUADRO = 0.85;
 
 /**
  * Las líneas que unen la zona ampliada con su recuadro, como en los mapas de ArcGIS o

@@ -26,6 +26,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "muestras": "node scripts/muestras.mjs",
+    "censo": "node scripts/censo.mjs",
     "qa": "node scripts/qa.mjs"
   },
   "dependencies": {

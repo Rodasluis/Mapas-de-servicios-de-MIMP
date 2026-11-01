@@ -339,13 +339,15 @@ y se dejaron como estaban. **Educadores de Calle** sigue sin estar en el archivo
 un ícono **provisional** hasta que diseño entregue el suyo.
 
 El tamaño se fija en milímetros reales de impresión y ningún trazo baja de 0,1 mm, que
-es lo que una imprenta offset garantiza. El de referencia es 3,4 mm en A4, crece con la
-raíz del formato, nunca baja de 3 mm y tiene un tope de 6 mm en A0. **En el mapa los
-íconos se dibujan a la mitad de esa medida** (`ESCALA_ICONO_MAPA` en
-`src/motor/render.js`): 1,7 mm en A4, 2 mm en A3, 2,7 mm en A1 y 3 mm en A0. Lo pidió
-el área usuaria en la revisión de la Fase 20, para que los grupos no se choquen. Es
-menos que los 3 mm en los que el pictograma se lee bien, así que a ese tamaño los tipos
-se distinguen sobre todo por el color. La leyenda no se reduce: tiene su propia medida.
+es lo que una imprenta offset garantiza. Los íconos se diseñaron para 3,4 mm en A4;
+**en el mapa se dibujan a la mitad** (`tamanoDeIcono` en `src/motor/servicios.js`):
+1,7 mm en A4, 2 mm en A3, 2,3 mm en A2 y 2,7 mm en A1, **y en el A1 se quedan**: A0,
+2A0 y 4A0 llevan el mismo ícono de 2,7 mm. La mitad la pidió el área usuaria en la
+revisión de la Fase 20, para que los grupos no se choquen; el tope en A1, en la revisión
+de la Fase 21, porque en 4A0 —donde el ícono llegaba a 4,1 mm— los grupos de Trujillo y
+de Áncash se veían saturados. Es menos que los 3 mm en los que el pictograma se lee
+bien, así que a ese tamaño los tipos se distinguen sobre todo por el color. La leyenda
+no se reduce: tiene su propia medida.
 `muestras/iconos.pdf` imprime cada ícono a 3, 4,5 y 6 mm junto a su tipo, sigla y color:
 es a la vez la documentación de la correspondencia y la comprobación de que a tamaño
 real siguen distinguiéndose.
@@ -366,24 +368,36 @@ Se prueba, por este orden:
 
 1. **La rejilla junto a su nombre.** El nombre de la unidad, medido igual que lo mide el
    motor de rótulos (`medirRotulo`), se pone encima de la rejilla, debajo o a un lado,
-   en una línea o en dos, y el bloque entero se corre por los puntos interiores de la
-   unidad hasta que cabe dentro. Si no cabe entero, vale el que deje el nombre menos
-   fuera, hasta la mitad. Ese hueco queda **reservado** para el nombre: otro rótulo que
-   lo pise paga un coste, así que un departamento no se lo quita a su provincia teniendo
-   otro sitio.
+   en una línea, en dos o —si el nivel lo admite— en vertical, y el bloque entero se
+   corre por los puntos interiores de la unidad hasta que cabe dentro. Si no cabe entero,
+   vale el que deje el nombre menos fuera, hasta la mitad, y lo que sale cuenta a la
+   mitad si el nombre va encima o debajo de la rejilla (`DESCUENTO_APILADO`); si el
+   nombre es estricto (los distritos del Perú por distritos), sólo entero dentro, y
+   además se prueba alineado con un borde de la rejilla y, si a su cuerpo no hay
+   bloque posible, con la letra un 15 % menor, como lo probará el motor de rótulos. Ese
+   hueco queda **reservado** para el nombre: otro rótulo que lo pise paga un coste, así
+   que una provincia no se lo quita a su distrito teniendo otro sitio.
 2. **La rejilla compacta**, la más cuadrada, en el punto de la unidad, si cabe entera.
 3. **Las demás rejillas**, de la más cuadrada a la más alargada —dos filas, una fila,
-   una columna—, centradas y algo corridas, para las unidades angostas pero rectas.
-4. **La forma.** Si ninguna cabe, las celdas se toman de una en una a partir del punto,
-   siempre la más cercana que toque a las ya puestas y caiga dentro: en una provincia
-   angosta y torcida el grupo se estira a lo largo de ella en vez de salirse por los
-   lados. Huancayo en A1 tiende sus íconos por el brazo norte de la provincia, y
-   Arequipa en A4 los escalona según su contorno.
+   una columna—, en cada uno de los diez puntos interiores de la unidad y corridas hasta
+   una celda alrededor de cada uno. Hasta la Fase 21 sólo se probaban en el centro y con
+   medio corrimiento, y en una unidad irregular la rejilla cabía entera unos milímetros
+   más allá y se quedaba asomando.
+4. **La forma.** Si ninguna cabe, las celdas se toman de una en una a partir de cada
+   punto interior, siempre la más cercana que toque a las ya puestas y caiga dentro: en
+   una provincia angosta y torcida el grupo se estira a lo largo de ella en vez de
+   salirse por los lados. Huancayo en A1 tiende sus íconos por el brazo norte de la
+   provincia, y Arequipa en A4 los escalona según su contorno.
 
 Gana la que deja más íconos dentro de la unidad; a igualdad, la que va antes. En una
 unidad donde no cabe ni un ícono queda la compacta. Como un grupo que sigue la forma no
 es un rectángulo, los rótulos, la ocupación y el apiñamiento lo miden **celda por
-celda**, no por su caja envolvente.
+celda**, no por su caja envolvente. Y ninguna celda pisa los nombres del nivel previo
+—los departamentos del mapa del país—, que se colocan antes que las rejillas (ver «El
+nivel previo se coloca antes que las rejillas»), ni las rejillas ya puestas: los grupos
+se colocan **de la unidad más estrecha a la más ancha** —por el radio de su polo—, y
+cada uno esquiva los anteriores y el hueco que dejaron a su nombre cuando cae entero
+dentro de su unidad (revisión de la Fase 21).
 
 En la Fase 20 la disposición por omisión fue el **anillo**, como el «desplazamiento de
 puntos» de QGIS, y el área usuaria prefirió la rejilla. El anillo sigue disponible en el
@@ -391,13 +405,22 @@ panel («Íconos de cada grupo») o con `?disposicion=anillo` (`repartirEnAnillo
 6 íconos, un solo anillo del radio justo; con siete o más, el más frecuente en el centro
 y los demás en anillos concéntricos, el empaquetado del panal.
 
-**La cifra bajo cada ícono** (cuántas sedes de ese tipo hay) va en 3,8 pt, pegada al
-borde inferior del círculo, y sólo reserva el alto real de un dígito más un hilo de aire
+**La cifra bajo cada ícono** (cuántas sedes de ese tipo hay) va pegada al borde
+inferior del círculo y sólo reserva el alto real de un dígito más un hilo de aire
 (`cifraDeGrupo`, el mismo para el mapa y los recuadros). Iba en 5,2 pt y reservaba una
 línea entera de texto, con su sitio para acentos y descendentes que una cifra no tiene:
-cada ícono con su número ocupaba casi una vez y media su propio alto. Con la cifra
-compacta los grupos que se tocan en el Perú A4 bajan de 142 a 108 en anillo y de 89 a
-65 en rejilla; en A1, de 34 a 18 y de 5 a 2.
+cada ícono con su número ocupaba casi una vez y media su propio alto. En la Fase 20 pasó
+a 3,8 pt, y con la cifra compacta los grupos que se tocan en el Perú A4 bajaron de 142
+a 108 en anillo y de 89 a 65 en rejilla; en A1, de 34 a 18 y de 5 a 2. En la revisión
+de la Fase 21 el área usuaria la vio todavía grande frente al ícono —el dígito medía
+algo más de la mitad del diámetro— y pidió un 40 % menos: se aplica con un **suelo de
+2,8 pt**, porque el 40 % a secas dejaría la cifra en 2,3 pt en A4, medio milímetro de
+alto, que en papel no se lee a ojo. Queda A4 2,8 · A3 2,8 · A2 3,1 · A1 3,6 pt, el
+dígito en torno al 40 % del diámetro del ícono, y de A0 en adelante se queda en los
+3,6 pt del A1, como el ícono; el halo sigue al dígito (un cuarto de su alto) en vez de
+crecer con la hoja. El aire a los lados de cada ícono (12 % de su
+lado, `ANCHO_CELDA`: 0,2 mm en A4) se dejó como estaba: es lo justo para que dos
+círculos no se toquen.
 
 ### Los recuadros de zoom
 
@@ -546,7 +569,8 @@ rejilla fina de respaldo: una unidad más chica que la celda con la que se busca
 polo no tenía dónde anclar sus íconos y se quedaba sin ellos, sin aviso.
 
 Los **nombres de distrito** se escriben donde caben enteros dentro de su distrito, sin
-tocar íconos ni otros nombres (rótulo `estricto`); los demás se omiten sin aviso, porque
+tocar otros nombres y sin más que un roce de ícono (rótulo `estricto`); los demás se
+omiten sin aviso, porque
 a esta escala es lo esperado (nivel `opcional`), y su recuento queda en el resumen. A
 las provincias, en cambio, se les deja asomar o montarse sobre los íconos antes que
 perder el nombre: con 1.893 distritos eso llenaría el país de texto. Van en un tercer
@@ -878,7 +902,8 @@ rápido que el anterior aunque pruebe más posiciones.
 ### Los nombres de distrito del mapa del país
 
 En el Perú por distritos, los nombres de distrito sólo se ponen si caben dentro de su
-distrito sin tocar íconos (son *estrictos* y opcionales: hay más de 1.800). El área
+distrito, sin tocar otros nombres y sin más que un roce de ícono (son *estrictos* y
+opcionales: hay más de 1.800). El área
 usuaria vio, sobre todo en hojas mayores que A1, distritos sin servicios —sin íconos que
 estorbaran— y con sitio, pero sin nombre (revisión de la Fase 20). El motor descartaba
 cualquier posición en la que la caja del texto tocara el límite, y tres cosas lo hacían
@@ -893,7 +918,7 @@ demasiado estricto:
   nombre se prueba girado un cuarto de vuelta, leyéndose de abajo arriba, como los
   números de la retícula y como hace QGIS con las unidades alargadas (`COSTE.VERTICAL`).
 
-| Perú por distritos | Distritos nombrados antes | Ahora |
+| Perú por distritos | Distritos nombrados antes | Fase 20 |
 |---|---:|---:|
 | A1 | 573 | 768 |
 | A0 | 824 | 1.042 (107 en vertical) |
@@ -901,7 +926,221 @@ demasiado estricto:
 
 Los que siguen sin nombre no caben de ninguna de esas formas o se quedaron sin hueco
 porque otros nombres ocuparon sus posiciones. El CSV de territorios lo dice para cada
-uno: «no cabe» o «sin hueco libre».
+uno: «no cabe» o «sin hueco libre», y para los que no caben, cuánto mide el nombre y el
+mayor círculo interior de la unidad, que es lo que dice si la unidad es de verdad más
+chica que su nombre.
+
+### Fase 21: el nombre y los íconos, dentro de su territorio
+
+El área usuaria pidió revisar uno por uno los departamentos, provincias y distritos en
+todas las hojas, y que en lo posible el nombre y los íconos de cada uno quedaran dentro
+de su territorio. La revisión se hizo con un **censo**: un guion compone 584 mapas —el
+Perú en sus tres divisiones y las siete hojas en vertical y horizontal, los 25
+departamentos por provincias y por distritos en A4, A3 y A1, y las 196 provincias en
+A4 y A2— y anota, para cada territorio de cada mapa, si su nombre se puso, si quedó
+entero dentro, si va girado y si sus íconos cayeron dentro: 38.402 filas. Se corrió
+con el motor de la Fase 20 y con el de ésta, y se compararon fila a fila. De ahí
+salieron cinco cambios:
+
+- **La rejilla busca en toda la unidad** (puntos 3 y 4 de «Cómo se reparten los íconos
+  de un grupo»): en cada punto interior y corrida hasta una celda, no sólo en el centro.
+  Es el cambio que más íconos mete dentro.
+- **El nombre en vertical, en todos los niveles en minúsculas**, no sólo en los
+  distritos estrictos: provincias del mapa del país y distritos de los mapas
+  departamental y provincial (`admiteVertical`). También pegado a su rejilla, y la
+  rejilla puede dejarle el sitio en vertical. Gira sólo si acostado dejaría más de un
+  tercio del nombre fuera (`COSTE.VERTICAL`).
+- **El nombre en diagonal, a lo largo del eje de la unidad**, sólo para los distritos
+  estrictos del mapa del país (`ejeDe` en `src/motor/ocupacion.js`, `COSTE.DIAGONAL`).
+  El censo mostró que de los distritos sin nombre en A1, el 91 % son *estrechos*: cabe
+  el alto del nombre pero no el ancho, y muchos son valles largos y torcidos. Se probó
+  también en las provincias y se perdían más nombres de los que se ganaban: la caja
+  envolvente de un nombre en diagonal es ancha y estorba a los vecinos.
+- **La rejilla deja sitio también a los nombres opcionales**: en las capitales de
+  provincia la rejilla se plantaba en el centro del distrito y el nombre, que sí cabía,
+  se quedaba fuera (Cajatambo, Abancay, Celendín en A1).
+- **El nivel previo se coloca antes que las rejillas** (siguiente apartado).
+
+En las 38.402 filas del censo, los nombres puestos pasan de 25.585 a 26.164, los que
+quedan enteros dentro de su territorio de 22.143 a 22.635, y los grupos con todos sus
+íconos dentro de 7.452 a 7.897 (de 10.418). Lo que más se mueve:
+
+| Mapa | Nombres puestos (Fase 20 → 21) | Grupos con todos los íconos dentro |
+|---|---|---|
+| Perú por distritos, distritos, A1 | 43 % → 46 % (768 → 809 de 1.775) | 65 % → 72 % |
+| Perú por distritos, distritos, A0 | 57 % → 60 % | 75 % → 81 % |
+| Perú por distritos, distritos, 2A0 | 69 % → 72 % | 82 % → 87 % |
+| Perú por distritos, provincias, A4 vertical | 87 % → 98 % | — |
+| Perú por distritos, provincias, A4 horizontal | 57 % → 75 % | — |
+| Perú por provincias, provincias, A3 horizontal | 90 % → 95 % (176 → 186) | 79 % → 82 % |
+| Perú por provincias, provincias, A4 horizontal | 70 % → 78 % | 58 % → 67 % |
+| Departamentos por distritos, distritos, A4 | 99 % → 100 % | 84 % → 86 % |
+
+Lo que queda sin nombre en el Perú por distritos es, casi todo, lo que no cabe: en A1,
+de los 870 distritos sin nombre, 26 son más chicos que el alto de su nombre y unos 800
+son más estrechos que su ancho en cualquier dirección. Caben sólo con una letra menor o
+con el nombre abreviado, que son decisiones del área usuaria, no del motor. El área
+usuaria eligió probar la letra menor (siguiente apartado).
+
+### Revisión de la Fase 21: letra menor, nombres apilados, límites y líneas
+
+De la revisión del área usuaria salieron cuatro pedidos más, cada uno con su mecanismo
+en el motor:
+
+- **Letra un 15 % menor para los nombres que no caben** (`reduccion` en
+  `colocarEtiquetas`, `REDUCCION_NOMBRES` en render.js). Es una pasada más del motor,
+  después de la normal: los nombres que se quedaron sin sitio se prueban otra vez con el
+  cuerpo reducido, respetando todo lo ya puesto, y quedan anotados (`reducido`) para
+  que el censo los cuente aparte. Es lo que ArcGIS llama reducción del tamaño de fuente.
+  En el Perú por distritos en A1 nombra 118 distritos más (809 → 927).
+- **El nombre apilado sobre sus íconos en las provincias estrechas** (Carlos Fermín
+  Fitzcarrald, Mariscal Luzuriaga, Carhuaz, Aija y Asunción en el Perú A3). Lo que
+  sale de la unidad cuenta a la mitad cuando el nombre va centrado justo encima o
+  debajo de su rejilla (`DESCUENTO_APILADO`): en una provincia más estrecha que su
+  nombre, el nombre sobresale haga lo que haga, y sobre sus íconos se lee de quién es,
+  mientras que al costado parece de la vecina. Con eso solo no bastaba, porque las
+  rejillas se colocaban sin saber de las vecinas y la de Mariscal Luzuriaga se
+  plantaba donde la de Carlos Fermín Fitzcarrald había dejado sitio a su nombre: ahora
+  **las rejillas se colocan de la unidad más estrecha a la más ancha y cada una esquiva
+  las ya puestas** y el hueco de su nombre, con un índice de colisiones en
+  `dibujarSimbolos`. El hueco se reserva en firme si cae entero dentro de su unidad;
+  si asoma a la vecina, sólo cuando el nombre va apilado sobre su rejilla y como
+  obstáculo **blando**: la rejilla vecina lo esquiva si puede y lo ignora si con él no
+  le caben los íconos dentro (`repartirEnRejilla`). Y un nombre de pie ya no puede
+  alejarse de su unidad más de la mitad de su largo: medido con la caja envolvente,
+  «Carlos Fermín Fitzcarrald» se iba dos provincias más allá.
+- **El nombre del departamento cruza un límite entre provincias** («CUSCO» entero
+  dentro de La Convención se leía como el nombre de esa provincia). El nivel previo
+  recibe las pruebas de interior de sus unidades (`subunidades`, de `subunidadesDe`
+  en render.js) y una posición cuyas letras caen todas en una sola paga
+  `COSTE.UNA_SUBUNIDAD`; la paga también toda posición que asome del departamento, de
+  modo que entero dentro y cruzando gana a entero dentro en una sola provincia, y las
+  dos ganan a asomando. Como el nivel previo se coloca antes que las rejillas, se le
+  dan además las **rejillas previstas** —la cuadrícula compacta de cada grupo en su
+  polo, que es donde se queda una rejilla que no cabe (`prepararSimbolos`)— con un
+  coste por la parte que tapa (`COSTE.SOBRE_PREVISTA`), menor que el de un ícono real
+  porque la rejilla suele poder correrse: «CUSCO» acababa sobre los íconos de la
+  provincia de Cusco y «ÁNCASH» sobre el único sitio donde cabía el ícono de Carhuaz.
+- **Nombres con línea en los recuadros de zoom** (`enlace`, `despejado`,
+  `COSTE.ENLACE`): en Lima y Callao los distritos de la costa son más chicos que su
+  nombre y éste iba de pie sobre el mar, sin nada que dijera de qué distrito era. Ahora
+  va acostado sobre terreno despejado —el mar: ningún punto de sus letras sobre una
+  unidad del recuadro— con una línea desde el borde de su caja hasta el borde de la
+  caja de sus íconos, de no más de diez alturas de letra. Es el «callout» de QGIS. Va
+  en una pasada propia después de la normal, para que un nombre de tierra adentro, que
+  sólo cabe sobre el mar con una línea larga, no le quite el sitio al de la costa, que
+  lo tiene junto a sus íconos; y en la pasada normal un nombre que admite línea no
+  toma una posición peor que la que tendría con ella. **Las líneas no se cruzan entre
+  sí ni pasan sobre otro nombre**: cada línea puesta es un obstáculo más, para las
+  cajas de los demás nombres y para las demás líneas, tanto al generar candidatos
+  (`indice.cruza`, `segmentosSeCruzan` en colisiones.js) como en el solucionador, donde
+  un choque de línea contra caja o contra línea cuenta como un choque de cajas. Sobre
+  íconos sí pueden pasar (`atravesable`): en el centro de Lima no hay otro camino. El
+  área usuaria pidió esto al ver líneas horizontales cruzadas con verticales. En el
+  recuadro del Perú A3 por distritos se nombran 39 distritos en vez de 34, cinco de
+  ellos con línea; en A1, 52 con siete líneas.
+
+Medido con el censo (Fase 21 → revisión): nombres puestos 26.164 → 27.286, de ellos
+1.257 con letra menor (1.228 son distritos del Perú por distritos); enteros dentro de
+su territorio 22.635 → 23.261; grupos con todos sus íconos dentro 7.897 → 7.874. Se
+ganan 1.398 nombres y se pierden 276: de los perdidos, 162 iban de pie y 149 con la
+mitad o más fuera de su unidad —nombres que flotaban sobre la vecina, como el de Carlos
+Fermín Fitzcarrald, y que la regla de cercanía ya no admite—, casi todos en A4 y en A3
+horizontal. Otros 156 pasan de enteros dentro a asomar (97 de ellos, menos de un
+cuarto). Los recuadros de zoom no entran en el censo. Un efecto colateral: como las
+rejillas ya no se pisan entre sí, el apiñamiento que dispara los recuadros automáticos
+baja (Lima por distritos en A1: de 6 a 2 provincias sobre el umbral), y esos mapas
+salen con menos recuadros.
+
+El informe de muestras y el censo distinguen ahora los nombres con letra menor y con
+línea (`reducido`, `enlace` en `meta.etiquetas.colocados`), y cada grupo de íconos
+lleva su caja y el polo de su unidad (`meta.servicios.grupos`).
+
+**La cifra bajo cada ícono, un 40 % menor** (segunda ronda de la revisión). El área
+usuaria la vio grande frente al ícono: el dígito medía algo más de la mitad del
+diámetro. Se aplica con un suelo de 2,8 pt, porque el 40 % a secas la dejaría en 2,3 pt
+en A4, medio milímetro de alto, ilegible en papel: queda A4 2,8 · A3 2,8 · A2 3,1 ·
+A1 3,6 pt (`cifraDeGrupo`), y el halo sigue al dígito. La celda de cada ícono
+baja un 16 % de alto (en A4, de 2,85 a 2,39 mm) y nada de ancho: el aire lateral (12 %
+del lado del ícono, 0,2 mm en A4) es lo justo para que dos círculos no se toquen y se
+dejó como estaba. La celda más baja mueve las rejillas unas décimas y con ellas el
+racimo de provincias chicas de Áncash se volvió a resolver: para que una rejilla no
+volviera a caer en el hueco del nombre apilado de su vecina, ese hueco se reserva ahora
+como obstáculo blando (ver «Cómo se reparten los íconos»).
+
+**El ícono deja de crecer en el A1** (tercera ronda). En 4A0 el ícono llegaba a 4,1 mm
+—el tope de 6 mm calibrado en A0 se estiraba con la escala del mapa— y el área usuaria
+vio saturados los grupos de Trujillo y de Áncash: la rejilla de Trujillo, con ocho
+íconos, medía 14 × 18 mm, y en el Perú por distritos sólo 3 de los 14 íconos de la
+ciudad de Trujillo caían en su distrito. Ahora el ícono crece con la hoja hasta los
+2,7 mm del A1 y ahí se queda (`tamanoDeIcono`, en `src/motor/servicios.js`): A0 pasa
+de 3 a 2,7 mm, 2A0 de 3,5 a 2,7 y 4A0 de 4,1 a 2,7, y la cifra lo acompaña (3,6 pt en
+vez de 4,3, 5 y 5,8). La rejilla de Trujillo queda en 9 × 11 mm; en el Perú por distritos en
+4A0 los íconos dentro de su distrito suben de 466 a 504 de 540 (del 86 al 93 %) y los
+pares de rejillas que se pisan bajan de 35 a 16; en el censo, los íconos dentro de su
+distrito suben en A0 del 82 al 85 % (vertical) y del 71 al 74 % (horizontal), en 2A0
+del 88 al 90 y del 79 al 85, y en 4A0 del 90 al 95 y del 85 al 90. Lo que no cabe ni
+así —los siete íconos del distrito de Trujillo en una ciudad de 8 mm— es trabajo de un
+recuadro de zoom, no del ícono. De A4 a A1 no cambia nada: las medidas son idénticas bit
+a bit y las láminas, las mismas. Se probó también achicarlo en todas las hojas (raíz
+cuarta del factor de formato: 1,8 mm en A3, 2,2 en A1, 2,3 en A0): en A3 ganaba tres
+íconos dentro de su provincia a cambio de que Pomabamba pasara a vertical, y en el Perú
+por distritos en A1 subía los íconos dentro de su distrito del 69 al 77 %. Queda como
+opción si el área usuaria quiere íconos menores también en A1.
+
+**Un nombre de distrito puede rozar un ícono** (cuarta ronda). El área usuaria vio en
+Lambayeque distritos con sitio de sobra y sin nombre, y pidió tolerar algo de
+superposición con los íconos. La causa era la regla estricta: un nombre de distrito no
+podía tocar un ícono ni un 1 % de su caja, y en Cañaris —todo el distrito libre—
+cualquier posición junto a su ícono lo rozaba un 3 %; con letra reducida, al distrito de
+Lambayeque le pasaba igual. Ahora los nombres estrictos admiten lo mismo que los demás
+niveles: hasta un 10 % de su caja bajo íconos (`TAPADO_MAXIMO`), y sólo cuando no hay
+ninguna posición libre, porque montarse sobre íconos sigue costando más que todo lo
+demás. En el Perú por distritos en A1 se ganan 16 nombres (937 → 953; 36 rozan un ícono,
+ninguno más del 9 %) y en 4A0 seis (1.609 → 1.615). Lo que sigue sin nombre no cabe
+dentro de su distrito ni con letra menor ni de pie: el nombre es más ancho que el
+distrito (Pueblo Nuevo, José Leonardo Ortiz, La Victoria) o los íconos lo tapan casi
+entero (Chiclayo, cinco íconos sobre un distrito de 6 mm en 4A0).
+
+**La rejilla deja sitio al nombre de distrito también reducido o al costado** (quinta
+ronda). El área usuaria notó que el distrito de Ferreñafe había perdido su nombre en el
+Perú por distritos en 4A0. No era una regla de los rótulos: el distrito mide unos 6 mm y
+su nombre, aun con la letra un 15 % menor, 8,5. Antes la rejilla, más grande, no cabía
+centrada, se corría media celda hacia abajo y por casualidad dejaba arriba el hueco
+justo; con el ícono y la cifra más chicos cabe centrada y se quedaba donde iba el
+nombre. La rejilla sólo se apartaba a propósito para un nombre a su cuerpo y centrado
+sobre ella, y el de Ferreñafe en esa posición deja un 17 % de las letras fuera de su
+distrito (el tope de un nombre estricto es el 10 %). Ahora, para los nombres de
+distrito, el bloque prueba también el nombre alineado con un borde de la rejilla y, si
+a su cuerpo no hay bloque posible, con la letra reducida (`elegirRejilla`, en
+`src/motor/servicios.js`). Ferreñafe vuelve, a su cuerpo, de pie junto a su ícono y
+entero dentro. Hacen falta las dos cosas: sólo con las alineaciones, Ferreñafe no
+vuelve y en el resto del país se gana mucho menos.
+
+En el censo de las catorce láminas del Perú por distritos se ganan 135 nombres de
+distrito y se pierden 55 (neto, 80 más), y en A4 vertical una provincia más; por hoja,
+entre 6 y 23 ganados y entre ninguno y 9 perdidos (A2 vertical queda en 8 y 9). Los
+íconos dentro no cambian salvo en dos distritos: Mazamari pierde uno en A2 horizontal y
+Pichari gana uno en A0 horizontal. De los perdidos, 47 son distritos sin íconos cuyo
+único sitio ocupó la rejilla de un vecino al apartarse para el nombre del vecino: es el
+intercambio de esta regla. Otros 6 (Matucana y Huanta en A0, entre ellos) tienen su
+rejilla apartada para su nombre reducido, pero los nombres reducidos se colocan en una
+segunda pasada y para entonces los vecinos ya ocuparon el hueco a su cuerpo normal
+(`COSTE.RESERVA_AJENA` lo encarece, no lo prohíbe). Los mapas por provincias y los de
+un departamento no cambian: no tienen nombres estrictos.
+
+### El nivel previo se coloca antes que las rejillas
+
+Con la rejilla buscando por toda la unidad apareció un conflicto: en A3 horizontal la
+rejilla de Bolognesi se corrió justo al sitio donde iba «ÁNCASH», y el nombre del
+departamento acabó un 70 % fuera. Desde la Fase 21 el nivel de lectura gruesa —los
+departamentos en el mapa del país, las provincias en el de un departamento
+(`esNivelPrevio`)— se coloca **antes** que las rejillas, los recuadros y el layout, con
+el mapa aún vacío, y queda marcado en la ocupación como un bloque más: son las rejillas
+y los recuadros los que lo esquivan. En el Perú por departamentos no hace falta: ahí el
+nombre y la rejilla del departamento siguen yendo juntos como un bloque. En A3
+horizontal los 24 departamentos vuelven a quedar enteros dentro, y se nombran 186
+provincias en vez de 176.
 
 ### Lo que no cambia
 
@@ -1010,10 +1249,10 @@ y 1682 × 2378 mm (el cuádruple). No existe un «3A0». Se componen con el mism
 detalle que el A0, así que cuestan casi lo mismo: unos 30 s y 12-13 MB de PDF, frente a
 los 28 s y 11 MB del A0 nacional vertical.
 
-Lo único que se ajustó es el tope del ícono. Los 6 mm se calibraron en A0; en 2A0 y 4A0
-el mapa está a una escala 1,4 y 2 veces mayor, y el tope crece con la raíz de ese
-factor: 7 mm en 2A0 y 8,2 mm en 4A0. De A4 a A0 no cambia nada. En el mapa se dibujan a
-la mitad (ver «Los íconos»): 3,5 mm en 2A0 y 4,1 mm en 4A0.
+El ícono no crece con ellas: desde la revisión de la Fase 21 se queda en los 2,7 mm del
+A1 (ver «Los íconos»). Hasta entonces el tope de 6 mm calibrado en A0 se estiraba con
+la escala del mapa —7 mm en 2A0 y 8,2 en 4A0; 3,5 y 4,1 en el mapa— y en 4A0 la rejilla
+de Trujillo, con ocho íconos, medía 14 × 18 mm.
 
 Para imprimirlos hace falta un plóter con rollo de al menos 1,2 m (2A0) o 1,7 m (4A0).
 
@@ -1119,13 +1358,17 @@ control recompone el mapa y actualiza la URL.
 ## Control de calidad
 
 ```bash
-npm run muestras    # 15 láminas y lo que se puede medir mientras compone
+npm run muestras    # 25 láminas y lo que se puede medir mientras compone
 npm run qa          # lo que sólo se ve mirando el archivo terminado
+npm run censo       # nombres e íconos, territorio por territorio, en 584 mapas
 ```
 
-Los dos corren en cada pull request (`.github/workflows/pruebas.yml`) con **los mismos
-comandos** que en local: no hay una versión «de CI» del control que pudiera pasar
-mientras la de verdad falla.
+Los dos primeros corren en cada pull request (`.github/workflows/pruebas.yml`) con
+**los mismos comandos** que en local: no hay una versión «de CI» del control que
+pudiera pasar mientras la de verdad falla. El censo no: tarda unos 25 minutos y es la
+herramienta para medir un cambio del motor de rótulos antes y después (`npm run censo
+-- --etiqueta=antes`, el cambio, `--etiqueta=despues` y `--comparar antes despues`;
+ver «Fase 21: el nombre y los íconos, dentro de su territorio»).
 
 Y corren **antes de publicar**: el despliegue a Pages llama a ese mismo workflow y no
 publica si no pasa, porque una lámina mal compuesta en la web no lleva ningún aviso de

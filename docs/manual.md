@@ -44,7 +44,13 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    Los íconos de cada unidad van **en rejilla**, con la cifra de sedes pequeña y pegada
    a cada ícono, y el nombre de la unidad junto a la rejilla, dentro de su territorio
    cuando cabe. En una unidad angosta la rejilla se alarga o sigue su forma en vez de
-   salirse. En el mapa los íconos van a la mitad del tamaño de la leyenda, para que los
+   salirse, y el nombre puede ir **en vertical** (se lee de abajo arriba) o, en los
+   distritos del mapa del país, **en diagonal** a lo largo del distrito, cuando acostado
+   no cabe; y si tampoco así cabe, se prueba con **letra un 15 % menor**. En una
+   provincia más estrecha que su nombre, el nombre va **encima de sus íconos**, aunque
+   sobresalga por los lados: sobre ellos se lee de quién es. El nombre del
+   departamento, en mayúsculas, se pone **cruzando un límite entre provincias**, para
+   que no se lea como el nombre de una de ellas. En el mapa los íconos son pequeños —1,7 mm en A4, 2,7 mm de A1 en adelante—, para que los
    grupos no se choquen, y los nombres de los territorios en letra pequeña, para que
    quepan dentro de su provincia o distrito. En **Capas → Íconos de cada grupo** se
    puede elegir el **anillo**, como el desplazamiento de puntos de QGIS.
@@ -59,7 +65,10 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    se ve una mancha. Mientras está en la lámina, los íconos de Lima y Callao van **sólo
    en el recuadro**, con su cifra; en el mapa queda el color y el rectángulo rojo que
    dice dónde está, unido al recuadro por dos líneas rojas en degradado. El nombre de
-   la zona va sólo en el recuadro. Si el recuadro no cupiera en la hoja, los íconos se
+   la zona va sólo en el recuadro. Dentro del recuadro, el nombre de un distrito que no
+   cabe en su territorio va **sobre el mar, acostado, con una línea** hasta sus íconos,
+   como en los planos de Lima; las líneas nunca se cruzan entre sí ni pasan sobre otro
+   nombre. Si el recuadro no cupiera en la hoja, los íconos se
    quedan en el mapa. Se quita con **Quitar**; los demás mapas abren sin recuadros. Tres opciones:
    *Automáticos* (el motor amplía donde los símbolos no caben), *Elegir zonas* o
    *Ninguno*. Con *Elegir zonas* aparecen tres
@@ -160,6 +169,7 @@ siempre diga de qué corte de datos salió. El pie impreso ya no la lleva.
 ```bash
 npm run muestras    # genera las láminas de muestra y las comprueba
 npm run qa          # regresión visual, vectorialidad y rendimiento
+npm run censo       # nombres e íconos, territorio por territorio, en 584 mapas (unos 25 min)
 ```
 
 `npm run muestras` comprueba lo que se puede medir mientras compone: que los totales
