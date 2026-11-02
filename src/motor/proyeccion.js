@@ -102,3 +102,19 @@ export function crearRuta(proyeccion, decimales = 3) {
 export function cajaProyectada(proyeccion, ambito) {
   return geoPath(proyeccion).bounds(ambito);
 }
+
+/**
+ * Generador de trazados recortado al marco (Fase 23). Los ríos, las vías y el velo de
+ * fuera del ámbito cruzan el borde de la hoja: con el recorte del SVG no se VEN fuera,
+ * pero el PDF lleva igual sus kilómetros invisibles. Recortarlos en la geometría, con un
+ * milímetro de holgura para que el trazo no se corte en seco en el borde, los deja en
+ * lo que se ve. Es la misma proyección: sólo cambia que d3 corta en el rectángulo.
+ */
+export function crearRutaRecortada(proyeccion, marco, decimales = 3) {
+  const recortada = geoTransverseMercator()
+    .rotate(proyeccion.rotate())
+    .scale(proyeccion.scale())
+    .translate(proyeccion.translate())
+    .clipExtent([[marco.x - 1, marco.y - 1], [marco.x + marco.ancho + 1, marco.y + marco.alto + 1]]);
+  return geoPath(recortada).digits(decimales);
+}

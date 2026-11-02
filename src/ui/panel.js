@@ -15,7 +15,9 @@ import {
   zoomPorDefecto, esZoomLimaCallao, tituloPorDefecto,
 } from './config.js';
 import { dibujarIcono, ICONOS, VICEMINISTERIOS } from '../iconos/index.js';
-import { VARIABLES } from '../motor/variables.js';
+import { VARIABLES, VARIABLE_PROPIA, VARIABLE_POR_DEFECTO } from '../motor/variables.js';
+import { leerArchivo, interpretar, libroModelo } from '../motor/datos-propios.js';
+import { crearBuscador, indiceDeLugares } from './buscador.js';
 
 const el = (etiqueta, atributos = {}, hijos = []) => {
   const nodo = document.createElement(etiqueta);
@@ -85,7 +87,9 @@ const casilla = (id, etiqueta, activa, alCambiar) => {
   return el('label', { clase: 'casilla', for: id }, [input, el('span', { texto: etiqueta })]);
 };
 
-export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar }) {
+export function crearPanel({
+  contenedor, config, catalogo, alCambiar, alGenerar,
+}) {
   const emitir = () => alCambiar(config);
 
   /* ------------------------------- hoja -------------------------------- */
@@ -112,6 +116,9 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
      que aparece y desaparece mueve todo lo que tiene debajo cada vez que se toca. */
   const selDepartamento = el('select', { id: 'ambito' });
   selDepartamento.appendChild(el('option', { value: '', texto: 'Perú (nacional)' }));
+  /* El VRAEM (Fase 23) no es un departamento, pero se elige como uno: es un ámbito que
+     se imprime entero, sin provincia ni distrito que elegir dentro. */
+  selDepartamento.appendChild(el('option', { value: 'vraem', texto: 'VRAEM (ríos Apurímac, Ene y Mantaro)' }));
   for (const d of catalogo.departamentos) {
     selDepartamento.appendChild(el('option', { value: d.id, texto: d.nombre }));
   }
@@ -120,13 +127,14 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   const selDistrito = el('select', { id: 'ambito-distrito' });
 
   const llenarProvincias = (ccdd, elegida) => {
+    const esDepartamento = Boolean(ccdd) && ccdd !== 'vraem';
     selProvincia.innerHTML = '';
-    selProvincia.appendChild(el('option', { value: '', texto: ccdd ? 'Todo el departamento' : '—' }));
+    selProvincia.appendChild(el('option', { value: '', texto: esDepartamento ? 'Todo el departamento' : '—' }));
     for (const p of catalogo.provincias.filter((x) => x.ccdd === ccdd)) {
       selProvincia.appendChild(el('option', { value: p.id, texto: p.nombre }));
     }
     selProvincia.value = elegida || '';
-    selProvincia.disabled = !ccdd;
+    selProvincia.disabled = !esDepartamento;
   };
 
   /* Los distritos salen de la CARTOGRAFÍA, no de centros.json. El catálogo de centros.json
@@ -144,6 +152,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
 
   const ambitoActual = () => {
     if (!selDepartamento.value) return { nivel: 'nacional', id: null };
+    if (selDepartamento.value === 'vraem') return { nivel: 'vraem', id: 'vraem' };
     if (!selProvincia.value) return { nivel: 'departamento', id: selDepartamento.value };
     if (!selDistrito.value) return { nivel: 'provincia', id: selProvincia.value };
     return { nivel: 'distrito', id: selDistrito.value };
@@ -184,8 +193,9 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     emitir();
   });
 
-  const departamentoInicial = config.ambito.id ? config.ambito.id.slice(0, 2) : '';
-  const provinciaInicial = config.ambito.id && config.ambito.id.length >= 4
+  const enVraem = config.ambito.nivel === 'vraem';
+  const departamentoInicial = enVraem ? 'vraem' : config.ambito.id ? config.ambito.id.slice(0, 2) : '';
+  const provinciaInicial = !enVraem && config.ambito.id && config.ambito.id.length >= 4
     ? config.ambito.id.slice(0, 4) : '';
   selDepartamento.value = departamentoInicial;
   llenarProvincias(departamentoInicial, provinciaInicial);
@@ -211,8 +221,8 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     if (campo) campo.placeholder = subtituloDe(config.ambito, nombreDeAmbito(config.ambito));
   };
 
-  const alCambiarAmbito = () => {
-    config.ambito = ambitoActual();
+  const alCambiarAmbito = (ambito = ambitoActual()) => {
+    config.ambito = ambito;
     /* Cada ámbito empieza con su división de siempre. Arrastrar la anterior daría
        resultados que nadie ha pedido: «departamentos» no existe dentro de Cusco, y
        «provincias» en el país es lo normal, no una elección. */
@@ -226,6 +236,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     }
     sincronizarSubtitulo();
     sincronizarVariable();
+    sincronizarCapas();
     llenarZonas();
     emitir();
   };
@@ -238,13 +249,29 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     llenarDistritos(selProvincia.value, '');
     alCambiarAmbito();
   });
-  selDistrito.addEventListener('change', alCambiarAmbito);
+  selDistrito.addEventListener('change', () => alCambiarAmbito());
+
+  /* El buscador (Fase 23) pone los tres selectores como si se hubieran elegido a mano.
+     El ámbito se fija directamente y no se lee de ellos: los distritos de un
+     departamento se cargan al pedirlos, y hasta entonces su selector está vacío. */
+  const ponerAmbito = (ambito) => {
+    const dep = ambito.nivel === 'vraem' ? 'vraem' : ambito.id ? ambito.id.slice(0, 2) : '';
+    const prov = ambito.nivel === 'provincia' || ambito.nivel === 'distrito' ? ambito.id.slice(0, 4) : '';
+    selDepartamento.value = dep;
+    llenarProvincias(dep, prov);
+    llenarDistritos(prov, ambito.nivel === 'distrito' ? ambito.id : '');
+    alCambiarAmbito({ nivel: ambito.nivel, id: ambito.id });
+  };
+  const buscador = catalogo.lugares
+    ? crearBuscador({ indice: indiceDeLugares(catalogo.lugares), alElegir: ponerAmbito })
+    : null;
 
   const bloqueHoja = grupo('Hoja y ámbito', [
     el('p', { clase: 'campo' }, [el('label', { for: 'tamano', texto: 'Tamaño' }), selTamano]),
     el('p', { clase: 'campo' }, [el('label', { for: 'orientacion', texto: 'Orientación' }), selOrientacion]),
+    buscador,
     el('p', { clase: 'campo' }, [
-      el('label', { for: 'ambito', texto: 'Departamento' }), selDepartamento,
+      el('label', { for: 'ambito', texto: 'Departamento o ámbito' }), selDepartamento,
     ]),
     el('p', { clase: 'campo' }, [
       el('label', { for: 'ambito-provincia', texto: 'Provincia' }), selProvincia,
@@ -387,6 +414,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     cobertura: 'Distancia al centro de atención más cercano',
     tasa: 'Centros de atención por cada 100 mil habitantes',
     pobreza: 'Pobreza monetaria (INEI, 2018)',
+    propia: 'Datos propios (archivo cargado)',
   };
   const NOTAS_VARIABLE = {
     presencia: 'Cuántos tipos de servicio distintos hay en cada unidad: el mapa de siempre.',
@@ -397,22 +425,28 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
       + ' que el INEI proyecta para este año.',
     pobreza: 'Porcentaje de la población en pobreza monetaria según el mapa de pobreza 2018'
       + ' del INEI. No depende de los tipos marcados; los íconos sí.',
+    propia: 'El valor de tu archivo en cada unidad, en cinco clases con un número parecido de'
+      + ' unidades. Se carga en «Datos propios».',
   };
   const selVariable = el('select', { id: 'variable' });
   for (const v of VARIABLES) selVariable.appendChild(el('option', { value: v, texto: NOMBRES_VARIABLE[v] || v }));
   selVariable.value = config.variable;
   const notaVariable = el('p', { clase: 'nota', id: 'nota-variable', 'aria-live': 'polite' });
+  const opcionPropia = selVariable.querySelector(`option[value="${VARIABLE_PROPIA}"]`);
   const sincronizarVariable = () => {
     const sinColor = config.capas.coropleta === false;
     const distrital = config.ambito.nivel === 'distrito';
+    /* «Datos propios» sólo con un archivo cargado que traiga valores por ubigeo. */
+    opcionPropia.disabled = !config.datosPropios?.valores;
     selVariable.disabled = sinColor || distrital;
     notaVariable.textContent = distrital ? 'El mapa de un solo distrito no se colorea: no hay con qué compararlo.'
       : sinColor ? 'El color está apagado en «Capas».'
         : NOTAS_VARIABLE[config.variable] || '';
   };
-  selVariable.addEventListener('change', () => {
+  const ponerVariable = (nueva) => {
     const anterior = config.variable;
-    config.variable = selVariable.value;
+    config.variable = nueva;
+    selVariable.value = nueva;
     /* El título sigue al tipo de mapa (config.js, TITULOS_POR_VARIABLE) mientras sea el
        que puso la aplicación; uno escrito a mano no se toca. */
     if (config.textos.titulo === tituloPorDefecto(anterior)) {
@@ -420,8 +454,8 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
       inputTitulo.value = config.textos.titulo;
     }
     sincronizarVariable();
-    emitir();
-  });
+  };
+  selVariable.addEventListener('change', () => { ponerVariable(selVariable.value); emitir(); });
   const bloqueColor = grupo('Color del mapa', [
     el('p', { clase: 'campo' }, [el('label', { for: 'variable', texto: 'Qué muestra el color' }), selVariable]),
     notaVariable,
@@ -459,6 +493,28 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     ]));
   }
 
+  /* Las capas de la Fase 23, apagadas por omisión. Ríos y vías se dibujan según la
+     escala (motor/redes.js), y el VRAEM no se ofrece en su propio mapa, donde su
+     contorno ya es el del ámbito. */
+  const nombresCapaOpcional = {
+    rios: 'Ríos (ANA)',
+    vias: 'Red vial nacional y departamental (MTC)',
+    vraem: 'Contorno del VRAEM',
+  };
+  const casillasOpcionales = Object.entries(nombresCapaOpcional).map(([clave, etiqueta]) => casilla(
+    `capa-${clave}`, etiqueta, config.capas[clave] === true,
+    (v) => { config.capas[clave] = v; emitir(); },
+  ));
+  const notaCapas = el('p', { clase: 'nota', id: 'nota-capas' });
+  const sincronizarCapas = () => {
+    const casillaVraem = contenedor.querySelector('#capa-vraem') || casillasOpcionales[2].querySelector('input');
+    casillaVraem.disabled = config.ambito.nivel === 'vraem';
+    notaCapas.textContent = config.ambito.nivel === 'vraem'
+      ? 'En el mapa del VRAEM su contorno es el del propio mapa.'
+      : 'Los ríos y las vías se dibujan según la escala: en el país, sólo los ríos principales y la red nacional.';
+  };
+  sincronizarCapas();
+
   const bloqueCapas = grupoPlegable('grupo-capas', 'Capas', [
     ...Object.entries(nombresCapa).map(([clave, etiqueta]) => casilla(
       `capa-${clave}`, etiqueta, config.capas[clave] !== false,
@@ -468,8 +524,12 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
         emitir();
       },
     )),
+    el('p', { clase: 'subtitulo-grupo', texto: 'Capas adicionales' }),
+    ...casillasOpcionales,
+    notaCapas,
     grupoDisposicion,
   ], Object.keys(nombresCapa).some((k) => config.capas[k] === false)
+    || Object.keys(nombresCapaOpcional).some((k) => config.capas[k] === true)
     || config.disposicion !== Object.keys(NOMBRES_DISPOSICION)[0]);
 
   /* ------------------------------- piezas ------------------------------ */
@@ -575,6 +635,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     if (a.nivel === 'provincia') {
       return { dep: a.id.slice(0, 2), prov: a.id, provincia: true, distrito: true, minimo: 6 };
     }
+    // El distrito y el VRAEM no tienen zonas que ampliar.
     return null;
   };
 
@@ -662,7 +723,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     }
     listaZonas.hidden = !config.zoom.seleccion.length;
     notaZonas.textContent = !reglasZona()
-      ? 'En un mapa distrital no hay zonas que ampliar.'
+      ? `En ${config.ambito.nivel === 'vraem' ? 'el mapa del VRAEM' : 'un mapa distrital'} no hay zonas que ampliar.`
       : config.zoom.seleccion.length ? '' : 'Aún no hay zonas: elige una y pulsa «Añadir zona».';
   };
 
@@ -727,8 +788,156 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
      pantalla, y anunciar cada segundo sería ruido. */
   const reloj = el('span', { clase: 'reloj', id: 'reloj', 'aria-hidden': 'true' });
 
+  /* ---------------------------- datos propios -------------------------- */
+
+  /* Un archivo de quien hace el mapa (motor/datos-propios.js): valores por ubigeo para
+     el color, o puntos con coordenadas. Se lee aquí, en el navegador, y no viaja en el
+     enlace, así que el panel lo dice. */
+  /* El modelo: un Excel con todos los distritos y cinco columnas de valor vacías, para
+     no tener que buscar ubigeos (motor/datos-propios.js, libroModelo). Se arma aquí, en
+     el navegador, con la lista del buscador. */
+  const botonModelo = el('button', { type: 'button', clase: 'secundario', id: 'datos-modelo' },
+    [el('span', { texto: 'Descargar el modelo (Excel)' })]);
+  botonModelo.disabled = !catalogo.lugares;
+  botonModelo.addEventListener('click', () => {
+    const url = URL.createObjectURL(new Blob([libroModelo(catalogo.lugares)], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }));
+    const enlace = el('a', { href: url, download: 'modelo_datos_propios_mapas_mimp.xlsx' });
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  });
+  const notaModelo = el('p', { clase: 'nota', id: 'nota-modelo', texto:
+    'Trae los 1 893 distritos con su ubigeo, departamento, provincia y distrito, y las'
+    + ' columnas valor1 a valor5 para llenar. Una celda vacía es «sin dato».' });
+
+  const inputArchivo = el('input', { type: 'file', id: 'datos-archivo', accept: '.csv,.txt,.xlsx' });
+  /* Con varias columnas de valor (valor1, valor2…), cuál colorea el mapa. */
+  const selColumna = el('select', { id: 'datos-columna' });
+  const campoColumna = el('p', { clase: 'campo', id: 'campo-columna' }, [
+    el('label', { for: 'datos-columna', texto: 'Columna que colorea el mapa' }), selColumna,
+  ]);
+  selColumna.addEventListener('change', () => {
+    const d = config.datosPropios;
+    if (!d) return;
+    const anterior = d.series[d.serie];
+    d.serie = Number(selColumna.value);
+    d.valores = d.series[d.serie].valores;
+    /* El nombre de la leyenda sigue a la columna mientras nadie lo haya escrito. */
+    if (d.nombre === anterior.columna) {
+      d.nombre = d.series[d.serie].columna;
+      campoNombreDatos.querySelector('input').value = d.nombre;
+    }
+    if (config.variable !== VARIABLE_PROPIA) ponerVariable(VARIABLE_PROPIA);
+    emitir();
+  });
+  const resumenDatos = el('p', { clase: 'nota', id: 'datos-resumen', 'aria-live': 'polite' });
+  const avisosDatos = el('ul', { clase: 'avisos-datos', id: 'datos-avisos' });
+  const campoNombreDatos = campoTexto('datos-nombre', 'Nombre de los datos (para la leyenda)', '', (v) => {
+    if (!config.datosPropios) return;
+    config.datosPropios.nombre = v.trim() || config.datosPropios.archivo;
+    emitir();
+  });
+  const campoFuenteDatos = campoTexto('datos-fuente', 'Fuente (va al pie del mapa)', '', (v) => {
+    if (!config.datosPropios) return;
+    config.datosPropios.fuente = v.trim();
+    emitir();
+  });
+  campoFuenteDatos.querySelector('input').placeholder = 'Quién produjo los datos y de cuándo';
+  const casillaPuntos = casilla('datos-puntos', 'Dibujar los puntos', true, (v) => {
+    if (!config.datosPropios) return;
+    config.datosPropios.mostrarPuntos = v;
+    emitir();
+  });
+  const botonQuitarDatos = el('button', { type: 'button', clase: 'enlace', id: 'datos-quitar' },
+    [el('span', { texto: 'Quitar los datos' })]);
+  const camposDatos = el('div', { id: 'datos-campos' }, [
+    campoColumna, campoNombreDatos, campoFuenteDatos, casillaPuntos, botonQuitarDatos,
+  ]);
+
+  const pintarDatos = () => {
+    const d = config.datosPropios;
+    camposDatos.hidden = !d;
+    avisosDatos.innerHTML = '';
+    if (!d) {
+      resumenDatos.textContent = 'Un CSV o Excel con la columna «ubigeo» y una o más columnas de valor'
+        + ' para colorear el mapa, o «latitud» y «longitud» para poner puntos. El archivo no sale de tu computadora.';
+      return;
+    }
+    const partes = [];
+    if (d.series.length) {
+      partes.push(d.series.length === 1
+        ? `${d.series[0].conDato} valores por ${d.nivel}`
+        : `${d.series.length} columnas de valor por ${d.nivel}`);
+    }
+    if (d.puntos.length) partes.push(`${d.resumen.puntos} puntos`);
+    selColumna.innerHTML = '';
+    d.series.forEach((s, i) => selColumna.appendChild(el('option', { value: String(i), texto: `${s.columna} (${s.conDato} con dato)` })));
+    selColumna.value = String(d.serie);
+    campoColumna.hidden = d.series.length < 2;
+    resumenDatos.textContent = `«${d.archivo}»: ${d.resumen.filas} filas, ${partes.join(' y ')}.`
+      + ' No viajan en el enlace: si recargas la página, vuelve a cargarlos.';
+    for (const a of d.avisos) avisosDatos.appendChild(el('li', { texto: a }));
+    campoNombreDatos.querySelector('input').value = d.nombre;
+    campoFuenteDatos.querySelector('input').value = d.fuente || '';
+    casillaPuntos.hidden = !d.puntos.length;
+    casillaPuntos.querySelector('input').checked = d.mostrarPuntos !== false;
+  };
+
+  inputArchivo.addEventListener('change', async () => {
+    const archivo = inputArchivo.files[0];
+    if (!archivo) return;
+    resumenDatos.textContent = `Leyendo «${archivo.name}»…`;
+    try {
+      const r = interpretar(leerArchivo({ nombre: archivo.name, bytes: new Uint8Array(await archivo.arrayBuffer()) }));
+      config.datosPropios = {
+        archivo: archivo.name,
+        /* Con varias columnas de valor, la leyenda lleva el nombre de la que colorea; con
+           una sola, el del archivo. */
+        nombre: r.series.length > 1 ? r.series[0].columna : archivo.name.replace(/\.[^.]+$/, ''),
+        fuente: '',
+        puntos: r.puntos,
+        series: r.series,
+        serie: 0,
+        valores: r.valores,
+        nivel: r.nivel,
+        mostrarPuntos: true,
+        resumen: r.resumen,
+        avisos: r.avisos,
+      };
+      pintarDatos();
+      /* Con valores, el color pasa a mostrarlos: es para lo que se cargaron. */
+      if (r.valores) ponerVariable(VARIABLE_PROPIA); else sincronizarVariable();
+      emitir();
+    } catch (err) {
+      resumenDatos.textContent = `No se pudo leer «${archivo.name}»: ${err.message}`;
+    }
+    // Para poder volver a elegir el mismo archivo después de corregirlo.
+    inputArchivo.value = '';
+  });
+  botonQuitarDatos.addEventListener('click', () => {
+    config.datosPropios = null;
+    if (config.variable === VARIABLE_PROPIA) ponerVariable(VARIABLE_POR_DEFECTO); else sincronizarVariable();
+    pintarDatos();
+    emitir();
+    inputArchivo.focus();
+  });
+  pintarDatos();
+  sincronizarVariable();
+
+  const bloqueDatos = grupoPlegable('grupo-datos', 'Datos propios', [
+    botonModelo,
+    notaModelo,
+    el('p', { clase: 'campo' }, [el('label', { for: 'datos-archivo', texto: 'Archivo (CSV o Excel)' }), inputArchivo]),
+    resumenDatos,
+    avisosDatos,
+    camposDatos,
+  ], Boolean(config.datosPropios));
+
   contenedor.append(
-    bloqueHoja, bloqueTipos, bloqueColor, bloqueZoom, bloqueCapas, bloquePiezas,
+    bloqueHoja, bloqueTipos, bloqueColor, bloqueDatos, bloqueZoom, bloqueCapas, bloquePiezas,
     el('div', { clase: 'pie-panel' }, [botonGenerar, el('div', { clase: 'estado' }, [progreso, reloj])]),
   );
 

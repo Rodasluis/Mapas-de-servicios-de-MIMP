@@ -21,6 +21,16 @@ No es una captura de pantalla: el PDF se construye a partir de geometría vector
   monetaria 2018 (POBREZA_*). Se anclan por SHA-256 en package.json y se versionan en
   origenes/indicadores/, como el directorio; scripts/fetch-indicadores.mjs los publica en
   public/data/indicadores.json. Con ellos, el pie cita esa fuente en una línea más.
+- Ríos y vías (Fase 23): red hidrográfica de la ANA y Red Vial Nacional y Departamental
+  del MTC. Son servicios vivos sin versión: se ancla una INSTANTÁNEA simplificada en
+  origenes/redes/ por su SHA-256 (REDES_SHA256, REDES_FECHA en package.json); se toma con
+  npm run redes -- --anclar y el build (scripts/build-capas.mjs) la lee de ahí.
+- VRAEM (Fase 23): la lista de sus 80 distritos vive en src/motor/vraem.js, tomada del
+  D.S. N.º 040-2016-PCM modificado por el D.S. N.º 133-2022-PCM; el build la comprueba
+  contra la cartografía. La marca «Zona Vraem» del directorio NO define el ámbito.
+- Datos propios (Fase 23): archivos que carga quien hace el mapa, sólo en su navegador;
+  nunca en el enlace. Sus puntos se dibujan con una forma que ningún
+  servicio usa (rombo gris) y el pie cita la fuente que escriba.
 - Este proyecto es INDEPENDIENTE del buscador (Rodasluis/Distancia-al-centro-de-atencion):
   no lee sus datos y no tiene que coincidir con él. Sus criterios sirvieron de punto de
   partida y nada más.
@@ -43,7 +53,8 @@ No es una captura de pantalla: el PDF se construye a partir de geometría vector
    src/estilo/tokens.js; los de los servicios, con su forma, en src/iconos/estilos.js
    (un solo estilo, círculo, transcrito del archivo de diseño del MIMP; el estilo casa
    se retiró en la Fase 16).
-3. Todo PDF lleva en el pie las fuentes (MIMP, INEI, Natural Earth), la cartografía
+3. Todo PDF lleva en el pie las fuentes (MIMP, INEI, Natural Earth, y desde la Fase 23
+   las de cada capa encendida: ANA, MTC, el decreto del VRAEM, los datos propios), la cartografía
    (proyección y retícula) y la escala. La versión del directorio (fecha de
    publicación y comienzo del hash) y la fecha de generación ya no se imprimen, ni la
    nota "Escala válida al imprimir al 100 %" —decisiones del área usuaria en la

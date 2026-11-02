@@ -91,13 +91,16 @@ export function nombreConSigla(tipo) {
  * @param {object} [disposicion]     {columnas, escala}: compone ésa, con los nombres
  *                                   enteros y cada uno en una línea, en vez de buscar
  *                                   la que quepa en altoMaximoMm × anchoMaximoMm
+ * @param {Array} [extras]           filas que no son tipos de servicio —ríos, vías,
+ *                                   VRAEM, datos propios (Fase 23)—, cada una con su
+ *                                   etiqueta y su muestra (motor/superposiciones.js)
  */
 export function bloqueLeyenda({
   agregado, estiloIconos, medidor, factor, altoMaximoMm, anchoMaximoMm,
-  reduccion = 1, cuerpoMinimoPt = 0, disposicion = null,
+  reduccion = 1, cuerpoMinimoPt = 0, disposicion = null, extras = [],
 }) {
   const tipos = agregado.tipos;
-  if (!tipos.length) return null;
+  if (!tipos.length && !extras.length) return null;
 
   /**
    * Se busca la composición MENOS agresiva que quepa en la caja disponible. Para cada
@@ -137,7 +140,12 @@ export function bloqueLeyenda({
        de la letra, y el área usuaria vio en ese aire una línea en blanco de más
        (revisión de la Fase 20). */
     const altoTituloBloque = medidor.alto(eTitulo) * 1.2;
-    const filasTipos = Math.ceil(tipos.length / columnas);
+    /* Los tipos y, detrás, las filas de las capas de la Fase 23, en las mismas columnas. */
+    const entradas = [
+      ...tipos.map((tipo) => ({ tipo })),
+      ...extras.map((extra) => ({ extra })),
+    ];
+    const filasTipos = Math.ceil(entradas.length / columnas);
     /* Entre una columna y la siguiente, el aire de un ícono. */
     const aireColumnas = icono;
 
@@ -151,9 +159,12 @@ export function bloqueLeyenda({
     const anchoTexto = partir && anchoMaximoMm
       ? (anchoMaximoMm * k - relleno * 2 - aireColumnas * (columnas - 1)) / columnas - icono * 1.5
       : Infinity;
-    const filas = tipos.map((tipo, i) => {
-      const lineas = partirEnLineas(`${etiquetaDe(tipo)} (${agregado.porTipo.get(tipo)})`, anchoTexto, eItem, medidor);
-      return { tipo, lineas, columna: Math.floor(i / filasTipos), alto: altoFila + (lineas.length - 1) * altoLineaMas };
+    const filas = entradas.map(({ tipo, extra }, i) => {
+      const lineas = partirEnLineas(extra ? extra.etiqueta : `${etiquetaDe(tipo)} (${agregado.porTipo.get(tipo)})`,
+        anchoTexto, eItem, medidor);
+      return {
+        tipo, extra, lineas, columna: Math.floor(i / filasTipos), alto: altoFila + (lineas.length - 1) * altoLineaMas,
+      };
     });
     const usadas = Math.max(...filas.map((f) => f.columna)) + 1;
     // Cada fila empieza donde acaba la anterior de su columna.
@@ -249,16 +260,20 @@ export function bloqueLeyenda({
 
       /* El ícono va a la altura de la primera línea del nombre; las demás, debajo. */
       const altoLineaMas = medidor.alto(eItem) * 0.95;
-      for (const { tipo, lineas, columna, y: dy } of filas) {
+      for (const {
+        tipo, extra, lineas, columna, y: dy,
+      } of filas) {
         const cx = x + relleno + xColumnas[columna];
         const cy = cursor + dy;
-        piezas.push(dibujarIcono({
-          tipo,
-          x: cx + tamanoIcono * 0.6,
-          y: cy + altoFila * 0.85,
-          tamanoMm: tamanoIcono,
-          estilo: estiloIconos,
-        }));
+        /* Una fila de capa lleva su muestra centrada donde iría el ícono. */
+        piezas.push(extra ? extra.dibujar(cx + tamanoIcono * 0.05, cy + altoFila * 0.85 - tamanoIcono / 2, tamanoIcono)
+          : dibujarIcono({
+            tipo,
+            x: cx + tamanoIcono * 0.6,
+            y: cy + altoFila * 0.85,
+            tamanoMm: tamanoIcono,
+            estilo: estiloIconos,
+          }));
         lineas.forEach((linea, k2) => {
           piezas.push(texto(linea, {
             x: cx + tamanoIcono * 1.4,

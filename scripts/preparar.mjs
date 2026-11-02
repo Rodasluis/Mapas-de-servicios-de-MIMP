@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { RAIZ, PUBLICO, abortar, titulo, paquete } from './lib/comun.mjs';
+import { VERSION_CAPAS } from './lib/capas.mjs';
 
 const forzar = process.argv.includes('--forzar');
 
@@ -66,6 +67,17 @@ const PASOS = [
       && leer('data/indicadores.json').poblacion?.sha256 === paquete().POBLACION_SHA256
       && leer('data/indicadores.json').pobreza?.sha256 === paquete().POBREZA_SHA256
       && String(leer('data/indicadores.json').poblacion?.anio) === String(paquete().POBLACION_ANIO),
+  },
+  /* Ríos y vías, contorno del VRAEM y lugares del buscador (Fase 23). Después de la
+     cartografía, de cuyos distritos salen el VRAEM y los lugares. Listo sólo si lo
+     publicado es de la instantánea anclada y de esta versión del paso. */
+  {
+    nombre: 'ríos, vías, VRAEM y lugares',
+    script: 'build-capas.mjs',
+    nodeArgs: ['--max-old-space-size=6144'],
+    listo: () => existe('data/capas.json') && existe('data/lugares.json')
+      && leer('data/capas.json').version === VERSION_CAPAS
+      && leer('data/capas.json').redes?.sha256 === paquete().REDES_SHA256,
   },
 ];
 

@@ -71,7 +71,11 @@ const $ = (id) => document.getElementById(id);
 async function arrancar() {
   const config = desdeParametros(new URLSearchParams(window.location.search));
 
-  const [centros] = await Promise.all([cargador.centros(), fuentesListas()]);
+  /* Los lugares del buscador (Fase 23) no son imprescindibles: sin ellos el panel
+     arranca igual, sin buscador. */
+  const [centros, lugares] = await Promise.all([
+    cargador.centros(), cargador.lugares().catch(() => null), fuentesListas(),
+  ]);
   const conteo = new Map();
   for (const c of centros.centros) conteo.set(c.tipo, (conteo.get(c.tipo) || 0) + 1);
   const nombreDepartamento = new Map(centros.catalogo.departamentos.map((d) => [d.id, d.nombre]));
@@ -87,6 +91,8 @@ async function arrancar() {
     /* Sólo los distritos CON algún centro: son los únicos que centros.json cataloga, y
        también los únicos que tiene sentido ofrecer para AMPLIAR. */
     distritos: [...centros.catalogo.distritos].sort(porNombre),
+    /* Todos los departamentos, provincias y distritos, para el buscador. */
+    lugares,
 
     /**
      * Distritos de una provincia, leídos de la CARTOGRAFÍA.
@@ -150,8 +156,12 @@ async function arrancar() {
   let reloj = null;
 
   /* El ámbito puede venir de la URL, así que los distritos de su departamento hacen
-     falta desde el primer dibujo. */
-  if (config.ambito.id) pedirDistritos(config.ambito.id.slice(0, 2));
+     falta desde el primer dibujo. El VRAEM no es un departamento: los suyos los pide el
+     motor. */
+  const pedirDistritosDelAmbito = () => {
+    if (config.ambito.id && config.ambito.nivel !== 'vraem') pedirDistritos(config.ambito.id.slice(0, 2));
+  };
+  pedirDistritosDelAmbito();
 
   const panel = crearPanel({
     contenedor: $('panel'),
@@ -272,6 +282,15 @@ async function arrancar() {
       ['Recuadros', meta.servicios.recuadros.length
         ? meta.servicios.recuadros.map((z) => z.etiqueta).join(', ') : 'ninguno'],
     ];
+    /* Las capas de la Fase 23, sólo si se dibujó alguna. */
+    const sp = meta.superposiciones || {};
+    const capas = [
+      sp.redes?.rios ? 'ríos' : '',
+      sp.redes?.viasNacional || sp.redes?.viasDepartamental ? 'vías' : '',
+      sp.vraem ? 'VRAEM' : '',
+      sp.puntosPropios ? `${sp.puntosPropios} puntos propios` : '',
+    ].filter(Boolean);
+    if (capas.length) filas.push(['Capas adicionales', capas.join(' · ')]);
     /* Cada pareja va envuelta en un div —que la lista de definiciones admite— para
        que el resumen se pueda disponer en UNA línea con saltos limpios. Sin la
        envoltura, el término y su valor se separan al repartirse por la fila. */
@@ -357,6 +376,18 @@ async function arrancar() {
         + ' se ve dónde están de verdad las brechas.', { etiqueta: 'Dividir hasta distritos', accion: () => usarDivision('distrito') });
     }
 
+    /* Datos propios (Fase 23): de otro nivel que el del mapa no colorean nada, y unos
+       puntos que caen todos fuera del ámbito no se ven. Las dos cosas se dicen. */
+    const vp = meta.superposiciones?.valoresPropios;
+    if (vp?.nivelDistinto) {
+      avisar(`Tus datos son por ${vp.nivel} y este mapa está dividido en ${NOMBRE_NIVEL[meta.ambito.agregacion] || 'otras unidades'}:`
+        + ' el color sale «Sin dato».', { etiqueta: `Dividir hasta ${vp.nivel}s`, accion: () => usarDivision(vp.nivel) });
+    }
+    const dp = cfg.datosPropios;
+    if (dp?.puntos?.length && dp.mostrarPuntos !== false && !meta.superposiciones?.puntosPropios) {
+      avisar(`Ninguno de los ${dp.puntos.length} puntos de «${dp.archivo}» cae dentro de este ámbito.`);
+    }
+
     /* Un nombre de país que falta se nota; saber por qué falta no, y sin eso parece un
        descuido del programa. El caso normal es que un recuadro de zoom o la leyenda
        ocupen el hueco. El motivo técnico queda en meta.rotulos.motivos. */
@@ -424,7 +455,9 @@ async function arrancar() {
   $('copiar-enlace').addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
-      panel.progreso('Enlace copiado al portapapeles');
+      panel.progreso(config.datosPropios
+        ? 'Enlace copiado. No lleva los datos propios: quien lo abra tendrá que cargarlos.'
+        : 'Enlace copiado al portapapeles');
     } catch {
       panel.progreso('No se pudo copiar; la dirección de la barra ya tiene la configuración');
     }

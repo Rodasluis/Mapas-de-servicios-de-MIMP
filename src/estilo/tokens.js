@@ -82,6 +82,18 @@ export const color = {
   marco: '#000000',
   fondoHoja: '#ffffff',
   grilla: '#8c8c8c',
+
+  /* Capas de la Fase 23. Los ríos en un azul más oscuro que el de los lagos, que sobre
+     el naranja de la coropleta se pierde. Las vías en un pardo oscuro y no en rojo, que
+     es el color institucional y el de la rampa: una carretera roja sobre un distrito
+     naranja se leía como un límite. El VRAEM, en el azul MIMP: es un ámbito del Estado,
+     como los límites, y no un dato del color. Los datos propios, en gris casi negro:
+     tienen que distinguirse de los servicios del MIMP, que van en color. */
+  rio: '#3f86c6',
+  viaNacional: '#4a3524',
+  viaDepartamental: '#6e5843',
+  vraem: '#1b4b8f',
+  datoPropio: '#2b2b2b',
 };
 
 /**
@@ -188,6 +200,21 @@ export const trazoMm = {
   haloRotulo: 0.35,
   // La línea que une un nombre puesto sobre el mar con su distrito (recuadros de zoom).
   enlaceRotulo: 0.15,
+  /* Fase 23. Un río, según su importancia (src/motor/redes.js): de 1, los de 300 km o
+     más, a 4, las quebradas. */
+  rio: [0.35, 0.24, 0.15, 0.1],
+  viaNacional: 0.32,
+  viaDepartamental: 0.18,
+  vraem: 0.55,
+  vraemDirecta: 0.35,
+};
+
+/** Trazos discontinuos, en milímetros de trazo y hueco. */
+export const discontinuoMm = {
+  // Una vía sin pavimentar: afirmada, sin afirmar o trocha.
+  viaSinPavimentar: [0.9, 0.5],
+  // El contorno del ámbito de intervención directa del VRAEM.
+  vraemDirecta: [1.6, 0.8],
 };
 
 /** Medidas del layout en milímetros. */
@@ -236,4 +263,8 @@ export const opacidad = {
   /* Lo bastante para que el entorno se lea como fondo, no tanto como para que
      desaparezca: los nombres de los vecinos tienen que seguir leyéndose. */
   veloZoom: 0.62,
+  /* Velo blanco sobre los ríos y las vías de FUERA del ámbito (Fase 23): siguen diciendo
+     por dónde se llega, pero dejan de competir con lo que el mapa retrata. Sin él, en el
+     mapa del VRAEM las carreteras de alrededor pesaban más que el propio VRAEM. */
+  veloExterior: 0.6,
 };

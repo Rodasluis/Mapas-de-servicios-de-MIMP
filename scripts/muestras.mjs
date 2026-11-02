@@ -20,6 +20,8 @@ import { buscarSolapes } from '../src/motor/colisiones.js';
 import { ICONOS, VICEMINISTERIOS } from '../src/iconos/index.js';
 import { comprobarWebIgualQueMuestras } from '../tests/web-igual-que-muestras.mjs';
 import { tituloPorDefecto } from '../src/ui/config.js';
+import { ambitoVraem } from '../src/motor/vraem.js';
+import { leerArchivo, interpretar } from '../src/motor/datos-propios.js';
 
 const DESTINO = path.join(RAIZ, 'muestras');
 const PUERTO = 4180;
@@ -37,6 +39,18 @@ const fechaFija = opcion('fecha');
  * que retratan lo que sale por omisión lo llevan; sin él el motor amplía en automático.
  */
 const LIMA_Y_CALLAO = { modo: 'manual', seleccion: ['1501', '07'] };
+
+/**
+ * Datos propios de una muestra (Fase 23), leídos de tests/datos/ con el mismo lector
+ * que usa la interfaz y entregados al motor como se los entrega ella (config.js,
+ * datosParaElMotor): así la muestra prueba también la lectura del archivo.
+ */
+function datosPropiosDe(archivo, { nombre, fuente }) {
+  const r = interpretar(leerArchivo({ nombre: archivo, bytes: fs.readFileSync(path.join(RAIZ, 'tests', 'datos', archivo)) }));
+  return {
+    nombre, nombrePuntos: nombre, fuente, puntos: r.puntos, mostrarPuntos: true, valores: r.valores, nivel: r.nivel,
+  };
+}
 
 /**
  * Muestras. La Fase 1 pedía los tres formatos verticales; la Fase 2 añade A4 y A0
@@ -249,6 +263,46 @@ const MUESTRAS = [
     hoja: { tamano: 'A4', orientacion: 'vertical' },
     opciones: { division: 'departamento', variable: 'pobreza' },
     textos: { titulo: tituloPorDefecto('pobreza'), subtitulo: undefined },
+  },
+  /* Fase 23. El VRAEM como ámbito, con ríos y vías; el país con las tres capas nuevas
+     (a su escala, sólo los ríos principales y la red nacional), y los datos propios de
+     las dos clases: valores por departamento —la población del INEI, que es pública—
+     y puntos —las capitales distritales del VRAEM que publica el MTC—. */
+  {
+    nombre: 'vraem_A3_horizontal_rios_vias',
+    ambito: 'vraem',
+    hoja: { tamano: 'A3', orientacion: 'horizontal' },
+    opciones: { capas: { rios: true, vias: true } },
+    textos: { titulo: tituloPorDefecto('presencia'), subtitulo: undefined },
+  },
+  {
+    nombre: 'nacional_A3_rios_vias_vraem',
+    hoja: { tamano: 'A3', orientacion: 'vertical' },
+    opciones: { zoom: LIMA_Y_CALLAO, capas: { rios: true, vias: true, vraem: true } },
+    textos: { titulo: tituloPorDefecto('presencia'), subtitulo: undefined },
+  },
+  {
+    nombre: 'nacional_A4_departamentos_datos_propios',
+    hoja: { tamano: 'A4', orientacion: 'vertical' },
+    opciones: {
+      division: 'departamento',
+      variable: 'propia',
+      datosPropios: datosPropiosDe('poblacion_departamentos_2026.csv', {
+        nombre: 'Población proyectada 2026', fuente: 'INEI, población proyectada al 30 de junio de 2026',
+      }),
+    },
+    textos: { titulo: tituloPorDefecto('propia'), subtitulo: undefined },
+  },
+  {
+    nombre: 'vraem_A4_puntos_propios',
+    ambito: 'vraem',
+    hoja: { tamano: 'A4', orientacion: 'vertical' },
+    opciones: {
+      datosPropios: datosPropiosDe('capitales_distritales_vraem.csv', {
+        nombre: 'Capitales distritales', fuente: 'MTC, capitales distritales (geoportal)',
+      }),
+    },
+    textos: { titulo: tituloPorDefecto('presencia'), subtitulo: undefined },
   },
 ];
 
@@ -487,6 +541,8 @@ let fallosDatos = 0;
     const tipos = muestra.opciones?.tipos ? new Set(muestra.opciones.tipos) : null;
     const dentro = (c) => {
       if (!ambito) return true;
+      /* El VRAEM, por la lista del decreto (motor/vraem.js), no por la marca del directorio. */
+      if (ambito === 'vraem') return Boolean(ambitoVraem(c.ubigeo));
       if (ambito.length === 2) return c.ccdd === ambito;
       if (ambito.length === 4) return c.ccpp === ambito;
       return c.ubigeo === ambito;

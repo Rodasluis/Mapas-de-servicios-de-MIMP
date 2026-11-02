@@ -14,9 +14,10 @@
 import { ICONOS } from '../iconos/index.js';
 import { fechaDelMapa } from '../motor/fecha.js';
 import { CLASES_POR_DEFECTO, DISPOSICIONES } from '../motor/servicios.js';
-import { CAPAS_POR_DEFECTO, PIEZAS_POR_DEFECTO } from '../motor/render.js';
-import { DIVISIONES } from '../motor/ambito.js';
-import { VARIABLES, VARIABLE_POR_DEFECTO } from '../motor/variables.js';
+import { CAPAS_POR_DEFECTO, PIEZAS_POR_DEFECTO, CAPAS_OPCIONALES } from '../motor/render.js';
+import { DIVISIONES, VRAEM } from '../motor/ambito.js';
+import { VARIABLES, VARIABLE_POR_DEFECTO, VARIABLE_PROPIA } from '../motor/variables.js';
+import { NOMBRE_VRAEM } from '../motor/vraem.js';
 
 /** Lima Metropolitana y Callao: la zona que el recuadro amplía en un solo bloque. */
 export const ZOOM_LIMA_CALLAO = ['1501', '07'];
@@ -36,6 +37,7 @@ export const TITULOS_POR_VARIABLE = {
   cobertura: 'Distancia al centro de atención del MIMP más cercano',
   tasa: 'Centros de atención del MIMP por cada 100 mil habitantes',
   pobreza: 'Servicios del MIMP y pobreza monetaria',
+  propia: 'Servicios del MIMP y datos propios',
 };
 export const tituloPorDefecto = (variable) => TITULOS_POR_VARIABLE[variable] || TITULOS_POR_VARIABLE.presencia;
 
@@ -44,7 +46,8 @@ const CAMPOS_DE_TEXTO = ['titulo', 'subtitulo', 'periodo'];
 
 export const POR_DEFECTO = {
   hoja: { tamano: 'A1', orientacion: 'vertical' },
-  /* Ámbito: nacional, o un ubigeo de departamento (2 dígitos) o provincia (4). */
+  /* Ámbito: nacional, un ubigeo de departamento (2 dígitos), provincia (4) o distrito
+     (6), o el VRAEM (Fase 23). */
   ambito: { nivel: 'nacional', id: null },
   /* Nivel de división: 'departamento', 'provincia' o 'distrito'. null es «la del
      ámbito» (motor/ambito.js, DIVISIONES), que es lo que se usaba antes de poder
@@ -73,6 +76,9 @@ export const POR_DEFECTO = {
      Para los demás lo decide zoomPorDefecto(). Los automáticos no se ponen nunca solos:
      tapan parte de la lámina con un trozo del mapa que quien la prepara no ha elegido. */
   zoom: { modo: 'manual', seleccion: [...ZOOM_LIMA_CALLAO] },
+  /* Datos propios de quien hace el mapa (Fase 23, motor/datos-propios.js). Viven sólo en
+     la sesión: no se escriben en la URL, porque el enlace no puede llevar un archivo. */
+  datosPropios: null,
   /* Fecha de generación. Normalmente es la del día, pero se puede fijar en la URL
      para REPETIR una configuración tal cual: un mapa regenerado meses después con la
      misma dirección sale idéntico, incluida la línea «Generado el» del pie. Es también
@@ -123,10 +129,16 @@ export function aParametros(config) {
     p.set('tipos', config.tipos.map(siglaDe).join(','));
   }
   if (config.disposicion !== POR_DEFECTO.disposicion) p.set('disposicion', config.disposicion);
-  if (config.variable !== POR_DEFECTO.variable) p.set('variable', config.variable);
-  const apagadas = (objeto, defecto) => Object.keys(defecto).filter((k) => objeto[k] === false);
+  /* Los datos propios no viajan en el enlace, y «propia» sin ellos no es nada: un enlace
+     con variable=propia abriría el mapa de siempre diciendo otra cosa. */
+  if (config.variable !== POR_DEFECTO.variable && config.variable !== VARIABLE_PROPIA) p.set('variable', config.variable);
+  const apagadas = (objeto, defecto) => Object.keys(defecto)
+    .filter((k) => !CAPAS_OPCIONALES.includes(k) && objeto[k] === false);
   const capas = apagadas(config.capas, CAPAS_POR_DEFECTO);
   if (capas.length) p.set('sinCapas', capas.join(','));
+  /* Las capas de la Fase 23 van al revés: apagadas por omisión, se escriben encendidas. */
+  const encendidas = CAPAS_OPCIONALES.filter((k) => config.capas[k] === true);
+  if (encendidas.length) p.set('conCapas', encendidas.join(','));
   const piezas = apagadas(config.piezas, PIEZAS_POR_DEFECTO);
   if (piezas.length) p.set('sinPiezas', piezas.join(','));
 
@@ -155,7 +167,8 @@ export function desdeParametros(p) {
   const config = estructuraClonada(POR_DEFECTO);
 
   const ambito = (p.get('ambito') || '').trim();
-  if (/^[0-9]{2}$/.test(ambito)) config.ambito = { nivel: 'departamento', id: ambito };
+  if (ambito.toLowerCase() === 'vraem') config.ambito = { ...VRAEM };
+  else if (/^[0-9]{2}$/.test(ambito)) config.ambito = { nivel: 'departamento', id: ambito };
   else if (/^[0-9]{4}$/.test(ambito)) config.ambito = { nivel: 'provincia', id: ambito };
   else if (/^[0-9]{6}$/.test(ambito)) config.ambito = { nivel: 'distrito', id: ambito };
 
@@ -185,7 +198,7 @@ export function desdeParametros(p) {
   if (DISPOSICIONES.includes(disposicion)) config.disposicion = disposicion;
 
   const variable = p.get('variable');
-  if (VARIABLES.includes(variable)) config.variable = variable;
+  if (VARIABLES.includes(variable) && variable !== VARIABLE_PROPIA) config.variable = variable;
   /* Sin título en el enlace, el del tipo de mapa. */
   if (!p.has('titulo')) config.textos.titulo = tituloPorDefecto(config.variable);
 
@@ -198,7 +211,12 @@ export function desdeParametros(p) {
   ]) {
     if (!p.has(clave)) continue;
     for (const nombre of p.get(clave).split(',')) {
-      if (nombre in defecto) objeto[nombre] = false;
+      if (nombre in defecto && !CAPAS_OPCIONALES.includes(nombre)) objeto[nombre] = false;
+    }
+  }
+  if (p.has('conCapas')) {
+    for (const nombre of p.get('conCapas').split(',')) {
+      if (CAPAS_OPCIONALES.includes(nombre)) config.capas[nombre] = true;
     }
   }
 
@@ -268,6 +286,7 @@ export const esZoomLimaCallao = (zoom) => zoom?.modo === 'manual'
  */
 export function subtituloDe(ambito, nombre) {
   if (!ambito || ambito.nivel === 'nacional') return 'Ámbito nacional';
+  if (ambito.nivel === 'vraem') return `${NOMBRE_VRAEM} (VRAEM)`;
   if (ambito.nivel === 'departamento') return `Departamento de ${nombre}`;
   if (ambito.nivel === 'provincia') return `Provincia de ${nombre}`;
   return `Distrito de ${nombre}`;
@@ -305,6 +324,21 @@ export function aOpcionesDelMotor(config) {
     capas: config.capas,
     piezas: config.piezas,
     zoom: config.zoom.modo === 'ninguno' ? false : config.zoom,
+    /* Sólo lo que el motor usa, y sólo si hay algo que usar (Fase 23). */
+    ...(config.datosPropios ? { datosPropios: datosParaElMotor(config.datosPropios) } : {}),
+  };
+}
+
+/** Los datos propios como los lee el motor: sin el archivo ni el resumen de la lectura. */
+function datosParaElMotor(d) {
+  return {
+    nombre: d.nombre,
+    nombrePuntos: d.nombre,
+    fuente: d.fuente || `archivo «${d.archivo}»`,
+    puntos: d.puntos,
+    mostrarPuntos: d.mostrarPuntos !== false,
+    valores: d.valores,
+    nivel: d.nivel,
   };
 }
 
@@ -341,7 +375,8 @@ export function aLlamadasDelMotor(config) {
 
 /** Nombre de archivo descriptivo: ámbito, tamaño y fecha. */
 export function nombreDeArchivo(config, fecha = config.fecha ? new Date(config.fecha) : new Date()) {
-  const partes = [config.ambito && config.ambito.id ? `ubigeo${config.ambito.id}` : 'peru'];
+  const partes = [config.ambito?.nivel === 'vraem' ? 'vraem'
+    : config.ambito && config.ambito.id ? `ubigeo${config.ambito.id}` : 'peru'];
   // Sólo si no es la de siempre: «peru_distritos» se distingue de «peru» a la vista.
   if (config.division) partes.push(`${config.division}s`);
   /* La sigla, sin tildes y con guiones: «CAR Básico» da «car-basico» y no «carbsico». */

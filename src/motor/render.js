@@ -17,9 +17,13 @@
  * Las capas se crean aunque queden vacías, cada una en su sitio del orden de dibujo,
  * para que las fases siguientes se limiten a rellenarlas sin recolocar nada.
  */
-import { geoPath, geoDistance, geoBounds as geoBoundsDe } from 'd3-geo';
+import {
+  geoPath, geoDistance, geoBounds as geoBoundsDe, geoContains,
+} from 'd3-geo';
 import { marcoDelMapa } from './hoja.js';
-import { crearProyeccion, medirEscala, nivelPara, crearRuta, RADIO_TERRESTRE_M } from './proyeccion.js';
+import {
+  crearProyeccion, medirEscala, nivelPara, crearRuta, crearRutaRecortada, RADIO_TERRESTRE_M,
+} from './proyeccion.js';
 import { construirGrilla, anguloDelNorte } from './grilla.js';
 import { crearOcupacion, recolectorDeAnillos, rectangulo } from './ocupacion.js';
 import { crearMedidor } from './texto.js';
@@ -48,8 +52,15 @@ import {
 import { poloDeInaccesibilidad, polosDeInaccesibilidad, pruebaDentro, ejeDe } from './ocupacion.js';
 import { crearIndice } from './colisiones.js';
 import { colocarEtiquetas, crearSolicitud, medirRotulo } from './etiquetas.js';
-import { color, trazoMm, tipografia, layoutMm, ptAmm } from '../estilo/tokens.js';
+import {
+  color, trazoMm, tipografia, layoutMm, ptAmm, opacidad,
+} from '../estilo/tokens.js';
 import { prepararVariable, VARIABLES_CON_INDICADORES } from './variables.js';
+import { visibleA } from './redes.js';
+import { DEPARTAMENTOS_VRAEM } from './vraem.js';
+import {
+  cajaGeografica, dibujarRedes, dibujarVraem, dibujarPuntosPropios, filasDeLeyenda, fuentesDeCapas,
+} from './superposiciones.js';
 import { el, grupo, texto, textoConHalo, rect, documento, num } from './svg.js';
 import { fechaDelMapa } from './fecha.js';
 
@@ -64,7 +75,15 @@ export const CAPAS_POR_DEFECTO = {
   grilla: true,
   rotulos: true,
   contexto: true,
+  /* Fase 23, apagadas por omisión: un mapa que no las pide sale como antes. Ríos de la
+     ANA, vías del MTC y el contorno del VRAEM (motor/superposiciones.js). */
+  rios: false,
+  vias: false,
+  vraem: false,
 };
+
+/** Las capas de arriba que se encienden en vez de apagarse. */
+export const CAPAS_OPCIONALES = ['rios', 'vias', 'vraem'];
 
 /** Piezas del layout que la interfaz puede apagar. */
 export const PIEZAS_POR_DEFECTO = {
@@ -83,7 +102,13 @@ export const CAPAS = [
   'exterior',      // territorio peruano fuera del ámbito, atenuado (Fase 6)
   'coropleta',     // Fase 3
   'territorio',    // relleno del ámbito
+  /* Fase 23: ríos y vías bajo los límites, que a menudo los siguen y tienen que verse
+     enteros; encima, el velo que atenúa la parte de fuera del ámbito, y el VRAEM. */
+  'rios',
+  'vias',
+  'veloExterior',
   'limites',       // límites administrativos
+  'vraem',
   'grilla',        // retícula UTM
   /* Las líneas que unen cada zona ampliada con su recuadro cruzan el mapa: van por
      debajo de nombres e íconos para no tapar ningún dato. */
@@ -94,6 +119,8 @@ export const CAPAS = [
      el halo blanco del rótulo sigue separándolo del relleno y lo que se pierde es sólo
      el trozo de letra que queda bajo una insignia. */
   'rotulos',       // nombres de departamentos y provincias
+  // Los puntos de los datos propios, bajo los íconos del MIMP (Fase 23).
+  'puntos',
   'simbolos',      // Fase 3
   'recuadros',     // Fase 3: rectángulos de los zooms
   'etiquetas',     // países, océano y lagos: por encima de todo, orientan la lectura
@@ -157,12 +184,36 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
      fecha del día se confundiría con un cambio del dibujo. */
   const fechaPie = fechaDelMapa(textos.fecha);
 
+  /* Capas de la Fase 23. El VRAEM se dibuja si es el ámbito o si se pidió su capa; los
+     datos propios, si traen valores para el color o puntos que mostrar. */
+  const enVraem = elAmbito.nivel === 'vraem';
+  const conVraem = enVraem || capasVisibles.vraem;
+  const datosPropios = opciones.datosPropios || null;
+  const usaValoresPropios = opciones.variable === 'propia' && Boolean(datosPropios?.valores);
+  const usaPuntosPropios = Boolean(datosPropios?.puntos?.length) && datosPropios.mostrarPuntos !== false;
+  const conRedes = capasVisibles.rios || capasVisibles.vias;
+  const manifiestoCapas = conRedes ? await cargador.capas() : null;
+  const fuentesCapas = fuentesDeCapas({
+    rios: capasVisibles.rios,
+    vias: capasVisibles.vias,
+    vraem: conVraem,
+    propios: usaValoresPropios || usaPuntosPropios ? (datosPropios.fuente || 'archivo de quien elabora el mapa') : null,
+    manifiesto: manifiestoCapas,
+  });
+
   /* El pie es obligatorio en todo PDF y la retícula necesita una banda fuera del
      marco para sus números: los dos se descuentan antes de encajar el mapa. */
   /* Con población o pobreza, el pie lleva una línea más con esa fuente: todo PDF dice de
-     dónde salen sus datos. Se decide aquí porque el alto del pie descuenta del mapa. */
-  const pie = medidasDelPie(medidor, factor, conIndicadores ? 3 : 2);
+     dónde salen sus datos. Se decide aquí porque el alto del pie descuenta del mapa.
+     Las fuentes de las capas de la Fase 23 van debajo, en las líneas que necesiten, a
+     todo el ancho del marco: la escala sólo ocupa la primera. */
   const banda = bandaDeGrilla(medidor, factor);
+  const lineasCapas = fuentesCapas.length ? partirFuentes(fuentesCapas, {
+    estilo: medidasDelPie(medidor, factor).estilo,
+    ancho: marcoDelMapa(hoja, { arriba: banda.arriba, izquierda: banda.lateral, derecha: banda.lateral, abajo: 0 }).ancho,
+    medidor,
+  }) : [];
+  const pie = medidasDelPie(medidor, factor, (conIndicadores ? 3 : 2) + lineasCapas.length);
   const marco = marcoDelMapa(hoja, {
     arriba: banda.arriba,
     izquierda: banda.lateral,
@@ -184,6 +235,19 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
   const escala = medirEscala(proyeccion, marco);
   const ruta = crearRuta(proyeccion);
 
+  /* Ríos y vías que tocan el marco y que a esta escala se dibujan (motor/redes.js). */
+  const rasgosRedes = conRedes
+    ? (await cargador.redes(nivel, cajaGeografica(proyeccion, marco))).features
+      .filter((f) => (f.properties.capa === 'rio' ? capasVisibles.rios : capasVisibles.vias)
+        && visibleA(f.properties, escala.denominador))
+    : [];
+  /* El VRAEM: en su propio mapa, el contorno ya es el del ámbito y sólo falta marcar la
+     intervención directa; en los demás, los dos contornos. */
+  const rasgosVraem = enVraem ? plan.directa.features
+    : capasVisibles.vraem ? (await cargador.vraem(nivel)).features
+      .filter((f) => f.properties.ambito === 'vraem' || f.properties.ambito === 'directa')
+    : [];
+
   /* La agregación depende del ámbito: el país cuenta por provincia y un departamento,
      por distrito. Se recorta además a lo que cae DENTRO del ámbito, o el pie de un
      mapa de Cusco anunciaría los 704 centros del país. */
@@ -204,6 +268,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     unidades: plan.unidades.features,
     unidad: plan.agregacion,
     indicadores,
+    datosPropios: usaValoresPropios ? datosPropios : null,
   });
   const clases = medida.clases;
   const clasesVisibles = medida.clasesUsadas;
@@ -344,6 +409,34 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
      acabaron sobre los símbolos de Lima, y la escala sobre los de Arequipa. */
   for (const g of simbolos.grupos) for (const c of g.celdas || [g]) ocupacion.marcarBloque(c);
 
+  /* Capas de la Fase 23. Se dibujan aquí, antes del layout, porque la leyenda tiene que
+     saber qué se llegó a dibujar: si a esta escala no entra la red departamental, no la
+     anuncia. Los puntos propios se reservan en la ocupación como los íconos: la leyenda
+     no se pone encima de un dato. */
+  /* Recortados al marco: un río que cruza el borde de la hoja no tiene que llevar al PDF
+     los kilómetros que no se ven. */
+  const rutaMarco = crearRutaRecortada(proyeccion, marco);
+  const redesSvg = rasgosRedes.length
+    ? dibujarRedes({ rasgos: rasgosRedes, ruta: rutaMarco, proyeccion, marco })
+    : { rios: [], vias: [], dibujados: null };
+  const vraemSvg = rasgosVraem.length ? dibujarVraem({ rasgos: rasgosVraem, ruta, conTodo: !enVraem }) : [];
+  const ladoPunto = tamanoIcono * 0.9;
+  const puntosPropios = usaPuntosPropios ? dibujarPuntosPropios({
+    puntos: datosPropios.puntos,
+    proyeccion,
+    marco,
+    lado: ladoPunto,
+    dentroDelAmbito: (p) => plan.contorno.features.some((f) => geoContains(f, p)),
+  }) : { svg: [], dibujados: 0 };
+  for (const [x, y] of puntosPropios.posiciones || []) {
+    ocupacion.marcarBloque({ x: x - ladoPunto / 2, y: y - ladoPunto / 2, ancho: ladoPunto, alto: ladoPunto });
+  }
+  const extrasLeyenda = filasDeLeyenda({
+    redes: redesSvg.dibujados,
+    vraem: rasgosVraem.length ? { todo: !enVraem, directa: rasgosVraem.some((f) => f.properties.ambito === 'directa') } : null,
+    puntos: puntosPropios.dibujados ? { nombre: datosPropios.nombrePuntos || datosPropios.nombre || 'Datos propios', dibujados: puntosPropios.dibujados } : null,
+  });
+
   const grilla = capasVisibles.grilla
     ? construirGrilla(proyeccion, marco, escala.denominador)
     : { paso: 0, lineas: [], desviacionMaximaMm: 0 };
@@ -400,6 +493,8 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     ocupacion,
     escala: piezasVisibles.escala !== false ? barraDeEscala : null,
     anclajesEscala: plantilla.escala,
+    /* Ríos, vías, VRAEM y puntos propios, si se dibujó alguno (Fase 23). */
+    extras: extrasLeyenda,
   });
 
   const piezas = {
@@ -483,6 +578,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       unidades: plan.unidades.features,
       intermedios: plan.intermedios.features,
       contorno: plan.contorno.features,
+      /* Y las capas de la Fase 23, las mismas que en el mapa. */
+      redes: rasgosRedes,
+      vraem: rasgosVraem,
+      vraemTodo: !enVraem,
     },
     trazos: plan.trazos,
     anillos,
@@ -591,6 +690,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     rampa,
     contexto,
     ruta,
+    rutaMarco,
     marco,
     /* El ámbito distrital no colorea por clases: la coropleta compara unidades entre
        sí y ahí sólo hay una, así que un tono de la rampa invitaría a leer una
@@ -605,6 +705,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     simbolos: simbolos.svg,
     recuadros: recuadros.referencias,
     enlaces: recuadros.enlaces,
+    rios: redesSvg.rios,
+    vias: redesSvg.vias,
+    vraem: vraemSvg,
+    puntos: puntosPropios.svg,
   });
 
   const idRecorte = 'recorte-marco';
@@ -619,7 +723,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       ...colocacion.colocadas.map((c) => c.pieza.dibujar(c.x, c.y)),
       ...recuadros.colocados.map((z) => z.svg),
     ]),
-    dibujarPie({ marco, pie, banda, version, escala, nivel, medidor, fechaPie, fuentesExtra: medida.fuentes, indicadores }),
+    dibujarPie({
+      marco, pie, banda, version, escala, nivel, medidor, fechaPie, fuentesExtra: medida.fuentes, indicadores,
+      lineasCapas, redes: conRedes ? manifiestoCapas.redes : null,
+    }),
   ].join('\n');
 
   return {
@@ -654,6 +761,18 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       },
       anguloNorteGrados: Number(norte.toFixed(2)),
       rasgos: capas.rasgos,
+      /* Capas de la Fase 23: qué se dibujó de cada una y las fuentes que cita el pie. */
+      superposiciones: {
+        redes: redesSvg.dibujados,
+        vraem: rasgosVraem.length > 0,
+        puntosPropios: puntosPropios.dibujados,
+        valoresPropios: usaValoresPropios ? {
+          nivel: datosPropios.nivel,
+          valores: Object.keys(datosPropios.valores).length,
+          nivelDistinto: Boolean(medida.nivelDistinto),
+        } : null,
+        fuentes: fuentesCapas,
+      },
       servicios: {
         totalDibujado: agregado.total,
         totalEnDatos: centrosJson.centros.length,
@@ -961,8 +1080,14 @@ function ajustarTabla({ filas, medidor, factor, marco, sinServicios, enElMapa })
  * departamento. Puestas una al lado de la otra, la lectura va de fuera hacia dentro.
  */
 async function vistasDeUbicacion({ ambito, cargador, plan }) {
-  const ccdd = ambito.id.slice(0, 2);
   const departamentos = await cargador.departamentos('bajo');
+  /* El VRAEM, como una provincia: sus cinco departamentos teñidos y él en rojo encima. */
+  if (ambito.nivel === 'vraem') {
+    return [{
+      base: departamentos, resaltar: DEPARTAMENTOS_VRAEM, ambito: plan.contorno, titulo: 'Perú', ampliacion: 1.45,
+    }];
+  }
+  const ccdd = ambito.id.slice(0, 2);
   const suDepartamento = {
     type: 'FeatureCollection',
     features: departamentos.features.filter((f) => f.properties.ubigeo === ccdd),
@@ -1562,6 +1687,7 @@ function anillosPorRasgo(proyeccion, rasgos) {
 function dibujarCapas({
   plan, indiceDe, rampa, contexto, ruta, marco,
   grilla, etiquetas, rotulos, simbolos, recuadros, enlaces = '', conColor = true,
+  rios = [], vias = [], vraem = [], puntos = [], rutaMarco = ruta,
 }) {
   const porCapa = (nombre) => contexto.features.filter((f) => f.properties.capa === nombre);
   const rasgos = {};
@@ -1651,13 +1777,28 @@ function dibujarCapas({
     simbolos: [simbolos],
     recuadros: [recuadros],
     etiquetas: [etiquetas],
+    rios,
+    vias,
+    /* El velo sólo hace falta si hay ríos o vías que atenuar y algo fuera del ámbito. */
+    veloExterior: (rios.length || vias.length) && plan.exterior.features.length ? [el('path', {
+      d: plan.exterior.features.map((f) => rutaMarco(f.geometry)).join(''),
+      fill: color.fondoHoja, 'fill-opacity': opacidad.veloExterior, stroke: 'none',
+    })] : [],
+    vraem,
+    puntos,
   };
 
+  /* Las capas de la Fase 23 sólo existen en el SVG si traen algo: un mapa que no las
+     pide tiene que salir byte a byte como antes. */
+  const presentes = CAPAS.filter((nombre) => !CAPAS_VACIAS_FUERA.includes(nombre) || contenido[nombre].length);
   return {
     rasgos,
-    svg: CAPAS.map((nombre) => grupo({ id: `capa-${nombre}` }, contenido[nombre])).join('\n'),
+    svg: presentes.map((nombre) => grupo({ id: `capa-${nombre}` }, contenido[nombre])).join('\n'),
   };
 }
+
+/** Capas que no se escriben en el SVG si están vacías (las de la Fase 23). */
+const CAPAS_VACIAS_FUERA = ['rios', 'vias', 'veloExterior', 'vraem', 'puntos'];
 
 function dibujarMarco(marco) {
   return grupo({ id: 'capa-marco' }, [
@@ -1681,6 +1822,29 @@ function medidasDelPie(medidor, factor, lineas = 2) {
 const ESCALA_PIE = 0.5;
 
 /**
+ * Las fuentes de las capas de la Fase 23, repartidas en líneas del ancho del marco: se
+ * juntan frases mientras quepan, y una frase que no cabe sola se parte por palabras.
+ * Nada se recorta: una fuente cortada con puntos suspensivos no se puede citar.
+ */
+function partirFuentes(frases, { estilo, ancho, medidor }) {
+  const lineas = [];
+  let actual = '';
+  const cabe = (t) => medidor.ancho(t, estilo) <= ancho;
+  for (const frase of frases) {
+    const junta = actual ? `${actual} ${frase}` : frase;
+    if (cabe(junta)) { actual = junta; continue; }
+    if (actual) lineas.push(actual);
+    actual = '';
+    for (const palabra of frase.split(' ')) {
+      const prueba = actual ? `${actual} ${palabra}` : palabra;
+      if (actual && !cabe(prueba)) { lineas.push(actual); actual = palabra; } else actual = prueba;
+    }
+  }
+  if (actual) lineas.push(actual);
+  return lineas;
+}
+
+/**
  * Pie obligatorio: de dónde salen los datos y la cartografía, a la izquierda, y la
  * escala, a la derecha.
  *
@@ -1693,6 +1857,7 @@ const ESCALA_PIE = 0.5;
  */
 function dibujarPie({
   marco, pie, banda, version, escala, nivel, medidor, fechaPie, fuentesExtra = [], indicadores = null,
+  lineasCapas = [], redes = null,
 }) {
   const x = marco.x;
   const derecha = marco.x + marco.ancho;
@@ -1717,7 +1882,10 @@ function dibujarPie({
     /* La fuente de la variable del color, si no es un dato del directorio (Fase 22):
        población o pobreza del INEI. */
     ...(fuentesExtra.length ? [fuentesExtra.join(' ')] : []),
-  ].slice(0, pie.lineas).map((t) => medidor.recortar(t, pie.estilo, anchoIzquierda));
+  ].map((t) => medidor.recortar(t, pie.estilo, anchoIzquierda))
+    /* Las fuentes de las capas de la Fase 23 ya vienen partidas al ancho del marco. */
+    .concat(lineasCapas)
+    .slice(0, pie.lineas);
 
   return grupo({ id: 'capa-pie' }, [
     ...izquierda.map((t, i) => texto(t, { ...comun, x, y: base + pie.interlinea * i })),
@@ -1732,6 +1900,8 @@ function dibujarPie({
       + ` · ${version.totalCentros} centros publicados · generado el ${fechaPie.texto}`
       /* Y, si el color usó los indicadores del INEI, de qué archivos salieron. */
       + (indicadores ? ` · Población INEI ${indicadores.poblacion.anio} (${indicadores.poblacion.sha256.slice(0, 7)})`
-        + ` · Pobreza INEI ${indicadores.pobreza.anio} (${indicadores.pobreza.sha256.slice(0, 7)})` : '')),
+        + ` · Pobreza INEI ${indicadores.pobreza.anio} (${indicadores.pobreza.sha256.slice(0, 7)})` : '')
+      /* Y la instantánea de ríos y vías, si se usó. */
+      + (redes ? ` · Ríos y vías ${redes.fecha} (${redes.sha256.slice(0, 7)})` : '')),
   ]);
 }
