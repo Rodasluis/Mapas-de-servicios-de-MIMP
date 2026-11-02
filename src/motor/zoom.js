@@ -37,7 +37,7 @@
  */
 import { geoBounds, geoPath } from 'd3-geo';
 import { crearProyeccion, crearRuta } from './proyeccion.js';
-import { claseDe, repartirGrupo, cifraDeGrupo } from './servicios.js';
+import { repartirGrupo, cifraDeGrupo } from './servicios.js';
 import { dibujarIcono, cajaEnPunto } from '../iconos/index.js';
 import {
   mayorRectanguloLibre, rectangulo, recolectorDeAnillos, polosDeInaccesibilidad,
@@ -379,7 +379,7 @@ function regionesManuales({ seleccion, agregado, unidades, anillos, zonas: def, 
  */
 export function construirRecuadros({
   modo = 'auto', seleccion = [], grupos, umbral, unidades, zonas, anillos, agregado,
-  clases, rampa, estiloIconos, medidor, factor, tamanoIcono, marco, ocupacion, maximo,
+  clases, rampa, indiceDe, estiloIconos, medidor, factor, tamanoIcono, marco, ocupacion, maximo,
   modoSimbolos = 'agregado', centros = [], entorno = null, trazos = null, disposicion,
 }) {
   const tope = maximo ?? maximoPorFormato(factor);
@@ -627,6 +627,7 @@ export function construirRecuadros({
       agregado,
       clases,
       rampa,
+      indiceDe,
       estiloIconos,
       tamanoIcono,
       altoCifra,
@@ -698,7 +699,7 @@ export function construirRecuadros({
 /** Dibuja un recuadro ya dimensionado. */
 function dibujarRecuadro({
   x, y, ancho, alto, anchoMapa, altoMapa, cabecera, borde, etiqueta,
-  sub, miembros, protagonistas, agregado, clases, rampa, estiloIconos, tamanoIcono, altoCifra, cifra,
+  sub, miembros, protagonistas, agregado, clases, rampa, indiceDe, estiloIconos, tamanoIcono, altoCifra, cifra,
   eTitulo, eCifra, medidor, factor, modoSimbolos = 'agregado', centros = [],
   entorno = null, trazos = null, disposicion,
 }) {
@@ -757,8 +758,9 @@ function dibujarRecuadro({
   /* La coropleta es la de TODAS las unidades del mapa que caigan dentro, no sólo la de
      los miembros: eso es lo que hace que el recuadro se lea como un trozo del mapa. */
   const relleno = (e.unidades || miembros).map((f) => {
-    const datos = agregado.porUnidad.get(f.properties.ubigeo);
-    const clase = claseDe(datos ? datos.tiposDistintos : 0, clases);
+    /* La misma pregunta que el mapa (motor/variables.js): así el recuadro colorea con
+       la variable elegida, sea la presencia, el número o la distancia. */
+    const clase = indiceDe(f);
     return el('path', { d: ruta(f.geometry), fill: clase >= 0 ? rampa[clase] : color.sinDato });
   });
 

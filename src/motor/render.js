@@ -32,7 +32,7 @@ import {
   SITIO_FIJO, SEPARACION_MM, sitioJunto, sitioAbajo,
 } from './layout.js';
 import {
-  agregarCentros, claseDe, clasesUsadas, repartirGrupo, repartirIconos, medirApinamiento, cifraDeGrupo,
+  agregarCentros, repartirGrupo, repartirIconos, medirApinamiento, cifraDeGrupo,
   tamanoDeIcono, CLASES_POR_DEFECTO, DISPOSICIONES,
 } from './servicios.js';
 import {
@@ -48,7 +48,8 @@ import {
 import { poloDeInaccesibilidad, polosDeInaccesibilidad, pruebaDentro, ejeDe } from './ocupacion.js';
 import { crearIndice } from './colisiones.js';
 import { colocarEtiquetas, crearSolicitud, medirRotulo } from './etiquetas.js';
-import { color, trazoMm, tipografia, layoutMm, rampaNaranjas, ptAmm } from '../estilo/tokens.js';
+import { color, trazoMm, tipografia, layoutMm, ptAmm } from '../estilo/tokens.js';
+import { prepararVariable, VARIABLES_CON_INDICADORES } from './variables.js';
 import { el, grupo, texto, textoConHalo, rect, documento, num } from './svg.js';
 import { fechaDelMapa } from './fecha.js';
 
@@ -122,6 +123,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     cargador.indice(), cargador.version(), cargador.logos(), cargador.metricas(),
     cargador.centros(),
   ]);
+  /* Población y pobreza del INEI, sólo si el color del mapa las usa (Fase 22): el mapa
+     de siempre no las pide y sale igual que antes. */
+  const conIndicadores = VARIABLES_CON_INDICADORES.includes(opciones.variable);
+  const indicadores = conIndicadores ? await cargador.indicadores() : null;
   /* Un solo estilo de íconos, el círculo (src/iconos/estilos.js). Ya no se elige: un
      enlace antiguo con ?iconos=casa sale igual que uno sin el parámetro. */
   const estiloIconos = ESTILO_POR_DEFECTO;
@@ -134,7 +139,9 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
      trata como todos y se anota, en vez de devolver un mapa en blanco sin explicación. */
   const tiposActivos = opciones.tipos && opciones.tipos.length
     ? new Set(opciones.tipos) : null;
-  const clases = opciones.clases || CLASES_POR_DEFECTO;
+  /* Clases de las variables que cuentan servicios; las de la distancia son fijas
+     (motor/variables.js). */
+  const clasesDeConteo = opciones.clases || CLASES_POR_DEFECTO;
 
   /* Capas y piezas que la interfaz puede apagar. Por omisión todas encendidas: el
      motor no debe comportarse distinto según quién lo llame. */
@@ -152,7 +159,9 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
 
   /* El pie es obligatorio en todo PDF y la retícula necesita una banda fuera del
      marco para sus números: los dos se descuentan antes de encajar el mapa. */
-  const pie = medidasDelPie(medidor, factor);
+  /* Con población o pobreza, el pie lleva una línea más con esa fuente: todo PDF dice de
+     dónde salen sus datos. Se decide aquí porque el alto del pie descuenta del mapa. */
+  const pie = medidasDelPie(medidor, factor, conIndicadores ? 3 : 2);
   const banda = bandaDeGrilla(medidor, factor);
   const marco = marcoDelMapa(hoja, {
     arriba: banda.arriba,
@@ -183,7 +192,21 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     tiposActivos,
     pertenece: plan.perteneceAlAmbito,
   });
-  const clasesVisibles = clasesUsadas(agregado, clases);
+  /* Qué mide el color (Fase 22): tipos distintos —el de siempre—, número de servicios o
+     distancia al más cercano. El resto del motor sólo le pregunta la clase de cada
+     unidad. */
+  const medida = prepararVariable({
+    variable: opciones.variable,
+    agregado,
+    centrosJson,
+    tiposActivos,
+    clasesDeConteo,
+    unidades: plan.unidades.features,
+    unidad: plan.agregacion,
+    indicadores,
+  });
+  const clases = medida.clases;
+  const clasesVisibles = medida.clasesUsadas;
 
   /* La rampa empieza en el tono más claro para la clase más baja que el mapa use. El
      Perú por departamentos no tiene ninguno con menos de 4 tipos de servicio: con la
@@ -191,8 +214,10 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
      departamentos el mapa parecía otro. Se desplaza la rampa, no se reparte: las
      distancias entre clases se conservan —un hueco sigue viéndose como un salto— y
      un mapa cuya clase más baja ya es la primera sale exactamente igual que antes. */
-  const rampaBase = opciones.rampa || rampaNaranjas;
-  const desfase = clasesVisibles.length ? clasesVisibles[0] : 0;
+  const rampaBase = opciones.rampa || medida.rampa;
+  /* Salvo en la distancia, donde el tono más claro significa «hay servicio aquí» y no
+     puede cambiar de sentido según el ámbito (rampaFija). */
+  const desfase = !medida.rampaFija && clasesVisibles.length ? clasesVisibles[0] : 0;
   const rampa = rampaBase.map((_, i) => rampaBase[Math.max(0, i - desfase)]);
 
   /* Un tipo en los datos sin ícono en el catálogo se dibujaría como un hueco, así que
@@ -365,6 +390,8 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
        de servicio y no anuncia una comparación que este mapa no hace. */
     clasesUsadas: plan.coropleta === false ? [] : clasesVisibles,
     clases,
+    tituloClases: medida.titulo(plan.agregacion),
+    notaClases: medida.nota,
     estiloIconos,
     medidor,
     factor,
@@ -462,6 +489,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
     agregado,
     clases,
     rampa,
+    indiceDe: medida.indiceDe,
     estiloIconos,
     medidor,
     factor,
@@ -559,8 +587,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
 
   const capas = dibujarCapas({
     plan,
-    agregado,
-    clases,
+    indiceDe: medida.indiceDe,
     rampa,
     contexto,
     ruta,
@@ -592,7 +619,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
       ...colocacion.colocadas.map((c) => c.pieza.dibujar(c.x, c.y)),
       ...recuadros.colocados.map((z) => z.svg),
     ]),
-    dibujarPie({ marco, pie, banda, version, escala, nivel, medidor, fechaPie }),
+    dibujarPie({ marco, pie, banda, version, escala, nivel, medidor, fechaPie, fuentesExtra: medida.fuentes, indicadores }),
   ].join('\n');
 
   return {
@@ -633,6 +660,7 @@ export async function componer({ hoja, cargador, ambito, textos = {}, opciones =
         tipos: agregado.tipos.map((t) => ({ tipo: t, n: agregado.porTipo.get(t) })),
         unidadesConServicio: agregado.porUnidad.size,
         unidadesDibujadas: plan.unidades.features.length,
+        variable: medida.clave,
         clasesUsadas: clasesVisibles.map((i) => clases[i].etiqueta),
         filtro: tiposActivos ? [...tiposActivos] : null,
         tamanoIconoMm: Number(tamanoIcono.toFixed(2)),
@@ -787,11 +815,12 @@ const CUERPO_MINIMO_LEYENDA_PT = 4;
  * @returns {{leyenda, clases}|null}
  */
 function ajustarLeyenda({
-  marco, ocupacion, clasesUsadas, clases, rampa, unidad, escala = null, anclajesEscala = [], ...resto
+  marco, ocupacion, clasesUsadas, clases, rampa, unidad, tituloClases, notaClases,
+  escala = null, anclajesEscala = [], ...resto
 }) {
   const clasesPara = (leyenda) => bloqueClases({
-    clasesUsadas, clases, rampa, unidad, medidor: resto.medidor, factor: resto.factor,
-    escalaTexto: leyenda.escalaExacta,
+    clasesUsadas, clases, rampa, unidad, titulo: tituloClases, nota: notaClases,
+    medidor: resto.medidor, factor: resto.factor, escalaTexto: leyenda.escalaExacta,
   });
   /* Acotada en las dos dimensiones: sin el límite de ancho, los nombres largos
      («Centro de Atención Residencial para Personas Adultas Mayores - CARPAM») estiraban
@@ -1531,7 +1560,7 @@ function anillosPorRasgo(proyeccion, rasgos) {
 /* ------------------------------- capas ---------------------------------- */
 
 function dibujarCapas({
-  plan, agregado, clases, rampa, contexto, ruta, marco,
+  plan, indiceDe, rampa, contexto, ruta, marco,
   grilla, etiquetas, rotulos, simbolos, recuadros, enlaces = '', conColor = true,
 }) {
   const porCapa = (nombre) => contexto.features.filter((f) => f.properties.capa === nombre);
@@ -1575,13 +1604,13 @@ function dibujarCapas({
     'stroke-linejoin': 'round',
   }));
 
-  /* El ámbito se rellena por UNIDAD con el color de su clase. Las que no tienen ningún
-     servicio quedan en blanco, como en el mapa de referencia: «sin servicio» y «con
-     uno» son cosas distintas y no pueden compartir tono. */
+  /* El ámbito se rellena por UNIDAD con el color de su clase, según la variable elegida
+     (motor/variables.js). En las que cuentan servicios, las unidades sin ninguno quedan
+     en blanco, como en el mapa de referencia: «sin servicio» y «con uno» son cosas
+     distintas y no pueden compartir tono. */
   let conServicio = 0;
   const coropleta = plan.unidades.features.map((f) => {
-    const datos = agregado.porUnidad.get(f.properties.ubigeo);
-    const indice = claseDe(datos ? datos.tiposDistintos : 0, clases);
+    const indice = indiceDe(f);
     if (indice >= 0) conServicio++;
     return el('path', {
       d: ruta(f.geometry),
@@ -1589,7 +1618,7 @@ function dibujarCapas({
       id: `u-${f.properties.ubigeo}`,
     });
   });
-  rasgos.unidadesConServicio = conServicio;
+  rasgos.unidadesConColor = conServicio;
 
   /* Los límites van en capas aparte y por encima de todos los rellenos: si cada
      polígono llevara su propio trazo, el borde compartido se dibujaría dos veces y en
@@ -1643,10 +1672,10 @@ function dibujarMarco(marco) {
  * y el aire de debajo también a la mitad. Desde la revisión de la Fase 20 el área
  * usuaria lo quiso así para dar ese alto al mapa.
  */
-function medidasDelPie(medidor, factor) {
+function medidasDelPie(medidor, factor, lineas = 2) {
   const estilo = { familia: 'Poppins', variante: 'Regular', pt: tipografia.pie.pt * factor * ESCALA_PIE };
   const interlinea = medidor.alto(estilo) * 1.18;
-  return { estilo, interlinea, lineas: 2, alturaMm: interlinea * 2 + 2.5 * factor * ESCALA_PIE };
+  return { estilo, interlinea, lineas, alturaMm: interlinea * lineas + 2.5 * factor * ESCALA_PIE };
 }
 
 const ESCALA_PIE = 0.5;
@@ -1662,7 +1691,9 @@ const ESCALA_PIE = 0.5;
  * no se dibuja y que aPdf (pdf.js) copia a las propiedades del PDF, así que un archivo
  * sigue diciendo de qué datos salió aunque la lámina impresa ya no lo diga.
  */
-function dibujarPie({ marco, pie, banda, version, escala, nivel, medidor, fechaPie }) {
+function dibujarPie({
+  marco, pie, banda, version, escala, nivel, medidor, fechaPie, fuentesExtra = [], indicadores = null,
+}) {
   const x = marco.x;
   const derecha = marco.x + marco.ancho;
   /* Por debajo del marco va primero la banda con los números de la retícula; el pie
@@ -1683,7 +1714,10 @@ function dibujarPie({ marco, pie, banda, version, escala, nivel, medidor, fechaP
   const izquierda = [
     'Fuentes: MIMP (Directorio Nacional de Servicios), INEI (Límites), Natural Earth 1:10m (Contexto).',
     'Cartografía: Proyección UTM Zona 18S (Meridiano Central 75° O). Retícula UTM 18S.',
-  ].map((t) => medidor.recortar(t, pie.estilo, anchoIzquierda));
+    /* La fuente de la variable del color, si no es un dato del directorio (Fase 22):
+       población o pobreza del INEI. */
+    ...(fuentesExtra.length ? [fuentesExtra.join(' ')] : []),
+  ].slice(0, pie.lineas).map((t) => medidor.recortar(t, pie.estilo, anchoIzquierda));
 
   return grupo({ id: 'capa-pie' }, [
     ...izquierda.map((t, i) => texto(t, { ...comun, x, y: base + pie.interlinea * i })),
@@ -1695,6 +1729,9 @@ function dibujarPie({ marco, pie, banda, version, escala, nivel, medidor, fechaP
        del directorio y el comienzo de su hash: la URL del MIMP no cambia entre
        versiones, así que el hash es lo único que identifica de qué archivo salió. */
     el('metadata', { id: 'procedencia' }, `Directorio ${version.generado} (${version.datosTagCorto})`
-      + ` · ${version.totalCentros} centros publicados · generado el ${fechaPie.texto}`),
+      + ` · ${version.totalCentros} centros publicados · generado el ${fechaPie.texto}`
+      /* Y, si el color usó los indicadores del INEI, de qué archivos salieron. */
+      + (indicadores ? ` · Población INEI ${indicadores.poblacion.anio} (${indicadores.poblacion.sha256.slice(0, 7)})`
+        + ` · Pobreza INEI ${indicadores.pobreza.anio} (${indicadores.pobreza.sha256.slice(0, 7)})` : '')),
   ]);
 }

@@ -16,12 +16,28 @@ import { fechaDelMapa } from '../motor/fecha.js';
 import { CLASES_POR_DEFECTO, DISPOSICIONES } from '../motor/servicios.js';
 import { CAPAS_POR_DEFECTO, PIEZAS_POR_DEFECTO } from '../motor/render.js';
 import { DIVISIONES } from '../motor/ambito.js';
+import { VARIABLES, VARIABLE_POR_DEFECTO } from '../motor/variables.js';
 
 /** Lima Metropolitana y Callao: la zona que el recuadro amplía en un solo bloque. */
 export const ZOOM_LIMA_CALLAO = ['1501', '07'];
 
 export const TAMANOS = ['A4', 'A3', 'A2', 'A1', 'A0', '2A0', '4A0'];
 export const ORIENTACIONES = ['vertical', 'horizontal'];
+
+/**
+ * Título por omisión de cada tipo de mapa, es decir, de cada cosa que puede medir el
+ * color (motor/variables.js). El título sigue al tipo de mapa mientras nadie lo
+ * escriba a mano (panel.js); el de siempre no cambia, así que un mapa por omisión sale
+ * igual que antes de la Fase 22.
+ */
+export const TITULOS_POR_VARIABLE = {
+  presencia: 'Ubicación de los servicios que brinda el MIMP',
+  centros: 'Número de centros de atención del MIMP',
+  cobertura: 'Distancia al centro de atención del MIMP más cercano',
+  tasa: 'Centros de atención del MIMP por cada 100 mil habitantes',
+  pobreza: 'Servicios del MIMP y pobreza monetaria',
+};
+export const tituloPorDefecto = (variable) => TITULOS_POR_VARIABLE[variable] || TITULOS_POR_VARIABLE.presencia;
 
 /** Los textos que escribe la persona y que viajan en la URL. */
 const CAMPOS_DE_TEXTO = ['titulo', 'subtitulo', 'periodo'];
@@ -35,7 +51,7 @@ export const POR_DEFECTO = {
      elegirla: el país por provincias y un departamento por distritos. */
   division: null,
   textos: {
-    titulo: 'Ubicación de los servicios que brinda el MIMP',
+    titulo: TITULOS_POR_VARIABLE.presencia,
     /* Vacío significa AUTOMÁTICO: lo rellena el motor con la descripción del ámbito.
        Guardar aquí «Ámbito nacional» obligaba a adivinar, al cambiar de ámbito, si ese
        texto lo había escrito una persona o lo había dejado la aplicación, y un enlace
@@ -44,6 +60,9 @@ export const POR_DEFECTO = {
     periodo: '',
   },
   tipos: null, // null es «todos»
+  /* Qué mide el color del mapa (Fase 22, motor/variables.js): 'presencia' —tipos de
+     servicio distintos, el de siempre—, 'centros', 'cobertura', 'tasa' o 'pobreza'. */
+  variable: VARIABLE_POR_DEFECTO,
   /* Cómo se reparten los íconos de cada grupo: 'rejilla', que sigue la forma de las
      unidades angostas, o 'anillo', como el desplazamiento de puntos de QGIS
      (motor/servicios.js, DISPOSICIONES). */
@@ -95,12 +114,16 @@ export function aParametros(config) {
     p.set('orientacion', config.hoja.orientacion === 'horizontal' ? 'h' : 'v');
   }
   for (const campo of CAMPOS_DE_TEXTO) {
-    if (config.textos[campo] !== POR_DEFECTO.textos[campo]) p.set(campo, config.textos[campo]);
+    /* El título por omisión depende del tipo de mapa: sólo se escribe si alguien lo
+       cambió, igual que los demás. */
+    const deSiempre = campo === 'titulo' ? tituloPorDefecto(config.variable) : POR_DEFECTO.textos[campo];
+    if (config.textos[campo] !== deSiempre) p.set(campo, config.textos[campo]);
   }
   if (config.tipos && config.tipos.length) {
     p.set('tipos', config.tipos.map(siglaDe).join(','));
   }
   if (config.disposicion !== POR_DEFECTO.disposicion) p.set('disposicion', config.disposicion);
+  if (config.variable !== POR_DEFECTO.variable) p.set('variable', config.variable);
   const apagadas = (objeto, defecto) => Object.keys(defecto).filter((k) => objeto[k] === false);
   const capas = apagadas(config.capas, CAPAS_POR_DEFECTO);
   if (capas.length) p.set('sinCapas', capas.join(','));
@@ -160,6 +183,11 @@ export function desdeParametros(p) {
 
   const disposicion = p.get('disposicion');
   if (DISPOSICIONES.includes(disposicion)) config.disposicion = disposicion;
+
+  const variable = p.get('variable');
+  if (VARIABLES.includes(variable)) config.variable = variable;
+  /* Sin título en el enlace, el del tipo de mapa. */
+  if (!p.has('titulo')) config.textos.titulo = tituloPorDefecto(config.variable);
 
   /* «iconos=casa» o «iconos=circulo» de los enlaces anteriores a la Fase 16 se
      ignoran: sólo queda el círculo, y el enlace sigue abriendo el mismo mapa. */
@@ -269,6 +297,9 @@ export function aOpcionesDelMotor(config) {
        omisión llega al motor exactamente igual que antes de existir la opción. */
     ...(config.division ? { division: config.division } : {}),
     tipos: config.tipos,
+    /* Como la división: la de siempre no se envía, para que un mapa por omisión llegue
+       al motor exactamente igual que antes de existir la opción. */
+    ...(config.variable && config.variable !== VARIABLE_POR_DEFECTO ? { variable: config.variable } : {}),
     disposicion: config.disposicion,
     clases: config.clases,
     capas: config.capas,
@@ -319,6 +350,7 @@ export function nombreDeArchivo(config, fecha = config.fecha ? new Date(config.f
       .toLowerCase().replace(/\s+/g, '-'));
   }
   else if (config.tipos && config.tipos.length) partes.push(`${config.tipos.length}tipos`);
+  if (config.variable && config.variable !== VARIABLE_POR_DEFECTO) partes.push(config.variable);
   partes.push(`${config.hoja.tamano}-${config.hoja.orientacion === 'horizontal' ? 'h' : 'v'}`);
   partes.push(fecha.toISOString().slice(0, 10));
   return `${partes.join('_').replace(/[^\w.-]/g, '')}.pdf`;

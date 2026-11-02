@@ -114,6 +114,19 @@ export const CASOS = [
       desmarcadas: [],
     },
   },
+  /* Fase 22: lo que mide el color viaja en la URL y llega al PDF por el compositor en
+     segundo plano. La pobreza por departamentos pasa además por los indicadores del
+     INEI, la clase «Sin dato» (Amazonas) y la tercera línea del pie. */
+  {
+    nombre: 'el país por departamentos coloreado por pobreza, A4',
+    parametros: { hoja: 'A4', division: 'departamento', variable: 'pobreza', fecha: FECHA },
+    esperado: {
+      paginaMm: MEDIDAS.A4,
+      controles: { tamano: 'A4', division: 'departamento', variable: 'pobreza' },
+      marcadas: ['capa-coropleta'],
+      desmarcadas: [],
+    },
+  },
   /* Fase 6: el ámbito viaja en la URL y tiene que llegar al PDF igual que lo demás. */
   {
     nombre: 'departamento de Cusco en A3',
@@ -152,11 +165,15 @@ export const CASOS = [
 
 /** Espera a que la página haya compuesto un mapa y el botón vuelva a estar activo. */
 async function esperarComposicion(pagina) {
-  await pagina.waitForFunction(() => document.querySelector('#vista svg') !== null, { timeout: 180000 });
+  /* El plazo va en el TERCER argumento: el segundo es el que recibe la función. Hasta la
+     Fase 22 iba en el segundo y la espera se quedaba en los 30 s por omisión; con la
+     composición en segundo plano, al final de una tanda larga y con la memoria justa, el
+     primer mapa de la web pasó de 30 s y la prueba se cortó sin que nada fallara. */
+  await pagina.waitForFunction(() => document.querySelector('#vista svg') !== null, null, { timeout: 180000 });
   await pagina.waitForFunction(() => {
     const b = document.getElementById('generar');
     return b && !b.disabled;
-  }, { timeout: 180000 });
+  }, null, { timeout: 180000 });
 }
 
 /**

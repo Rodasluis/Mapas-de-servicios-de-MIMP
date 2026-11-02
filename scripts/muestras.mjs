@@ -19,6 +19,7 @@ import { verificarArchivo, ptAmm } from '../tests/verificar-pdf.mjs';
 import { buscarSolapes } from '../src/motor/colisiones.js';
 import { ICONOS, VICEMINISTERIOS } from '../src/iconos/index.js';
 import { comprobarWebIgualQueMuestras } from '../tests/web-igual-que-muestras.mjs';
+import { tituloPorDefecto } from '../src/ui/config.js';
 
 const DESTINO = path.join(RAIZ, 'muestras');
 const PUERTO = 4180;
@@ -223,6 +224,31 @@ const MUESTRAS = [
     hoja: { tamano: 'A3', orientacion: 'vertical' },
     opciones: { division: 'provincia' },
     textos: { subtitulo: undefined },
+  },
+  /* Fase 22. Lo que mide el color, una muestra por familia: la distancia al CEM más
+     cercano en un departamento por distritos (rampa azul, que no se desplaza); la tasa
+     por cada 100 mil habitantes en el país por provincias (población del INEI y su
+     línea en el pie), y la pobreza en el país por departamentos, con Amazonas sin
+     dato. Con el título de su tipo de mapa y el subtítulo del ámbito, como saldrían
+     de la web sin tocar los textos. */
+  {
+    nombre: 'departamento_Cusco_A3_distancia_CEM',
+    ambito: '08',
+    hoja: { tamano: 'A3', orientacion: 'vertical' },
+    opciones: { variable: 'cobertura', tipos: ['Centro Emergencia Mujer y Familia'] },
+    textos: { titulo: tituloPorDefecto('cobertura'), subtitulo: undefined },
+  },
+  {
+    nombre: 'nacional_A3_tasa',
+    hoja: { tamano: 'A3', orientacion: 'vertical' },
+    opciones: { variable: 'tasa', zoom: LIMA_Y_CALLAO },
+    textos: { titulo: tituloPorDefecto('tasa'), subtitulo: undefined },
+  },
+  {
+    nombre: 'nacional_A4_departamentos_pobreza',
+    hoja: { tamano: 'A4', orientacion: 'vertical' },
+    opciones: { division: 'departamento', variable: 'pobreza' },
+    textos: { titulo: tituloPorDefecto('pobreza'), subtitulo: undefined },
   },
 ];
 

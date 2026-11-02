@@ -13,11 +13,20 @@
     <a class="saltar" href="#vista">Saltar a la vista previa</a>
 
     <header class="cabecera">
-      <h1>Mapas imprimibles del MIMP</h1>
-      <p class="entradilla">
-        Configura el mapa, revísalo en pantalla y descárgalo en PDF vectorial listo para
-        imprenta.
-      </p>
+      <div class="cabecera-texto">
+        <h1>Mapas imprimibles del MIMP</h1>
+        <p class="entradilla">
+          Configura el mapa, revísalo en pantalla y descárgalo en PDF vectorial listo para
+          imprenta.
+        </p>
+        <p id="version-datos" class="version-datos" hidden></p>
+      </div>
+      <nav class="ayuda" aria-label="Ayuda">
+        <a href="https://github.com/Rodasluis/Mapas-de-servicios-de-MIMP/blob/main/docs/manual.md"
+           target="_blank" rel="noopener">Manual de uso</a>
+        <a href="https://github.com/Rodasluis/Mapas-de-servicios-de-MIMP/blob/main/docs/decisiones-cartograficas.md"
+           target="_blank" rel="noopener">Por qué el mapa es así</a>
+      </nav>
     </header>
 
     <p id="arranque" class="fallo" hidden></p>
@@ -44,8 +53,9 @@
             <span id="avisos-cuenta">Sin avisos</span>
           </button>
 
-          <button type="button" id="copiar-enlace" class="enlace">
-            <span>Copiar enlace de esta configuración</span>
+          <button type="button" id="copiar-enlace" class="enlace"
+                  title="Copia la dirección de esta página: abre el mismo mapa con la misma configuración">
+            <span>Copiar enlace</span>
           </button>
         </div>
 

@@ -291,25 +291,32 @@ export const ESCALAS_LEYENDA = [1, 0.9, 0.8, 0.7, 0.62, 0.55];
  */
 export function bloqueClases({
   clasesUsadas, clases = CLASES_POR_DEFECTO, rampa, medidor, factor, unidad = 'provincia', escalaTexto = 1,
+  titulo: tituloPedido = null, nota = null,
 }) {
   if (!clasesUsadas.length) return null;
   /* El coropletas no siempre cuenta por provincia: en un mapa departamental la unidad
      es el distrito. Anunciar la unidad equivocada convierte la leyenda en una fuente
      de error, porque es justamente ahí donde se va a mirar qué significa cada tono. */
-  const titulo = `Presencia de servicios por ${unidad}`;
+  /* El título lo da la variable del coropletas (motor/variables.js); sin él, el de
+     siempre. La NOTA, si la hay, va en una línea bajo el título y dice cómo se midió
+     (la distancia, desde el centro de cada unidad). */
+  const titulo = tituloPedido || `Presencia de servicios por ${unidad}`;
   const esc = factor * escalaTexto;
   const relleno = layoutMm.relleneBloque * esc * 0.8;
   const eSub = { familia: 'Poppins', variante: 'SemiBold', pt: tipografia.leyendaItem.pt * esc };
   const eItem = { familia: 'Poppins', variante: 'Regular', pt: tipografia.leyendaItem.pt * esc };
   // El título lleva sólo el aire de su línea, como el de la leyenda.
   const altoTitulo = medidor.alto(eSub) * 1.3;
+  const eNota = { familia: 'Poppins', variante: 'Regular', pt: tipografia.leyendaItem.pt * esc * 0.85 };
+  const altoNota = nota ? medidor.alto(eNota) * 1.25 : 0;
   const altoMuestra = medidor.alto(eItem) * 0.95;
   const altoFila = Math.max(altoMuestra, medidor.alto(eItem)) * 1.15;
   const ancho = relleno * 2 + Math.max(
     medidor.ancho(titulo, eSub),
+    nota ? medidor.ancho(nota, eNota) : 0,
     altoMuestra * 2.4 + Math.max(...clasesUsadas.map((i) => medidor.ancho(clases[i].etiqueta, eItem))),
   );
-  const alto = relleno * 2 + altoTitulo + clasesUsadas.length * altoFila;
+  const alto = relleno * 2 + altoTitulo + altoNota + clasesUsadas.length * altoFila;
 
   return {
     nombre: 'clases',
@@ -325,8 +332,14 @@ export function bloqueClases({
           'font-family': eSub.familia, 'font-size': ptAmm(eSub.pt), 'font-weight': 600,
         }),
       ];
+      if (nota) {
+        piezas.push(texto(nota, {
+          x: x + relleno, y: y + relleno + altoTitulo + medidor.ascenso(eNota), fill: color.mimpGris,
+          'font-family': eNota.familia, 'font-size': ptAmm(eNota.pt),
+        }));
+      }
       clasesUsadas.forEach((indice, k) => {
-        const cy = y + relleno + altoTitulo + k * altoFila;
+        const cy = y + relleno + altoTitulo + altoNota + k * altoFila;
         piezas.push(rect(
           { x: x + relleno, y: cy + (altoFila - altoMuestra) / 2, ancho: altoMuestra * 1.8, alto: altoMuestra },
           { fill: rampa[indice], stroke: color.limiteProvincial, 'stroke-width': trazoMm.grilla * 1.5 },

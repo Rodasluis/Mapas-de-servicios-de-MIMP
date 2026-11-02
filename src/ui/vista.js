@@ -91,13 +91,43 @@ export function crearVista({ contenedor, alCambiarZoom }) {
     zoomEn(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY);
   }, { passive: false });
 
+  /* Dedos (o punteros) apoyados a la vez. Con uno se arrastra; con dos se pellizca para
+     acercar o alejar, como en cualquier mapa de un teléfono. La vista declara
+     touch-action: none —si no, el navegador ampliaría la página entera en vez del
+     mapa—, así que el gesto lo tiene que hacer ella (Fase 22: antes no lo hacía nadie y
+     en un teléfono sólo quedaban los botones + y −). */
+  const punteros = new Map();
+  let pellizco = null;
+  const dosPunteros = () => [...punteros.values()].slice(0, 2);
+
+  const empezarArrastre = (x, y) => {
+    arrastre = { x, y, dx: desplazamiento.x, dy: desplazamiento.y };
+    contenedor.classList.add('arrastrando');
+  };
+
   contenedor.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
-    arrastre = { x: e.clientX, y: e.clientY, dx: desplazamiento.x, dy: desplazamiento.y };
+    punteros.set(e.pointerId, { x: e.clientX, y: e.clientY });
     contenedor.setPointerCapture(e.pointerId);
-    contenedor.classList.add('arrastrando');
+    if (punteros.size === 2) {
+      const [a, b] = dosPunteros();
+      arrastre = null;
+      pellizco = { distancia: Math.hypot(a.x - b.x, a.y - b.y) };
+      return;
+    }
+    if (punteros.size === 1) empezarArrastre(e.clientX, e.clientY);
   });
   contenedor.addEventListener('pointermove', (e) => {
+    if (punteros.has(e.pointerId)) punteros.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pellizco && punteros.size >= 2) {
+      const [a, b] = dosPunteros();
+      const distancia = Math.hypot(a.x - b.x, a.y - b.y);
+      if (distancia > 0 && pellizco.distancia > 0) {
+        zoomEn(distancia / pellizco.distancia, (a.x + b.x) / 2, (a.y + b.y) / 2);
+        pellizco.distancia = distancia;
+      }
+      return;
+    }
     if (!arrastre) return;
     desplazamiento = {
       x: arrastre.dx + (e.clientX - arrastre.x),
@@ -107,10 +137,19 @@ export function crearVista({ contenedor, alCambiarZoom }) {
     aplicar();
   });
   const soltar = (e) => {
+    punteros.delete(e.pointerId);
+    if (e.pointerId !== undefined) contenedor.releasePointerCapture?.(e.pointerId);
+    if (punteros.size < 2) pellizco = null;
+    /* Al levantar uno de los dos dedos, el que queda sigue arrastrando desde donde está,
+       sin que el mapa salte. */
+    if (punteros.size === 1) {
+      const [resto] = punteros.values();
+      empezarArrastre(resto.x, resto.y);
+      return;
+    }
     if (!arrastre) return;
     arrastre = null;
     contenedor.classList.remove('arrastrando');
-    if (e.pointerId !== undefined) contenedor.releasePointerCapture?.(e.pointerId);
   };
   contenedor.addEventListener('pointerup', soltar);
   contenedor.addEventListener('pointercancel', soltar);

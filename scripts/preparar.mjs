@@ -56,6 +56,17 @@ const PASOS = [
       && leer('data/version.json').generado === paquete().DIRECTORIO_FECHA
       && fs.existsSync(path.join(RAIZ, 'auditoria', `auditoria_directorio_${paquete().DIRECTORIO_FECHA}.xlsx`)),
   },
+  /* Población y pobreza del INEI, para el color del mapa (Fase 22). Después de la
+     cartografía, porque informa de qué distritos se quedan sin dato. Listo sólo si lo
+     publicado corresponde a los archivos anclados ahora. */
+  {
+    nombre: 'indicadores del INEI (población y pobreza)',
+    script: 'fetch-indicadores.mjs',
+    listo: () => existe('data/indicadores.json')
+      && leer('data/indicadores.json').poblacion?.sha256 === paquete().POBLACION_SHA256
+      && leer('data/indicadores.json').pobreza?.sha256 === paquete().POBREZA_SHA256
+      && String(leer('data/indicadores.json').poblacion?.anio) === String(paquete().POBLACION_ANIO),
+  },
 ];
 
 const leer = (relativo) => JSON.parse(fs.readFileSync(path.join(PUBLICO, relativo), 'utf8'));

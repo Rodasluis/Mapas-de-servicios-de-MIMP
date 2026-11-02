@@ -90,6 +90,20 @@ export const color = {
  */
 export const rampaNaranjas = ['#fff7e6', '#ffebbe', '#ffa77f', '#ff5500', '#a83800'];
 
+/**
+ * Rampa de la distancia al centro de atención más cercano (Fase 22, motor/variables.js), de «hay
+ * servicio» a «a más de 100 km». Es otra familia de color a propósito: en los naranjas
+ * más oscuro es MÁS servicio; aquí es más LEJOS, y con la misma rampa las dos lecturas
+ * se confundirían. Termina en el azul institucional.
+ */
+export const rampaAzules = ['#f2f6fb', '#d4e1f1', '#a9c2e2', '#6f96c9', '#3b6aa8', color.mimpAzul];
+
+/**
+ * Rampa de la pobreza monetaria (Fase 22), de menos a más. Otra familia de color: la
+ * pobreza no es un dato de los servicios y no puede leerse con la rampa de ellos.
+ */
+export const rampaMorados = ['#f6f1f8', '#dfcde8', '#bf9ad2', '#9461b4', '#5f2d84'];
+
 /* ------------------------------ tipografía ------------------------------ */
 
 /** Fracción de su cuerpo de calibración a la que van los nombres de los territorios. */
