@@ -16,12 +16,16 @@
   "POBREZA_URL": "https://cdn.www.gob.pe/uploads/document/file/3340937/Anexo%20Estad%C3%ADstico.xlsx",
   "POBREZA_SHA256": "fcc465d75abe7f7e20107d67fc3a947d606e2176d0c00fecb02ceafcca913f00",
   "POBREZA_FECHA": "2020-02-20",
+  "comentarioRedes": "Ríos y vías (Fase 23): red hidrográfica de la ANA y Red Vial Nacional y Departamental del MTC. Son servicios vivos sin versión, así que se ancla una instantánea simplificada (npm run redes -- --anclar) versionada en origenes/redes/ por su SHA-256; REDES_FECHA es el día de la descarga. El build la lee de ahí (scripts/build-capas.mjs).",
+  "REDES_FECHA": "2026-11-01",
+  "REDES_SHA256": "f5244601943f2157177a2568e85c87530e18abd68336c0ac391e5738889d56ea",
   "GEO_TAG": "f2553240055092daa16ace1eb4ba614d09f1ca56",
   "NATURAL_EARTH_TAG": "v5.1.2",
   "POPPINS_TAG": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
   "SOURCE_SANS_TAG": "3.052R",
   "scripts": {
     "datos": "node scripts/fetch-datos.mjs",
+    "redes": "node --max-old-space-size=6144 scripts/fetch-redes.mjs",
     "fuentes": "node scripts/fetch-fuentes.mjs",
     "logos": "node scripts/build-logos.mjs",
     "metricas": "node scripts/build-metricas.mjs",
@@ -39,13 +43,13 @@
   },
   "dependencies": {
     "d3-geo": "^3.1.1",
+    "fflate": "^0.8.2",
     "jspdf": "^4.2.1",
     "proj4": "^2.19.10",
     "svg2pdf.js": "^2.8.1",
     "topojson-client": "^3.1.0"
   },
   "devDependencies": {
-    "fflate": "^0.8.2",
     "pdfjs-dist": "^4.10.38",
     "playwright": "^1.63.0",
     "polygon-clipping": "^0.15.7",

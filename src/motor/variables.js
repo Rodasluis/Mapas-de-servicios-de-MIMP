@@ -21,8 +21,12 @@ import { color, rampaNaranjas, rampaAzules, rampaMorados } from '../estilo/token
 import { ICONOS } from '../iconos/index.js';
 
 /** Las variables, en el orden en que las ofrece la interfaz. La primera es la de siempre. */
-export const VARIABLES = ['presencia', 'centros', 'cobertura', 'tasa', 'pobreza'];
+export const VARIABLES = ['presencia', 'centros', 'cobertura', 'tasa', 'pobreza', 'propia'];
 export const VARIABLE_POR_DEFECTO = VARIABLES[0];
+
+/** La que colorea con los datos propios de quien hace el mapa (Fase 23): sólo existe
+    si los ha cargado, y no viaja en el enlace. */
+export const VARIABLE_PROPIA = 'propia';
 
 /** Las que necesitan los indicadores del INEI (public/data/indicadores.json). */
 export const VARIABLES_CON_INDICADORES = ['tasa', 'pobreza'];
@@ -59,12 +63,17 @@ const CON_ARTICULO = { distrito: 'el distrito', provincia: 'la provincia', depar
  * @param {Array} o.unidades           las unidades que colorea el mapa (rasgos GeoJSON)
  * @param {string} o.unidad            qué son: 'distrito', 'provincia' o 'departamento'
  * @param {object} [o.indicadores]     población y pobreza del INEI, si la variable las usa
+ * @param {object} [o.datosPropios]    los datos propios con sus valores por ubigeo (Fase 23)
  * @returns {{clave, clases, rampa, rampaFija, indiceDe, clasesUsadas, titulo, nota, fuentes}}
  */
 export function prepararVariable({
   variable, agregado, centrosJson, tiposActivos, clasesDeConteo = CLASES_POR_DEFECTO, unidades, unidad, indicadores = null,
+  datosPropios = null,
 }) {
-  const clave = VARIABLES.includes(variable) ? variable : VARIABLE_POR_DEFECTO;
+  /* Sin datos propios cargados, «propia» no significa nada: el mapa de siempre. */
+  const pedida = variable === VARIABLE_PROPIA && !datosPropios?.valores ? VARIABLE_POR_DEFECTO : variable;
+  const clave = VARIABLES.includes(pedida) ? pedida : VARIABLE_POR_DEFECTO;
+  if (clave === VARIABLE_PROPIA) return prepararPropia({ datosPropios, unidades, unidad });
   if (clave === 'cobertura') return prepararCobertura({ agregado, centrosJson, tiposActivos, unidades, unidad });
   if (clave === 'tasa') return prepararTasa({ agregado, indicadores, unidades });
   if (clave === 'pobreza') return prepararPobreza({ indicadores, unidades });
@@ -246,6 +255,77 @@ function prepararPobreza({ indicadores, unidades }) {
     nota: 'Punto medio del intervalo de confianza al 95 % estimado por el INEI.',
     fuentes: [`Pobreza: INEI, Mapa de pobreza monetaria provincial y distrital ${anio}.`],
   };
+}
+
+/**
+ * Los datos propios de quien hace el mapa (Fase 23): un valor por ubigeo, de un
+ * archivo suyo (src/motor/datos-propios.js).
+ *
+ * No hay cortes que valgan para cualquier dato, así que se reparten las unidades del
+ * mapa en QUINTILES —cinco clases con un número parecido de unidades—, con los cortes
+ * redondeados a dos cifras para que la leyenda se lea. Si hay pocos valores distintos,
+ * salen menos clases. Una unidad sin valor en el archivo va a «Sin dato».
+ *
+ * El archivo dice de qué nivel son sus datos por la longitud del ubigeo. Si no es el
+ * de las unidades del mapa —datos por distrito en el Perú por provincias— no se suman
+ * ni se promedian, porque no se sabe cuál de las dos cosas tiene sentido: todo sale
+ * «Sin dato» y la interfaz ofrece dividir hasta ese nivel.
+ */
+function prepararPropia({ datosPropios, unidades, unidad }) {
+  const { valores, nivel, nombre } = datosPropios;
+  const coincide = nivel === unidad;
+  const valorDe = (f) => (coincide ? valores[f.properties.ubigeo] : undefined);
+  const presentes = unidades.map(valorDe).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  const cortes = [];
+  for (const q of [0.2, 0.4, 0.6, 0.8]) {
+    if (!presentes.length) break;
+    const v = redondearCifras(presentes[Math.min(presentes.length - 1, Math.floor(q * presentes.length))]);
+    /* Un corte que deja vacía su clase de abajo no sirve: el mínimo no cuenta, ni un
+       corte repetido. */
+    if (v > presentes[0] && (!cortes.length || v > cortes.at(-1))) cortes.push(v);
+  }
+  const n = (v) => formatear(v);
+  const clases = cortes.length ? [
+    { etiqueta: `Menos de ${n(cortes[0])}` },
+    ...cortes.slice(1).map((hasta, i) => ({ etiqueta: `Entre ${n(cortes[i])} y ${n(hasta)}` })),
+    { etiqueta: `${n(cortes.at(-1))} o más` },
+  ] : [{ etiqueta: presentes.length ? n(presentes[0]) : 'Con dato' }];
+  clases.push({ etiqueta: 'Sin dato' });
+  const sinDato = clases.length - 1;
+  /* La rampa de cinco naranjas, desde el tono que toca si hay menos clases: tres clases
+     usan los tres tonos de arriba, que se distinguen mejor que los tres primeros. */
+  const tonos = rampaNaranjas.slice(rampaNaranjas.length - (clases.length - 1));
+  const indiceDe = (f) => {
+    const v = valorDe(f);
+    if (!Number.isFinite(v)) return sinDato;
+    const tramo = cortes.findIndex((limite) => v < limite);
+    return tramo < 0 ? cortes.length : tramo;
+  };
+  return {
+    clave: VARIABLE_PROPIA,
+    clases,
+    rampa: [...tonos, color.sinDato],
+    rampaFija: true,
+    indiceDe,
+    clasesUsadas: usadas(unidades.map(indiceDe)),
+    titulo: (u) => `${nombre || 'Datos propios'}, por ${u}`,
+    nota: coincide ? 'Cortes por quintiles de las unidades del mapa.'
+      : `Los datos son por ${nivel}: divide el mapa hasta ${nivel}s para colorearlo.`,
+    fuentes: [],
+    nivelDistinto: !coincide,
+  };
+}
+
+/** Redondea a dos cifras significativas: 1 234 → 1 200, 0,0347 → 0,035. */
+function redondearCifras(v) {
+  if (!v) return 0;
+  const orden = 10 ** (Math.floor(Math.log10(Math.abs(v))) - 1);
+  return Math.round(v / orden) * orden;
+}
+
+/** Número para la leyenda, como el resto del mapa (es-PE), sin ceros de más. */
+function formatear(v) {
+  return Number(v.toPrecision(12)).toLocaleString('es-PE', { maximumFractionDigits: 4 });
 }
 
 /**

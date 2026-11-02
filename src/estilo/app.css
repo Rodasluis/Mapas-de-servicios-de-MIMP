@@ -455,3 +455,49 @@ button.secundario:disabled { color: var(--tinta-3); cursor: not-allowed; }
   .panel { overflow: visible; border-right: 0; max-height: none; }
   .pie-panel { bottom: 0; padding-bottom: .6rem; }
 }
+
+/* ------------------------------ Fase 23 ------------------------------- */
+
+/* El campo del buscador, que la regla de arriba no cubría. */
+input[type="search"] {
+  width: 100%;
+  font: inherit;
+  font-size: .88rem;
+  padding: .35rem .5rem;
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  background: var(--superficie);
+  color: inherit;
+}
+
+/* Buscador de lugares: la lista cuelga del campo y se superpone al panel. */
+.buscador { position: relative; display: grid; gap: .2rem; margin: .45rem 0; }
+.buscador label { font-size: .82rem; color: var(--tinta-2); }
+.sugerencias {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: .15rem 0 0;
+  padding: .2rem 0;
+  list-style: none;
+  max-height: 18rem;
+  overflow-y: auto;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / .12);
+}
+.sugerencias li { display: grid; padding: .3rem .55rem; cursor: pointer; }
+.sugerencias li[aria-selected="true"] { background: #e8eef7; outline: 2px solid var(--foco); outline-offset: -2px; }
+.sugerencias .nombre-lugar { font-size: .86rem; }
+.sugerencias .detalle-lugar { font-size: .74rem; color: var(--tinta-2); }
+.sugerencias .sin-resultados { cursor: default; font-size: .8rem; color: var(--tinta-3); }
+
+/* Datos propios. */
+input[type="file"] { font: inherit; font-size: .8rem; max-width: 100%; }
+.avisos-datos { margin: .3rem 0 0; padding-left: 1.1rem; font-size: .76rem; color: var(--tinta-2); }
+.avisos-datos:empty { display: none; }
+#datos-campos[hidden], #campo-columna[hidden] { display: none; }
+#datos-modelo { margin: .1rem 0 .2rem; }

@@ -18,7 +18,12 @@
  * atenuados y con su nombre, que es como se resuelve en cualquier lámina impresa.
  */
 
-export const NIVELES = ['nacional', 'departamento', 'provincia', 'distrito'];
+import { ambitoVraem, DEPARTAMENTOS_VRAEM, NOMBRE_VRAEM } from './vraem.js';
+
+export const NIVELES = ['nacional', 'departamento', 'provincia', 'distrito', 'vraem'];
+
+/** El VRAEM (Fase 23): un ámbito que no es una circunscripción (ver motor/vraem.js). */
+export const VRAEM = { nivel: 'vraem', id: 'vraem' };
 
 /** Ámbito por omisión: el país entero. */
 export const NACIONAL = { nivel: 'nacional', id: null };
@@ -36,6 +41,8 @@ export const DIVISIONES = {
   departamento: { opciones: ['provincia', 'distrito'], porDefecto: 'distrito' },
   provincia: { opciones: ['distrito'], porDefecto: 'distrito' },
   distrito: { opciones: [], porDefecto: null },
+  /* El VRAEM es una lista de distritos: no hay otra unidad en que partirlo. */
+  vraem: { opciones: ['distrito'], porDefecto: 'distrito' },
 };
 
 /** La división pedida si el ámbito la admite; si no, la de por omisión. */
@@ -55,6 +62,7 @@ export function normalizarAmbito(ambito) {
   if (typeof ambito === 'string') {
     const id = ambito.trim();
     if (!id || id.toLowerCase() === 'nacional' || id === 'pe') return { ...NACIONAL };
+    if (id.toLowerCase() === 'vraem') return { ...VRAEM };
     if (id.length === 2) return { nivel: 'departamento', id };
     if (id.length === 4) return { nivel: 'provincia', id };
     if (id.length === 6) return { nivel: 'distrito', id };
@@ -63,12 +71,14 @@ export function normalizarAmbito(ambito) {
   const nivel = ambito.nivel || 'nacional';
   if (!NIVELES.includes(nivel)) throw new Error(`Ámbito desconocido: «${nivel}».`);
   if (nivel === 'nacional') return { ...NACIONAL };
+  if (nivel === 'vraem') return { ...VRAEM };
   if (!ambito.id) throw new Error(`El ámbito «${nivel}» necesita un ubigeo.`);
   return { nivel, id: String(ambito.id) };
 }
 
 /** Departamento al que pertenece un ámbito, o null en el nacional. */
-export const departamentoDe = (ambito) => (ambito.nivel === 'nacional' ? null : ambito.id.slice(0, 2));
+export const departamentoDe = (ambito) => (ambito.nivel === 'nacional' || ambito.nivel === 'vraem'
+  ? null : ambito.id.slice(0, 2));
 
 /**
  * Geometría con la que se tantea la escala.
@@ -81,6 +91,10 @@ export const departamentoDe = (ambito) => (ambito.nivel === 'nacional' ? null : 
 export async function encajeDeTanteo(ambito, cargador) {
   const { nivel, id } = ambito;
   if (nivel === 'nacional') return cargador.departamentos('bajo');
+  if (nivel === 'vraem') {
+    const vraem = await cargador.vraem('bajo');
+    return soloRasgos(vraem, (f) => f.properties.ambito === 'vraem', 'VRAEM');
+  }
   if (nivel === 'departamento') {
     const todos = await cargador.departamentos('bajo');
     return soloRasgos(todos, (f) => f.properties.ubigeo === id, `departamento ${id}`);
@@ -121,6 +135,7 @@ export async function cargarAmbito({ ambito, cargador, nivel, division = divisio
   if (ambito.nivel === 'nacional') return cargarNacional({ cargador, nivel, division });
   if (ambito.nivel === 'departamento') return cargarDepartamento({ ambito, cargador, nivel, division });
   if (ambito.nivel === 'provincia') return cargarProvincia({ ambito, cargador, nivel });
+  if (ambito.nivel === 'vraem') return cargarVraem({ cargador, nivel });
   return cargarDistrito({ ambito, cargador, nivel });
 }
 
@@ -354,6 +369,72 @@ async function cargarProvincia({ ambito, cargador, nivel }) {
     rotulos: [
       { nivel: 'distrito', rasgos: dentro, prioridad: 1, mayusculas: false },
       { nivel: 'exterior', rasgos: fuera, prioridad: 3, mayusculas: false, exterior: true },
+    ],
+  };
+}
+
+/* --------------------------------- VRAEM --------------------------------- */
+
+/**
+ * El VRAEM (Fase 23): sus 80 distritos, coloreados y con sus íconos, como un
+ * departamento partido hasta distritos. Lo que cambia es que su borde no es el de
+ * ninguna circunscripción y atraviesa cinco departamentos.
+ *
+ * Por eso las piezas salen de scripts/build-capas.mjs, uniendo distritos del mismo
+ * nivel: el contorno del ámbito, el de su intervención directa —que se marca dentro,
+ * discontinuo—, lo que cada departamento tiene dentro, que hace de nivel intermedio y
+ * lleva su nombre en mayúsculas, y lo que le queda fuera, que se dibuja atenuado con
+ * los demás departamentos. Sale de los mismos distritos, así que encaja sin rendijas.
+ */
+async function cargarVraem({ cargador, nivel }) {
+  const [piezas, departamentos, ...porDepartamento] = await Promise.all([
+    cargador.vraem(nivel),
+    cargador.departamentos(nivel),
+    ...DEPARTAMENTOS_VRAEM.map((dd) => cargador.distritosDe(dd, nivel)),
+  ]);
+  const de = (ambito) => piezas.features.filter((f) => f.properties.ambito === ambito);
+  const distritos = porDepartamento.flatMap((c) => c.features)
+    .filter((f) => ambitoVraem(f.properties.ubigeo));
+  const enVraem = new Set(DEPARTAMENTOS_VRAEM);
+  const otros = departamentos.features.filter((f) => !enVraem.has(f.properties.ubigeo));
+  const partes = de('parte');
+  /* Lo de fuera lleva otro id que lo de dentro del mismo departamento: los dos son el
+     rótulo de «05» y el motor de nombres los distingue por id. */
+  const restos = de('resto').map((f) => ({
+    ...f, properties: { ...f.properties, ubigeo: `${f.properties.ubigeo}-fuera` },
+  }));
+
+  return {
+    nombre: 'VRAEM',
+    descripcion: `${NOMBRE_VRAEM} (VRAEM)`,
+    jerarquia: '',
+    unidades: coleccion(distritos),
+    intermedios: coleccion(partes),
+    contorno: coleccion(de('vraem')),
+    directa: coleccion(de('directa')),
+    exterior: coleccion([...otros, ...restos]),
+    encaje: coleccion(de('vraem')),
+    /* Sin recuadros de zoom: a la escala del VRAEM sus distritos ya se separan. */
+    zonas: null,
+    trazos: {
+      unidad: 'limiteDistrital',
+      intermedio: 'limiteProvincialDestacado',
+      contorno: 'limiteNacional',
+    },
+    agregacion: 'distrito',
+    simbolos: 'agregado',
+    claveCentro: (c) => c.ubigeo,
+    perteneceAlAmbito: (c) => Boolean(ambitoVraem(c.ubigeo)),
+    rotulos: [
+      /* Departamentos, con la letra de las provincias de un mapa departamental: la de
+         los departamentos del país es para una escala mucho menor. */
+      {
+        nivel: 'departamento', estilo: 'provincia', rasgos: partes, prioridad: 1, mayusculas: true,
+      },
+      { nivel: 'distrito', rasgos: distritos, prioridad: 2, mayusculas: false },
+      /* Lo que queda de cada departamento fuera del VRAEM, y los demás, con su nombre:
+         dicen hacia dónde sigue el territorio. */
+      { nivel: 'exterior', rasgos: [...restos, ...otros], prioridad: 3, mayusculas: true, exterior: true },
     ],
   };
 }

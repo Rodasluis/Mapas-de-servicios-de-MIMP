@@ -49,6 +49,7 @@ import {
   color, trazoMm, ptAmm, opacidad, tipografia,
 } from '../estilo/tokens.js';
 import { el, grupo, texto, textoConHalo, rect, num } from './svg.js';
+import { dibujarRedes, dibujarVraem } from './superposiciones.js';
 
 /** Por encima de esta fracción pisada, los íconos de una provincia se estorban. */
 export const UMBRAL_APINAMIENTO = 0.35;
@@ -770,6 +771,13 @@ function dibujarRecuadro({
     ...trazar(e.contorno, tz.contorno),
   ];
 
+  /* Ríos, vías y VRAEM, si el mapa los dibuja (Fase 23): un recuadro es un recorte
+     ampliado del mapa y tiene que llevar lo mismo. Los ríos bajo los límites. */
+  const redes = entorno0.redes?.length
+    ? dibujarRedes({ rasgos: entorno0.redes, ruta, proyeccion: proy, marco: marcoInterno })
+    : { rios: [], vias: [] };
+  const vraem = entorno0.vraem?.length ? dibujarVraem({ rasgos: entorno0.vraem, ruta, conTodo: entorno0.vraemTodo }) : [];
+
   /* Y encima, el contorno de la unidad que da nombre al recuadro. Sin él, en un recorte
      donde todo se dibuja igual no habría manera de saber cuál de las áreas es la que se
      ha ampliado. */
@@ -950,7 +958,7 @@ function dibujarRecuadro({
     }),
     grupo({ 'clip-path': `url(#${idRecorte})` }, [
       rect(marcoInterno, { fill: color.oceano }),
-      ...paises, ...fuera, ...relleno, ...limites, velo, ...resalte, ...simbolos, rotulos,
+      ...paises, ...fuera, ...relleno, ...redes.rios, ...limites, ...redes.vias, ...vraem, velo, ...resalte, ...simbolos, rotulos,
     ]),
     rect(marcoInterno, {
       fill: 'none', stroke: color.marco, 'stroke-width': trazoMm.marcoInterior,

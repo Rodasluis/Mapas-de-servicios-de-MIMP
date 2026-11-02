@@ -50,6 +50,40 @@ export function crearCargador(leerJson) {
       () => topo(`data/geo/distritos/${ccdd}.${nivel}.topojson`, 'distritos')),
 
     contexto: () => unaVez('contexto', () => topo('data/geo/contexto.topojson', 'contexto')),
+
+    /* Fase 23 (scripts/build-capas.mjs): manifiesto de las capas, lugares del buscador,
+       contorno del VRAEM y ríos y vías. */
+    capas: () => unaVez('capas', () => leerJson('data/capas.json')),
+    lugares: () => unaVez('lugares', () => leerJson('data/lugares.json')),
+    vraem: (nivel) => unaVez(`vraem:${nivel}`, () => topo(`data/geo/vraem.${nivel}.topojson`, 'vraem')),
+
+    /**
+     * Ríos y vías que tocan la caja [oeste, sur, este, norte]. Los niveles medio y alto
+     * van en teselas y sólo se piden las que toca la caja; un rasgo que cruza dos
+     * teselas está en las dos con el mismo id, y se queda una vez.
+     */
+    async redes(nivel, caja) {
+      const manifiesto = (await unaVez('capas', () => leerJson('data/capas.json'))).redes.niveles[nivel];
+      if (manifiesto.archivo) {
+        return unaVez(`redes:${nivel}`, () => topo(`data/geo/${manifiesto.archivo}`, 'redes'));
+      }
+      const tocan = manifiesto.teselas.filter(({ caja: t }) => !(t[2] < caja[0] || t[0] > caja[2]
+        || t[3] < caja[1] || t[1] > caja[3]));
+      const partes = await Promise.all(tocan.map((t) => unaVez(`redes:${t.archivo}`, () => topo(`data/geo/${t.archivo}`, 'redes'))));
+      const vistos = new Set();
+      const features = [];
+      for (const parte of partes) {
+        for (const f of parte.features) {
+          if (vistos.has(f.id)) continue;
+          vistos.add(f.id);
+          features.push(f);
+        }
+      }
+      /* En el orden de publicación, no en el de las teselas: el mismo mapa tiene que
+         dibujar sus vías en el mismo orden pida las teselas que pida. */
+      features.sort((a, b) => a.id - b.id);
+      return { type: 'FeatureCollection', features };
+    },
   };
 }
 

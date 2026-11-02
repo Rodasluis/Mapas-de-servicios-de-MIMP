@@ -17,9 +17,13 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    papel en el que vas a imprimir. Van de A4 a A0, más 2A0 y 4A0 para carteles de gran
    formato (necesitan un plóter con rollo de 1,2 m y 1,7 m respectivamente, y el mapa
    tarda unos 30 s en componerse).
-2. **Ámbito.** Los tres selectores están encadenados: departamento, luego provincia,
-   luego distrito. Déjalos en blanco para subir de nivel —sin provincia se imprime el
-   departamento entero; sin departamento, el Perú—.
+2. **Ámbito.** Lo más rápido es escribirlo en **Buscar un lugar**: «huanta», «san juan»,
+   «vraem». Sale una lista con lo que coincide y a qué pertenece cada resultado; con las
+   flechas eliges y con Intro lo abres. También puedes usar los tres selectores, que
+   están encadenados: departamento, luego provincia, luego distrito. Déjalos en blanco
+   para subir de nivel —sin provincia se imprime el departamento entero; sin
+   departamento, el Perú—. En el primero está también el **VRAEM**: sus 80 distritos
+   según el decreto vigente, con la intervención directa marcada en discontinuo.
 
    **Nivel de división** dice hasta qué unidad se parte el ámbito, que es la que se
    colorea. El Perú se puede dividir *hasta departamentos* (la lámina más limpia, buena
@@ -106,6 +110,38 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
 
 La tabla describe la división de siempre; el **Nivel de división** cambia la unidad
 del color en el Perú y en un departamento.
+
+El **VRAEM** responde lo mismo que un departamento, en sus 80 distritos.
+
+### Ríos y vías
+
+En **Capas → Capas adicionales**: **Ríos (ANA)**, **Red vial nacional y departamental
+(MTC)** y **Contorno del VRAEM**. Ríos y vías se dibujan según la escala: en el Perú
+sólo los ríos principales y la red nacional; en un departamento, también la red
+departamental y los demás ríos; las quebradas, sólo en mapas muy detallados. Las vías
+sin pavimentar van en discontinuo. Fuera del ámbito se ven más tenues. El pie cita la
+fuente de cada capa encendida.
+
+### Datos propios
+
+En **Datos propios** puedes cargar un archivo tuyo, CSV o Excel. Lo más fácil es empezar
+por **Descargar el modelo (Excel)**: trae los 1 893 distritos con su ubigeo, departamento,
+provincia y distrito, y las columnas **valor1** a **valor5** para llenar. Escribe tus
+datos en una o varias de ellas —puedes renombrarlas, por ejemplo «Casos 2025»—, deja en
+blanco lo que no tengas y súbelo. Si llenaste varias columnas, elige en **Columna que
+colorea el mapa** cuál se ve.
+
+- con una columna **ubigeo** y una o más columnas con números, el color del mapa pasa a
+  mostrar el valor de la columna elegida en cinco clases. Una celda vacía sale «Sin
+  dato»: no escribas 0 si el dato no existe;
+- con **latitud** y **longitud** (y, si quieres, **nombre**), se dibujan como rombos
+  grises, distintos de los íconos del MIMP.
+
+Escribe la **Fuente**: va al pie del mapa. El nombre que pongas sale en la leyenda. Si
+tus datos son por departamento y el mapa está dividido por provincias, el color sale
+«Sin dato» y un aviso ofrece dividir hasta departamentos. El archivo no sale de tu
+computadora y **no viaja en el enlace**: quien abra tu enlace tendrá que cargarlo, y si
+recargas la página también.
 
 ### La escala sólo vale si imprimes al 100 %
 

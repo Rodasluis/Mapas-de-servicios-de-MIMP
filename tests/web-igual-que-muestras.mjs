@@ -148,6 +148,18 @@ export const CASOS = [
       desmarcadas: [],
     },
   },
+  /* Fase 23: el VRAEM como ámbito, con ríos y vías, que se encienden en la URL
+     (conCapas) en vez de apagarse. */
+  {
+    nombre: 'el VRAEM con ríos y vías, A4',
+    parametros: { ambito: 'vraem', hoja: 'A4', conCapas: 'rios,vias', fecha: FECHA },
+    esperado: {
+      paginaMm: MEDIDAS.A4,
+      controles: { tamano: 'A4', ambito: 'vraem', 'ambito-provincia': '' },
+      marcadas: ['capa-rios', 'capa-vias', 'pieza-ubicacion'],
+      desmarcadas: ['capa-vraem'],
+    },
+  },
   {
     nombre: 'A2 con zoom manual y capas apagadas',
     parametros: {
@@ -248,7 +260,7 @@ export async function comprobarWebIgualQueMuestras({ navegador, pagina, urlBase 
         && [...hay.split(',')].sort().join() === [...valor.split(',')].sort().join();
       const igual = clave === 'orientacion'
         ? (hay || '').startsWith(valor[0])
-        : (clave.startsWith('sin') || clave === 'zoom' ? mismoConjunto() : hay === valor);
+        : (clave.startsWith('sin') || clave.startsWith('con') || clave === 'zoom' ? mismoConjunto() : hay === valor);
       if (!igual) problemas.push(`la URL perdió o cambió «${clave}»: «${hay}» en vez de «${valor}»`);
     }
 

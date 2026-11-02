@@ -2,8 +2,9 @@
 
 Aplicación web estática que genera mapas de los servicios del MIMP **listos para
 imprenta**, como PDF vectorial. El usuario elige tamaño de hoja, orientación, ámbito
-(Perú, departamento, provincia, distrito), capas, tipos de servicio y textos; la
-aplicación compone el mapa y lo descarga.
+(Perú, departamento, provincia, distrito o el VRAEM), capas —también ríos y vías—, tipos
+de servicio, textos y, si quiere, datos suyos; la aplicación compone el mapa y lo
+descarga.
 
 No es una captura de pantalla ampliada: el PDF se construye a partir de la geometría,
 con las fuentes incrustadas, de modo que se puede imprimir en A0 —o en 2A0 y 4A0— sin
@@ -51,6 +52,8 @@ exactamente el mismo mapa.
 | `SOURCE_SANS_TAG` | [adobe-fonts/source-sans](https://github.com/adobe-fonts/source-sans) | Source Sans 3 (SIL OFL 1.1) |
 | `POBLACION_URL` + `POBLACION_SHA256` + `POBLACION_FECHA` + `POBLACION_ANIO` | [INEI: población total proyectada 2018-2026 por departamento, provincia y distrito](https://www.gob.pe/institucion/inei/informes-publicaciones/6894980-peru-poblacion-total-proyectada-al-30-de-junio-de-cada-ano-segun-departamento-provincia-y-distrito-2018-2026) | población para la tasa por cada 100 mil habitantes: `indicadores.json` |
 | `POBREZA_URL` + `POBREZA_SHA256` + `POBREZA_FECHA` | [INEI: mapa de pobreza monetaria provincial y distrital 2018, anexo estadístico](https://www.gob.pe/institucion/inei/informes-publicaciones/3204872-mapa-de-pobreza-provincial-y-distrital-2018) | pobreza monetaria total: `indicadores.json` |
+| `REDES_FECHA` + `REDES_SHA256` | instantánea de la [red hidrográfica de la ANA](https://geosnirh.ana.gob.pe/server/rest/services/P%C3%BAblico/Rios/MapServer) y de la Red Vial Nacional y Departamental del [geoportal del MTC](https://swmapas.mtc.gob.pe:8443/geoserver/ows?service=WFS&request=GetCapabilities), versionada en `origenes/redes/` | ríos y vías: `geo/redes.*` |
+| `src/motor/vraem.js` | D.S. N.º 040-2016-PCM, modificado por el D.S. N.º 133-2022-PCM | los 80 distritos del VRAEM: `geo/vraem.*` |
 
 `GEO_TAG` admite una etiqueta, una rama o un SHA de commit.
 
@@ -1490,6 +1493,106 @@ seguiría saliendo verde. Por eso cada caso declara además qué tiene que haber
 —tamaño de página medido **en el archivo**, estado de los controles del panel y
 parámetros que sobreviven en la barra de direcciones—, y se comprueba que cambiar un
 control recompone el mapa y actualiza la URL.
+
+## Fase 23: buscador, VRAEM, ríos y vías, datos propios
+
+**Buscador de lugares.** En «Hoja y ámbito», un campo que busca a la vez en los 25
+departamentos, 196 provincias y 1 893 distritos —y en el VRAEM—, sin tildes ni
+mayúsculas, y dice de cada resultado a qué pertenece («Huanta · Distrito · Huanta,
+Ayacucho»). Es un *combobox* de la WAI-ARIA: las flechas recorren la lista e Intro
+elige. Elegir pone los tres selectores como si se hubieran usado a mano. La lista sale
+de la misma cartografía que se dibuja (`public/data/lugares.json`, 48 KB), no del
+directorio: un distrito sin servicios también se busca.
+
+Hubo también un grupo de **plantillas** —configuraciones frecuentes a un clic—, que el
+área usuaria pidió retirar en la revisión de la Fase 23: el enlace de cada mapa ya
+cumple ese papel.
+
+**VRAEM.** El Valle de los ríos Apurímac, Ene y Mantaro se elige como un ámbito más
+(`?ambito=vraem`). Su lista de distritos es la vigente: el artículo 1 del D.S. N.º
+040-2016-PCM tal como quedó tras el D.S. N.º 133-2022-PCM, que reescribió los incisos
+que cambiaba y dejó los demás con «(…)». Son 37 distritos de intervención directa y 43
+de influencia, 80 en cinco departamentos y diez provincias (`src/motor/vraem.js`). En
+cada build, `scripts/build-capas.mjs` comprueba que los 80 ubigeos existen en la
+cartografía con el nombre del decreto, y publica por nivel de detalle el contorno, el de
+la intervención directa y, para cada departamento, su parte dentro y su resto fuera,
+todo unido desde los mismos distritos para que encaje sin rendijas. El mapa del VRAEM se
+colorea por distrito, marca discontinua la intervención directa, nombra en mayúsculas
+la parte de cada departamento y dibuja atenuado lo de alrededor. En los demás mapas, la
+capa «Contorno del VRAEM» lo superpone.
+
+El directorio trae su propia marca «Zona Vraem», pero no sirve como ámbito: marca
+servicios de Pinto Recodo (San Martín) e Ichuña (Moquegua), que no están en ningún
+decreto del VRAEM. Los recuentos de las muestras usan la lista del decreto.
+
+**Ríos y vías.** Natural Earth, que ya da el contexto, se queda corto en el Perú: no trae
+el Apurímac, el Ene, el Mantaro ni el Urubamba. Se usan dos fuentes oficiales:
+
+| Capa | Fuente | Qué se toma |
+|---|---|---|
+| Ríos | ANA, red hidrográfica «RiosQuebradas» (2018) | 945 ríos y 279 quebradas, con su nombre |
+| Vías | MTC, Red Vial Nacional (corte al 30/06/2026) y Departamental (al 31/12/2025) | 11 114 tramos; fuera los 243 «Proyectado», que no existen sobre el terreno |
+
+Son servicios vivos sin versión, así que se anclan por una **instantánea**:
+`npm run redes -- --anclar` las descarga, las simplifica a 15 m (casi tres veces más
+fino que el nivel de detalle más alto del mapa), las guarda como TopoJSON comprimido en
+`origenes/redes/` (2,1 MB en vez de 330) y escribe su SHA-256 y su fecha en
+`package.json`. El build lee siempre la instantánea, nunca la red. Los niveles medio
+y alto se publican en teselas de 3°, y el motor pide sólo las que toca su marco.
+
+Lo que se dibuja depende de la **escala**, no del ámbito (`src/motor/redes.js`): la
+importancia de cada río sale de la longitud del río entero —sus tramos del mismo nombre
+unidos por los extremos—, y en el país (1:5,5 millones en A3) sólo van los ríos de 100
+km o más y la red nacional; por debajo de 1:3 millones entra la red departamental; por
+debajo de 1:2,5 millones, los demás ríos, y por debajo de 1:900 000, las quebradas. Las
+vías sin pavimentar van discontinuas. Fuera del ámbito, un velo blanco atenúa ríos y
+vías: dicen por dónde se llega sin competir con lo que se retrata. Ríos y vías se
+recortan al marco en la geometría, no sólo en el dibujo, para que el PDF no lleve los
+kilómetros que no se ven. Los recuadros de zoom los llevan igual que el mapa.
+
+**Datos propios.** En el grupo «Datos propios», un CSV o Excel de quien hace el mapa
+(`src/motor/datos-propios.js`): con **ubigeo y una o más columnas de valor**, colorea
+el mapa en cinco clases de un número parecido de unidades (quintiles, con los cortes
+redondeados a dos cifras); con **latitud y longitud**, dibuja puntos. Las columnas se
+reconocen por su cabecera, sin tildes ni mayúsculas; es columna de valor cualquiera que
+traiga números, salvo las de ubigeo, coordenadas, nombre, departamento, provincia o
+distrito. Con varias, el panel deja elegir cuál colorea.
+
+El botón **Descargar el modelo (Excel)** arma en el navegador un libro con los 1 893
+distritos —ubigeo como texto, para que Excel no se coma el cero inicial, y los nombres
+de su departamento, provincia y distrito— y las columnas `valor1` a `valor5` vacías,
+más una hoja de instrucciones (`libroModelo`). Sale de `lugares.json`, así que trae
+exactamente los distritos que el mapa sabe dibujar. Una celda vacía es «sin dato», no un
+cero; una columna del modelo que se deja vacía no se ofrece. El escritor de `.xlsx` de la
+auditoría pasó a `src/motor/xlsx-escribir.js` para poder usarlo en la interfaz.
+Se aceptan los números a la peruana o a la inglesa, los ubigeos sin el cero inicial que
+Excel se come y las coordenadas cambiadas de columna; lo que no se puede leer se
+descarta y se dice. Las reglas que no se negocian:
+
+- Los puntos propios son **rombos grises**, una forma que ningún servicio usa: los
+  servicios sólo salen del directorio y no se pueden confundir con lo que añade cada quien.
+- El pie cita la fuente que escriba quien carga el archivo; si no escribe ninguna, el
+  nombre del archivo.
+- Si los datos son de otro nivel que el del mapa (por departamento en un mapa por
+  provincias), no se suman ni se promedian: el color sale «Sin dato» y un aviso ofrece
+  dividir hasta ese nivel.
+- El archivo se lee en el navegador y no sale de él, así que **no viaja en el enlace**;
+  el panel y el aviso de «Copiar enlace» lo dicen.
+
+El lector de `.xlsx` pasó de `scripts/lib/` a `src/motor/xlsx.js`, porque ahora lo
+usan también la interfaz; `fflate` pasó a dependencia de ejecución.
+
+**Pie.** Cada capa nueva añade su fuente en las líneas que haga falta, a todo el ancho
+del marco y sin recortar: ANA, MTC con sus fechas de corte, el decreto del VRAEM y los
+datos propios. Un mapa sin capas nuevas lleva el pie de siempre. La instantánea de ríos
+y vías queda además en las propiedades del PDF.
+
+**Muestras nuevas:** `vraem_A3_horizontal_rios_vias`, `nacional_A3_rios_vias_vraem`,
+`nacional_A4_departamentos_datos_propios` (la población proyectada 2026 del INEI,
+tomada como si fuera un archivo propio) y `vraem_A4_puntos_propios` (las capitales
+distritales del VRAEM que publica el MTC). Los dos archivos de ejemplo están en
+`tests/datos/` y son datos públicos reales. La prueba de la web contra las muestras
+añade el VRAEM con ríos y vías.
 
 ## Control de calidad
 
