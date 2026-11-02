@@ -49,6 +49,8 @@ exactamente el mismo mapa.
 | `NATURAL_EARTH_TAG` | [natural-earth-vector](https://github.com/nvkelso/natural-earth-vector) | países vecinos, océano y lagos |
 | `POPPINS_TAG` | [google/fonts](https://github.com/google/fonts) | Poppins (SIL OFL 1.1) |
 | `SOURCE_SANS_TAG` | [adobe-fonts/source-sans](https://github.com/adobe-fonts/source-sans) | Source Sans 3 (SIL OFL 1.1) |
+| `POBLACION_URL` + `POBLACION_SHA256` + `POBLACION_FECHA` + `POBLACION_ANIO` | [INEI: población total proyectada 2018-2026 por departamento, provincia y distrito](https://www.gob.pe/institucion/inei/informes-publicaciones/6894980-peru-poblacion-total-proyectada-al-30-de-junio-de-cada-ano-segun-departamento-provincia-y-distrito-2018-2026) | población para la tasa por cada 100 mil habitantes: `indicadores.json` |
+| `POBREZA_URL` + `POBREZA_SHA256` + `POBREZA_FECHA` | [INEI: mapa de pobreza monetaria provincial y distrital 2018, anexo estadístico](https://www.gob.pe/institucion/inei/informes-publicaciones/3204872-mapa-de-pobreza-provincial-y-distrital-2018) | pobreza monetaria total: `indicadores.json` |
 
 `GEO_TAG` admite una etiqueta, una rama o un SHA de commit.
 
@@ -80,6 +82,37 @@ La versión queda registrada en `public/data/version.json` y va en las propiedad
 cada PDF (palabras clave), para que un archivo siempre diga de qué corte de datos
 salió. Hasta la revisión de la Fase 20 también se imprimía en el pie; el área usuaria
 pidió un pie con sólo las fuentes y la cartografía (ver «El pie»).
+
+### Población y pobreza del INEI
+
+Desde la Fase 22 el color del mapa puede medir algo más que los servicios (ver «Qué mide
+el color»), y para eso hay dos fuentes del INEI, tratadas como el directorio: cada
+archivo se ancla por su SHA-256 en `package.json`, su copia verificada se versiona en
+`origenes/indicadores/` (750 KB entre los dos) y el build la lee de ahí, así que no
+depende de que gob.pe responda. `scripts/fetch-indicadores.mjs` comprueba el hash, lee
+los cuadros y escribe `public/data/indicadores.json` (57 KB), con los valores por ubigeo
+en el formato de la cartografía. Si algo no cuadra, el build se detiene.
+
+- **Población**: el cuadro «Población total proyectada al 30 de junio de cada año, según
+  departamento, provincia y distrito, 2018-2026», publicado el 31 de diciembre de 2025
+  para los 1.892 distritos actuales. Se usa el año `POBLACION_ANIO` (2026). Antes de
+  publicarla se comprueba que la población de cada provincia sea la suma de sus
+  distritos y la del país, la de sus departamentos.
+- **Pobreza**: el anexo estadístico del «Mapa de pobreza monetaria provincial y
+  distrital 2018», publicado el 20 de febrero de 2020. El INEI no da una cifra por
+  distrito sino el **intervalo de confianza al 95 %** de la incidencia de pobreza
+  monetaria total; se usa su **punto medio**, que es la estimación puntual, y la leyenda
+  lo dice. 476 distritos se estimaron agrupados y comparten valor. El anexo trae también
+  los departamentos, salvo Amazonas, cuya fila viene vacía: por departamentos, Amazonas
+  sale «Sin dato».
+
+Frente a la cartografía quedan sin dato los distritos creados después de cada cuadro:
+uno sin población (Sangani, 120307) y diecinueve sin pobreza. El mapa los deja en blanco
+y la leyenda los nombra como «Sin dato»: un hueco sin explicar se leería como un cero.
+
+Para pasar a otra versión de cualquiera de los dos, se cambian su URL, su hash y su
+fecha en `package.json` y se ejecuta `npm run preparar`: el archivo nuevo se descarga,
+se comprueba y sustituye al anterior en `origenes/indicadores/`.
 
 ### Criterio de publicación
 
@@ -321,6 +354,56 @@ multiplicado por el factor del formato en las demás (`ICONO_LEYENDA_MM` en
 tope de 5 mm; el del mapa crece sólo con la raíz del formato, porque tiene que caber en
 las provincias, y en un A0 el ícono de la leyenda medía la mitad que la letra de al
 lado.
+
+### Qué mide el color
+
+Hasta la Fase 21 el color de cada unidad decía siempre lo mismo: cuántos tipos de
+servicio distintos hay en ella. Desde la Fase 22 se elige en el panel, en «Color del
+mapa», y viaja en la URL como `variable` (`src/motor/variables.js`):
+
+| Variable | Qué mide | Clases | Rampa |
+|---|---|---|---|
+| `presencia` (la de siempre) | tipos de servicio distintos en la unidad | 1 · 2-3 · 4-6 · 7-9 · 10+ | naranjas, desplazada |
+| `centros` | centros de atención en la unidad, de los tipos marcados | los mismos tramos, en centros | naranjas, desplazada |
+| `cobertura` | distancia en línea recta al centro de atención más cercano | con centro en la unidad · hasta 10 km · 10-25 · 25-50 · 50-100 · más de 100 | azules, fija |
+| `tasa` | centros de atención por cada 100 mil habitantes | menos de 2 · 2-5 · 5-10 · 10-25 · 25 o más | naranjas, fija |
+| `pobreza` | pobreza monetaria total, 2018 (%) | menos de 15 · 15-30 · 30-45 · 45-60 · 60 o más | morados, fija |
+
+Lo que se cuenta y se mide son **centros de atención**, cada sede del directorio; el
+**servicio** es el tipo (CEM, SAR…). El área usuaria pidió esa distinción al revisar la
+fase: la segunda opción se llamaba «número de servicios». Todas cuentan con los **tipos
+marcados**: con sólo los CEM, el número es de CEM y la distancia es al CEM más cercano,
+y la leyenda lo dice («al CEM más cercano»). La pobreza es la excepción: no depende de
+los servicios, aunque los íconos sí.
+
+- **La distancia** se mide desde el **centro geográfico** de cada unidad hasta el
+  centro de atención más cercano de esos tipos, esté donde esté: una provincia de Puno
+  puede tener el suyo en Cusco. En línea recta, no por carretera, que es lo único que se
+  puede afirmar con estos datos; la leyenda lo explica en una nota bajo su título. Una
+  unidad con algún centro forma su propia clase, «Con centro de atención en el
+  distrito». Los cortes salen del reparto real: con todos los tipos, la mitad de los
+  distritos sin ningún centro tiene uno a menos de 15 km, y con sólo los CAR la mayoría
+  pasa de 50, por eso hay un tramo más allá de 100. Por provincias o departamentos la
+  medida es gruesa —todas las provincias tienen algún centro— y un aviso ofrece dividir
+  hasta distritos.
+- **La tasa** divide los centros de atención de la unidad entre su población
+  proyectada. Una unidad sin centros queda en blanco, como en el mapa de siempre, y la
+  nota de la leyenda lo recuerda.
+- **La pobreza** usa el punto medio del intervalo del INEI (ver «Población y pobreza del
+  INEI»).
+
+Cada familia lleva **su color**: naranjas para lo que cuenta centros, azules para la
+distancia —más oscuro es más lejos, al revés que en los naranjas, y con la misma rampa
+las dos lecturas se confundirían— y morados para la pobreza, que no es un dato de los
+servicios. Las rampas viven en `src/estilo/tokens.js`. Sólo la de siempre se
+**desplaza** según la clase más baja que el mapa use; en las nuevas cada tono significa
+siempre lo mismo, y el más claro de la distancia es «hay servicio aquí». Lo que no tiene
+dato va en blanco y, si aparece, la leyenda lo nombra.
+
+Con población o pobreza, **el pie lleva una tercera línea** con esa fuente («Población:
+INEI, población total proyectada al 30 de junio de 2026.»), y las propiedades del PDF
+guardan el comienzo del hash de cada archivo. El mapa de siempre no carga los
+indicadores y sale idéntico byte a byte al de la Fase 21.
 
 ### Los íconos
 
@@ -1313,12 +1396,33 @@ guardan sus propiedades.
 
 La composición tiene freno: escribir un título dispararía un mapa nacional por cada
 tecla, y en A0 cada uno tarda trece segundos. Se espera a que la escritura se detenga y,
-si ya hay una composición en marcha, se encola **una sola**, porque lo que importa es el
-último estado y no los intermedios.
+si ya hay una composición en marcha, la nueva la **sustituye**, porque lo que importa es
+el último estado y no los intermedios.
 
-Al pie de la vista hay un resumen en una línea —escala, nivel de detalle, centros
-dibujados, rótulos colocados y recuadros—, y los avisos viven en un diálogo que se abre
-desde la barra. La regla de los avisos es señalar lo que el mapa **no** está diciendo:
+**Se compone en segundo plano** (Fase 22). El motor corre en un *worker*
+(`src/trabajador.js`, gestionado por `src/ui/compositor.js`): la página sigue
+respondiendo mientras compone. La revisión de uso midió en el sitio publicado que un A0
+congelaba la página 12 s seguidos y un A0 por distritos, 20 s; ahora el mayor bloqueo
+del A0 es de 0,7 s, el de insertar el dibujo en la vista. Un cambio durante una
+composición la descarta —se detiene el *worker* y arranca otro—, en vez de esperar a que
+termine un mapa que ya no sirve. Mientras compone, una barra recorre el borde de la vista,
+un reloj cuenta los segundos y «Generar PDF» queda desactivado: sólo se descarga el mapa
+que corresponde a lo elegido. El motor no toca el DOM —mide con las métricas de las
+tipografías y devuelve una cadena SVG—, por eso corre igual en Node, en la página y en el
+*worker*; si el navegador no admite *workers* de tipo módulo, se compone en la página como
+antes. El PDF sí necesita el navegador (svg2pdf mide el texto con él) y sigue en la página.
+
+**«Ninguno» ya no dibuja todos los tipos.** Ningún tipo marcado era «todos» y el mapa se
+llenaba justo cuando se iba a elegir; ahora se espera a que se marque alguno, el estado lo
+dice y no se puede descargar. El motor sigue tratando una lista vacía como «todos», porque
+puede llegar así en una URL escrita a mano.
+
+Al pie de la vista hay un resumen en una línea —escala, precisión de los límites,
+servicios, nombres puestos y recuadros, en palabras de quien prepara el mapa y no del
+motor—, y los avisos viven en un diálogo que se abre desde la barra. Desde la Fase 22
+están escritos en llano y, cuando el remedio es otra hoja u otra división, lo ofrecen con
+un botón («Probar en A3», «Dividir hasta distritos») que cambia el control del panel como
+si se hubiera tocado. La regla de los avisos es señalar lo que el mapa **no** está diciendo:
 símbolos que se estorban, rótulos omitidos por falta de sitio, zonas que pedían
 ampliación y no cupieron, piezas del layout que no entraron. Un mapa incompleto sin
 avisos parece completo, así que lo que se oculta es el texto, nunca que exista: el botón
@@ -1334,6 +1438,38 @@ rasteriza entera y luego la encoge, y en esa reducción **desaparecía el texto 
 que se revisa el mapa entero. Dándole al SVG su tamaño real de pantalla, el dibujo
 vectorial se hace a esa escala y el texto sale nítido a cualquier zoom; cada paso cuesta
 90 ms en A3 y 128 ms en A0.
+
+**Ayuda y datos a la vista** (Fase 22). La cabecera enlaza al manual de uso y a las
+decisiones cartográficas, y dice de qué corte del directorio salen los servicios
+(«publicado el 25/09/2026 · 762 centros de atención»), que antes sólo constaba en las propiedades
+del PDF. La pestaña lleva un ícono, compuesto con el rojo de `tokens.js`.
+
+**El panel se acorta**: «Recuadros de zoom», «Capas» y «Layout», que casi nunca se
+tocan, empiezan plegados y se abren solos si la configuración se aparta de lo normal en
+algo que contienen. «Layout» reúne los textos de la lámina —título, subtítulo y
+periodo— y los elementos que se pueden apagar; los textos iban en un grupo propio hasta
+que el área usuaria pidió llevarlos ahí. «Color del mapa» va después de los tipos de
+servicio, con una nota que dice en una frase qué mide cada opción.
+
+**El título sigue al tipo de mapa.** Cada opción de «Color del mapa» tiene su título
+(`TITULOS_POR_VARIABLE` en `src/ui/config.js`): «Ubicación de los servicios que brinda
+el MIMP» —el de siempre—, «Número de centros de atención del MIMP», «Distancia al centro
+de atención del MIMP más cercano», «Centros de atención del MIMP por cada 100 mil
+habitantes» y «Servicios del MIMP y pobreza monetaria». Al cambiar de tipo, el título
+cambia con él mientras sea el que puso la aplicación; uno escrito a mano no se toca. El
+enlace sólo lleva el título si alguien lo escribió.
+
+**Los tipos de servicio van agrupados por viceministerio**, cada grupo plegado: en su
+cabecera, la casilla del viceministerio, que marca o desmarca todos sus tipos, y un botón
+que despliega la lista para elegirlos uno por uno. Los veintidós tipos seguidos ocupaban
+media pantalla del panel. Un grupo con una selección a medias se abre solo, para que se
+vea qué está marcado.
+
+**En pantallas angostas** la página se desplaza: la vista previa va primero, con un alto
+propio, la barra se parte en dos líneas y «Generar PDF» queda fijo al pie de la pantalla
+mientras se recorre el panel. Antes la página estaba clavada al alto de la pantalla y a
+la vista le quedaban 52 px. La vista admite además **pellizcar** con dos dedos para
+acercar y alejar; antes un teléfono sólo tenía los botones + y −.
 
 ### Lo descargado es lo verificado
 

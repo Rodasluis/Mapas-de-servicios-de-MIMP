@@ -12,9 +12,10 @@
  */
 import {
   TAMANOS, ORIENTACIONES, siglaDe, subtituloDe, divisionesDe, divisionPorDefecto,
-  zoomPorDefecto, esZoomLimaCallao,
+  zoomPorDefecto, esZoomLimaCallao, tituloPorDefecto,
 } from './config.js';
 import { dibujarIcono, ICONOS, VICEMINISTERIOS } from '../iconos/index.js';
+import { VARIABLES } from '../motor/variables.js';
 
 const el = (etiqueta, atributos = {}, hijos = []) => {
   const nodo = document.createElement(etiqueta);
@@ -31,6 +32,21 @@ const grupo = (titulo, contenido) => el('fieldset', { clase: 'grupo' }, [
   el('legend', { texto: titulo }),
   ...[].concat(contenido),
 ]);
+
+/**
+ * Grupo que se pliega: los que casi nunca se tocan —recuadros, capas y elementos del
+ * layout— empiezan cerrados para que el panel no mida tres pantallas (revisión de uso
+ * de la Fase 22). Se abren solos si la configuración se aparta de lo normal en algo que
+ * contienen: un ajuste que no se ve es un ajuste que se olvida. Plegados, sus controles
+ * siguen en el documento con su valor; el tabulador llega al título del grupo y Intro o
+ * Espacio lo abren.
+ */
+const grupoPlegable = (id, titulo, contenido, abierto) => {
+  const detalles = el('details', { clase: 'grupo plegable', id });
+  detalles.open = abierto;
+  detalles.append(el('summary', { texto: titulo }), el('div', { clase: 'contenido-plegable' }, [].concat(contenido)));
+  return detalles;
+};
 
 const campoTexto = (id, etiqueta, valor, alCambiar) => {
   const input = el('input', { type: 'text', id, value: valor ?? '' });
@@ -164,6 +180,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     /* La división cambia qué se puede ampliar: el país por departamentos no tiene
        provincias que poner en un recuadro. */
     llenarZonas();
+    sincronizarVariable();
     emitir();
   });
 
@@ -208,6 +225,7 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
       sincronizarZoom();
     }
     sincronizarSubtitulo();
+    sincronizarVariable();
     llenarZonas();
     emitir();
   };
@@ -241,13 +259,18 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   llenarDivision();
 
   /* ------------------------------ textos ------------------------------- */
-  const bloqueTextos = grupo('Textos', [
-    campoTexto('titulo', 'Título', config.textos.titulo, (v) => { config.textos.titulo = v; emitir(); }),
+  /* Van dentro del grupo «Layout», con los elementos de la lámina (lo pidió el área
+     usuaria en la revisión de la Fase 22). El título sigue al tipo de mapa elegido en
+     «Color del mapa» mientras nadie lo escriba a mano (ver el selector de la variable). */
+  const campoTitulo = campoTexto('titulo', 'Título', config.textos.titulo, (v) => { config.textos.titulo = v; emitir(); });
+  const inputTitulo = campoTitulo.querySelector('input');
+  const camposTexto = [
+    campoTitulo,
     campoTexto('subtitulo', 'Subtítulo', config.textos.subtitulo, (v) => { config.textos.subtitulo = v; emitir(); }),
     campoTexto('periodo', 'Periodo', config.textos.periodo, (v) => { config.textos.periodo = v; emitir(); }),
     /* «Elaborado por» se retiró en la revisión de la Fase 20, con la línea del pie que
        lo imprimía. */
-  ]);
+  ];
 
   /* --------------------------- tipos de servicio ----------------------- */
   const casillasTipo = new Map();
@@ -273,16 +296,23 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
 
   const leerCasillas = () => {
     const marcados = activos();
-    /* Ningún tipo marcado no es un mapa vacío: es «todos». Un mapa en blanco sin
-       explicación parece un fallo, y desmarcar el último es casi siempre un
-       descuido, no una intención. */
-    config.tipos = marcados.length === 0 || marcados.length === catalogo.tipos.length
-      ? null : marcados;
+    /* Ningún tipo marcado es una selección a medias, no «todos»: hasta la Fase 22 se
+       componía el mapa con todos los tipos mientras las casillas decían lo contrario.
+       Ahora se espera a que se marque alguno (main.js lo dice en el estado y no deja
+       descargar). El motor sigue tratando una lista vacía como «todos», porque puede
+       llegar así de una URL escrita a mano. */
+    config.tipos = marcados.length === catalogo.tipos.length ? null : marcados;
     sincronizarGrupos();
     emitir();
   };
 
-  const listaGrupos = el('div', { clase: 'grupos-tipo' });
+  /* Un grupo por viceministerio, PLEGADO (revisión de la Fase 22): en la cabecera, la
+     casilla del viceministerio, que marca o desmarca de una vez todos sus tipos, y un
+     botón que despliega la lista para elegirlos uno por uno. Los veintidós tipos
+     seguidos ocupaban media pantalla del panel. Un grupo con una selección a medias se
+     abre solo: lo que está marcado tiene que verse. Dentro, el orden del catálogo: de
+     más a menos centros. */
+  const cajaTipos = el('div', { clase: 'caja-tipos' });
   for (const [vm, nombre] of Object.entries(VICEMINISTERIOS)) {
     const propios = tiposDeVm(vm);
     if (!propios.length) continue;
@@ -294,32 +324,40 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     });
     casillasGrupo.set(vm, input);
     const total = propios.reduce((n, t) => n + (catalogo.conteo.get(t) || 0), 0);
-    listaGrupos.appendChild(el('label', { clase: 'casilla', for: id }, [
-      input,
-      el('span', { texto: `Servicios del ${nombre} (${total})` }),
-    ]));
-  }
 
-  /* La lista sigue el orden de los grupos —primero los tipos de un viceministerio,
-     luego los del otro— para que se vea qué marca cada casilla de grupo. Dentro de
-     cada uno, el del catálogo: de más a menos servicios. */
-  const posicionVm = (tipo) => {
-    const i = Object.keys(VICEMINISTERIOS).indexOf(vmDe(tipo));
-    return i < 0 ? Infinity : i;
-  };
-  const tiposEnLista = [...catalogo.tipos].sort((a, b) => posicionVm(a) - posicionVm(b));
+    const idLista = `lista-${vm.toLowerCase()}`;
+    const lista = el('div', { clase: 'lista-tipos', id: idLista });
+    for (const tipo of propios) {
+      const idTipo = `tipo-${siglaDe(tipo).replace(/\W/g, '')}`;
+      const casillaTipo = el('input', { type: 'checkbox', id: idTipo });
+      casillaTipo.checked = !config.tipos || config.tipos.includes(tipo);
+      casillaTipo.addEventListener('change', leerCasillas);
+      casillasTipo.set(tipo, casillaTipo);
+      lista.appendChild(el('label', { clase: 'casilla', for: idTipo }, [
+        casillaTipo,
+        muestraIcono(tipo),
+        el('span', { texto: `${tipo} (${catalogo.conteo.get(tipo) || 0})` }),
+      ]));
+    }
 
-  const listaTipos = el('div', { clase: 'lista-tipos' });
-  for (const tipo of tiposEnLista) {
-    const id = `tipo-${siglaDe(tipo).replace(/\W/g, '')}`;
-    const input = el('input', { type: 'checkbox', id });
-    input.checked = !config.tipos || config.tipos.includes(tipo);
-    input.addEventListener('change', leerCasillas);
-    casillasTipo.set(tipo, input);
-    listaTipos.appendChild(el('label', { clase: 'casilla', for: id }, [
-      input,
-      muestraIcono(tipo),
-      el('span', { texto: `${tipo} (${catalogo.conteo.get(tipo) || 0})` }),
+    const desplegar = el('button', {
+      type: 'button', clase: 'desplegar', 'aria-controls': idLista,
+      'aria-label': `Ver los tipos de servicio del ${nombre}`,
+    }, [el('span', { texto: `${propios.length} tipos` })]);
+    const abrir = (si) => {
+      lista.hidden = !si;
+      desplegar.setAttribute('aria-expanded', si ? 'true' : 'false');
+    };
+    desplegar.addEventListener('click', () => abrir(lista.hidden));
+    const marcados = propios.filter((t) => casillasTipo.get(t).checked).length;
+    abrir(marcados > 0 && marcados < propios.length);
+
+    cajaTipos.appendChild(el('div', { clase: 'grupo-vm' }, [
+      el('div', { clase: 'cabecera-vm' }, [
+        el('label', { clase: 'casilla', for: id }, [input, el('span', { texto: `Servicios del ${nombre} (${total})` })]),
+        desplegar,
+      ]),
+      lista,
     ]));
   }
 
@@ -335,8 +373,60 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
       botón('Todos', () => marcarTodos(true)),
       botón('Ninguno', () => marcarTodos(false)),
     ]),
-    el('div', { clase: 'caja-tipos' }, [listaGrupos, listaTipos]),
+    cajaTipos,
   ]);
+
+  /* --------------------------- color del mapa -------------------------- */
+
+  /* Qué mide el color de cada unidad (motor/variables.js). Cada opción lleva una nota
+     que dice en una frase qué se está viendo: «distancia» sin decir desde dónde ni a
+     qué invita a leer otra cosa. */
+  const NOMBRES_VARIABLE = {
+    presencia: 'Tipos de servicio presentes',
+    centros: 'Número de centros de atención',
+    cobertura: 'Distancia al centro de atención más cercano',
+    tasa: 'Centros de atención por cada 100 mil habitantes',
+    pobreza: 'Pobreza monetaria (INEI, 2018)',
+  };
+  const NOTAS_VARIABLE = {
+    presencia: 'Cuántos tipos de servicio distintos hay en cada unidad: el mapa de siempre.',
+    centros: 'Cuántos centros de atención hay en cada unidad, de los tipos marcados.',
+    cobertura: 'A qué distancia en línea recta queda el centro de atención más cercano de los tipos'
+      + ' marcados, desde el centro de cada unidad. Se lee mejor hasta distritos.',
+    tasa: 'Centros de atención de los tipos marcados por cada 100 mil habitantes, con la población'
+      + ' que el INEI proyecta para este año.',
+    pobreza: 'Porcentaje de la población en pobreza monetaria según el mapa de pobreza 2018'
+      + ' del INEI. No depende de los tipos marcados; los íconos sí.',
+  };
+  const selVariable = el('select', { id: 'variable' });
+  for (const v of VARIABLES) selVariable.appendChild(el('option', { value: v, texto: NOMBRES_VARIABLE[v] || v }));
+  selVariable.value = config.variable;
+  const notaVariable = el('p', { clase: 'nota', id: 'nota-variable', 'aria-live': 'polite' });
+  const sincronizarVariable = () => {
+    const sinColor = config.capas.coropleta === false;
+    const distrital = config.ambito.nivel === 'distrito';
+    selVariable.disabled = sinColor || distrital;
+    notaVariable.textContent = distrital ? 'El mapa de un solo distrito no se colorea: no hay con qué compararlo.'
+      : sinColor ? 'El color está apagado en «Capas».'
+        : NOTAS_VARIABLE[config.variable] || '';
+  };
+  selVariable.addEventListener('change', () => {
+    const anterior = config.variable;
+    config.variable = selVariable.value;
+    /* El título sigue al tipo de mapa (config.js, TITULOS_POR_VARIABLE) mientras sea el
+       que puso la aplicación; uno escrito a mano no se toca. */
+    if (config.textos.titulo === tituloPorDefecto(anterior)) {
+      config.textos.titulo = tituloPorDefecto(config.variable);
+      inputTitulo.value = config.textos.titulo;
+    }
+    sincronizarVariable();
+    emitir();
+  });
+  const bloqueColor = grupo('Color del mapa', [
+    el('p', { clase: 'campo' }, [el('label', { for: 'variable', texto: 'Qué muestra el color' }), selVariable]),
+    notaVariable,
+  ]);
+  sincronizarVariable();
 
   /* ------------------------------- capas ------------------------------- */
   const nombresCapa = {
@@ -369,13 +459,18 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     ]));
   }
 
-  const bloqueCapas = grupo('Capas', [
+  const bloqueCapas = grupoPlegable('grupo-capas', 'Capas', [
     ...Object.entries(nombresCapa).map(([clave, etiqueta]) => casilla(
       `capa-${clave}`, etiqueta, config.capas[clave] !== false,
-      (v) => { config.capas[clave] = v; emitir(); },
+      (v) => {
+        config.capas[clave] = v;
+        if (clave === 'coropleta') sincronizarVariable();
+        emitir();
+      },
     )),
     grupoDisposicion,
-  ]);
+  ], Object.keys(nombresCapa).some((k) => config.capas[k] === false)
+    || config.disposicion !== Object.keys(NOMBRES_DISPOSICION)[0]);
 
   /* ------------------------------- piezas ------------------------------ */
   const nombresPieza = {
@@ -386,10 +481,20 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
     norte: 'Rosa de los vientos',
     ubicacion: 'Mapa de ubicación',
   };
-  const bloquePiezas = grupo('Elementos del layout', Object.entries(nombresPieza).map(([clave, etiqueta]) => casilla(
-    `pieza-${clave}`, etiqueta, config.piezas[clave] !== false,
-    (v) => { config.piezas[clave] = v; emitir(); },
-  )));
+  /* «Layout»: los textos de la lámina y los elementos que se pueden apagar. Se abre
+     solo si alguno se aparta de lo normal: un título escrito a mano, un subtítulo o un
+     periodo, o un elemento apagado. */
+  const textosPropios = config.textos.titulo !== tituloPorDefecto(config.variable)
+    || Boolean(config.textos.subtitulo) || Boolean(config.textos.periodo);
+  const bloquePiezas = grupoPlegable('grupo-piezas', 'Layout', [
+    el('p', { clase: 'subtitulo-grupo', texto: 'Textos' }),
+    ...camposTexto,
+    el('p', { clase: 'subtitulo-grupo', texto: 'Elementos' }),
+    ...Object.entries(nombresPieza).map(([clave, etiqueta]) => casilla(
+      `pieza-${clave}`, etiqueta, config.piezas[clave] !== false,
+      (v) => { config.piezas[clave] = v; emitir(); },
+    )),
+  ], textosPropios || Object.keys(nombresPieza).some((k) => config.piezas[k] === false));
 
   /* -------------------------------- zoom ------------------------------- */
 
@@ -607,17 +712,24 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
   };
   sincronizarZoom();
 
-  const bloqueZoom = grupo('Recuadros de zoom', [grupoModo, campoZonas, avisoZoom]);
+  /* Abierto si el recuadro no es el que le toca a este mapa por omisión. */
+  const zoomDeSiempre = zoomPorDefecto(config.ambito, config.division);
+  const bloqueZoom = grupoPlegable('grupo-zoom', 'Recuadros de zoom', [grupoModo, campoZonas, avisoZoom],
+    config.zoom.modo !== zoomDeSiempre.modo
+    || (config.zoom.modo === 'manual' && esZoomLimaCallao(config.zoom) !== esZoomLimaCallao(zoomDeSiempre)));
 
   /* ------------------------------ generar ------------------------------ */
   const botonGenerar = el('button', { type: 'button', clase: 'generar', id: 'generar' },
     [el('span', { texto: 'Generar PDF' })]);
   botonGenerar.addEventListener('click', () => alGenerar());
   const progreso = el('p', { clase: 'progreso', id: 'progreso', role: 'status', 'aria-live': 'polite' });
+  /* Los segundos de espera van aparte del estado: el estado lo anuncia el lector de
+     pantalla, y anunciar cada segundo sería ruido. */
+  const reloj = el('span', { clase: 'reloj', id: 'reloj', 'aria-hidden': 'true' });
 
   contenedor.append(
-    bloqueHoja, bloqueTextos, bloqueTipos, bloqueZoom, bloqueCapas, bloquePiezas,
-    el('div', { clase: 'pie-panel' }, [botonGenerar, progreso]),
+    bloqueHoja, bloqueTipos, bloqueColor, bloqueZoom, bloqueCapas, bloquePiezas,
+    el('div', { clase: 'pie-panel' }, [botonGenerar, el('div', { clase: 'estado' }, [progreso, reloj])]),
   );
 
   // El marcador del subtítulo necesita el campo ya insertado para poder encontrarlo.
@@ -634,12 +746,20 @@ export function crearPanel({ contenedor, config, catalogo, alCambiar, alGenerar 
       sincronizarBoton();
     },
 
-    /** Mensaje de estado del botón de generación. */
-    progreso(texto, ocupado = false) {
+    /**
+     * Mensaje de estado del botón de generación. `ocupado` es que hay trabajo en
+     * marcha; `puedeGenerar`, que hay un mapa al día que descargar (no lo hay mientras
+     * se compone, si la composición falló o si no hay ningún tipo marcado).
+     */
+    progreso(texto, ocupado = false, { puedeGenerar = !ocupado } = {}) {
       progreso.textContent = texto || '';
-      botonGenerar.disabled = ocupado;
+      botonGenerar.disabled = !puedeGenerar;
       botonGenerar.setAttribute('aria-busy', ocupado ? 'true' : 'false');
     },
+    /** La configuración cambió y el mapa de la vista ya no la refleja. */
+    mapaDesactualizado() { botonGenerar.disabled = true; },
+    /** Segundos que lleva la composición en curso; null lo oculta. */
+    reloj(segundos) { reloj.textContent = segundos ? `${segundos} s` : ''; },
     /** Aviso propio del bloque de zoom (capacidad de la hoja, zonas demasiado grandes). */
     avisoZoom(texto) { avisoZoom.textContent = texto || ''; },
   };

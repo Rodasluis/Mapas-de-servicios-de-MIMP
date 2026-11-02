@@ -34,6 +34,27 @@ const columnaANumero = (letras) => [...letras].reduce((n, l) => n * 26 + l.charC
  * @returns {{cabecera: string[], filas: object[]}}
  */
 export function leerHoja(buffer, nombreHoja) {
+  const filas = leerFilas(buffer, nombreHoja);
+  const [cabecera = [], ...resto] = filas;
+  const claves = cabecera.map((c) => String(c).trim());
+  return {
+    cabecera: claves,
+    filas: resto
+      .filter((f) => f.some((x) => String(x).trim() !== ''))
+      .map((f) => Object.fromEntries(claves.map((k, i) => [k, f[i] ?? '']))),
+  };
+}
+
+/**
+ * Las filas de una hoja TAL CUAL, como listas de valores por columna (la A es la 0),
+ * sin tomar ninguna como cabecera. Los cuadros del INEI llevan varias filas de título
+ * antes de la cabecera, y la cabecera de los años está partida en dos filas
+ * (fetch-indicadores.mjs, Fase 22).
+ * @param {Buffer|Uint8Array} buffer  el .xlsx completo
+ * @param {string} nombreHoja
+ * @returns {string[][]}
+ */
+export function leerFilas(buffer, nombreHoja) {
   const zip = unzipSync(new Uint8Array(buffer));
   const leer = (ruta) => {
     if (!zip[ruta]) throw new Error(`El .xlsx no contiene «${ruta}».`);
@@ -79,13 +100,5 @@ export function leerHoja(buffer, nombreHoja) {
     }
     filas.push(Array.from(fila, (x) => x ?? ''));
   }
-
-  const [cabecera = [], ...resto] = filas;
-  const claves = cabecera.map((c) => String(c).trim());
-  return {
-    cabecera: claves,
-    filas: resto
-      .filter((f) => f.some((x) => String(x).trim() !== ''))
-      .map((f) => Object.fromEntries(claves.map((k, i) => [k, f[i] ?? '']))),
-  };
+  return filas;
 }

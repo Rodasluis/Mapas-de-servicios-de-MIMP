@@ -16,6 +16,11 @@ No es una captura de pantalla: el PDF se construye a partir de geometría vector
   (npm run datos -- --comprobar dice si la hay).
 - Rodasluis/Peru-maps (solo lectura): límites departamentales, provinciales y
   distritales (INEI).
+- INEI (Fase 22), sólo para el color del mapa, nunca para los servicios: población total
+  proyectada por departamento, provincia y distrito (POBLACION_*) y mapa de pobreza
+  monetaria 2018 (POBREZA_*). Se anclan por SHA-256 en package.json y se versionan en
+  origenes/indicadores/, como el directorio; scripts/fetch-indicadores.mjs los publica en
+  public/data/indicadores.json. Con ellos, el pie cita esa fuente en una línea más.
 - Este proyecto es INDEPENDIENTE del buscador (Rodasluis/Distancia-al-centro-de-atencion):
   no lee sus datos y no tiene que coincidir con él. Sus criterios sirvieron de punto de
   partida y nada más.

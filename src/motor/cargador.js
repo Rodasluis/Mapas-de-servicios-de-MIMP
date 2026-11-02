@@ -33,6 +33,9 @@ export function crearCargador(leerJson) {
     centros: () => unaVez('centros', () => leerJson('data/centros.json')),
     logos: () => unaVez('logos', () => leerJson('data/logos.json')),
     metricas: () => unaVez('metricas', () => leerJson('data/metricas.json')),
+    /* Población y pobreza del INEI (Fase 22, scripts/fetch-indicadores.mjs). Sólo se pide
+       cuando el color del mapa las usa. */
+    indicadores: () => unaVez('indicadores', () => leerJson('data/indicadores.json')),
 
     departamentos: (nivel) => unaVez(`dep:${nivel}`,
       () => topo(`data/geo/departamentos.${nivel}.topojson`, 'departamentos')),

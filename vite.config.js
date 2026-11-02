@@ -37,5 +37,9 @@ export default defineConfig({
       },
     },
   },
+  /* El compositor en segundo plano (src/trabajador.js) es un trabajador de tipo módulo:
+     así se carga igual en desarrollo, donde Vite sirve módulos, que en el sitio
+     publicado. */
+  worker: { format: 'es' },
   server: { open: true },
 });

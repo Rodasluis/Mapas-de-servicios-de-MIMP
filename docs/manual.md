@@ -31,15 +31,19 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    *hasta provincias* o *hasta distritos* (lo normal); una provincia, sólo hasta
    distritos. Al cambiar de ámbito, el nivel vuelve al de siempre. En cualquier nivel,
    la clase más baja que tenga el mapa se pinta con el tono más claro.
-3. **Textos.** El subtítulo vacío significa *automático*: el campo muestra en gris el
-   texto que se va a usar («Distrito de Breña»). Escribe sólo si quieres otro.
-4. **Tipos de servicio.** Las dos primeras casillas marcan o desmarcan de una vez los
-   servicios de un viceministerio: *Servicios del Viceministerio de la Mujer* y
-   *Servicios del Viceministerio de Poblaciones Vulnerables*. Debajo, la lista de los
-   tipos uno a uno, primero los de la Mujer y luego los de Poblaciones Vulnerables,
-   cada uno con su ícono. Si sólo hay marcados algunos tipos de un viceministerio, su
-   casilla queda a medias. Desmarcar tipos recalcula todo: los colores, la leyenda y
-   los recuadros de zoom.
+3. **Textos.** Están dentro del grupo **Layout**, con los elementos que se pueden
+   apagar. El título sigue al tipo de mapa elegido en «Color del mapa» mientras no lo
+   cambies; si escribes uno, se queda. El subtítulo vacío significa *automático*: el
+   campo muestra en gris el texto que se va a usar («Distrito de Breña»). Escribe sólo
+   si quieres otro.
+4. **Tipos de servicio.** Van agrupados por viceministerio: *Servicios del
+   Viceministerio de la Mujer* y *Servicios del Viceministerio de Poblaciones
+   Vulnerables*. La casilla de cada uno marca o desmarca de una vez todos sus tipos, y el
+   botón de al lado («5 tipos», «17 tipos») despliega la lista para elegirlos uno por
+   uno, cada uno con su ícono. Si sólo hay marcados algunos tipos de un viceministerio,
+   su casilla queda a medias y su lista se abre sola. Desmarcar tipos recalcula todo: los colores, la leyenda y
+   los recuadros de zoom. Con «Ninguno» el mapa no se recompone hasta que marques al
+   menos un tipo, y mientras tanto no se puede descargar.
 
    Los íconos de cada unidad van **en rejilla**, con la cifra de sedes pequeña y pegada
    a cada ícono, y el nombre de la unidad junto a la rejilla, dentro de su territorio
@@ -60,6 +64,13 @@ A la izquierda se configura, a la derecha se revisa. El orden que ahorra tiempo:
    Discapacidad* en lugar de SAIPD y *personas con discapacidad* en lugar de PCD. Cada
    tipo lleva además su sigla, como «Centro Emergencia Mujer y Familia - CEM». Los
    nombres largos van en dos líneas.
+4b. **Color del mapa.** Elige qué dice el color de cada unidad: los tipos de servicio
+   presentes (el mapa de siempre), el número de centros de atención, la distancia en
+   línea recta al centro de atención más cercano, los centros de atención por cada 100
+   mil habitantes o la pobreza monetaria del INEI. Todas, salvo la pobreza, cuentan sólo los tipos marcados: con sólo los CEM,
+   la distancia es al CEM más cercano. La distancia se lee mejor dividiendo hasta
+   distritos; por provincias, un aviso lo ofrece con un botón. Con población o pobreza el
+   pie cita además esa fuente del INEI.
 5. **Recuadros de zoom.** El mapa del Perú —hasta provincias o hasta distritos— abre
    con un recuadro de **Lima Metropolitana y Callao** juntos, porque sin ampliarlos ahí
    se ve una mancha. Mientras está en la lámina, los íconos de Lima y Callao van **sólo
@@ -112,9 +123,10 @@ seis zonas pedían ampliación y sólo cabían dos, o que una tabla se quedó en
 filas. Ninguna de esas cosas hace el mapa incorrecto, pero todas cambian lo que puedes
 afirmar mirándolo.
 
-Los dos que más suelen aparecer:
+Cuando el remedio es otra hoja u otra división, el aviso trae un botón que lo aplica
+(«Probar en A3», «Dividir hasta distritos»). Los dos que más suelen aparecer:
 
-- **«Los símbolos se estorban en N provincias.»** Pasa cuando el papel es pequeño para
+- **«Los íconos se tocan en N provincias.»** Pasa cuando el papel es pequeño para
   la densidad de servicios. Se arregla con una hoja mayor o filtrando tipos.
 - **«X no cabe ampliado en esta hoja… prueba con la hoja horizontal.»** No es un consejo
   genérico: el Perú es alto y estrecho, así que girar la hoja abre mucho más sitio que

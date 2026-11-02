@@ -55,12 +55,21 @@ body.cargando .disposicion { opacity: .35; pointer-events: none; }
 }
 
 .cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: start;
+  gap: .4rem 1.5rem;
   padding: .9rem 1.25rem .6rem;
   border-bottom: 1px solid var(--borde);
   background: var(--superficie);
 }
 .cabecera h1 { margin: 0; font-size: 1.1rem; font-weight: 600; letter-spacing: -.01em; }
 .entradilla { margin: .15rem 0 0; color: var(--tinta-2); font-size: .88rem; }
+/* De qué corte del directorio salen los servicios (main.js). */
+.version-datos { margin: .2rem 0 0; color: var(--tinta-3); font-size: .78rem; }
+.ayuda { display: flex; flex-wrap: wrap; gap: .3rem 1rem; padding-top: .15rem; font-size: .85rem; }
+.ayuda a { color: var(--foco); }
 
 .fallo { margin: 1rem 1.25rem; color: #b3261e; }
 
@@ -94,6 +103,26 @@ body.cargando .disposicion { opacity: .35; pointer-events: none; }
   text-transform: uppercase;
   letter-spacing: .04em;
 }
+
+/* Grupo plegable (panel.js, grupoPlegable): el título hace de leyenda y de botón. */
+.plegable { padding: 0; }
+.plegable > summary {
+  padding: .6rem .8rem;
+  font-weight: 600;
+  font-size: .82rem;
+  color: var(--tinta-2);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.plegable > summary::-webkit-details-marker { display: none; }
+.plegable > summary::after { content: "+"; font-size: 1rem; font-weight: 400; color: var(--tinta-3); }
+.plegable[open] > summary::after { content: "−"; }
+.contenido-plegable { padding: 0 .8rem .8rem; }
 
 .campo { margin: .45rem 0; display: grid; gap: .2rem; }
 .campo label { font-size: .82rem; color: var(--tinta-2); }
@@ -132,15 +161,37 @@ input[type="text"]:disabled, select:disabled { background: #f4f5f7; color: var(-
   border-radius: 7px;
   padding: .35rem .5rem;
 }
-.grupos-tipo {
-  padding-bottom: .3rem;
-  margin-bottom: .3rem;
-  border-bottom: 1px solid var(--borde);
+/* Un grupo por viceministerio (panel.js): cabecera con su casilla y el botón que
+   despliega sus tipos, y la lista, sangrada, debajo. */
+.grupo-vm + .grupo-vm { border-top: 1px solid var(--borde); margin-top: .25rem; padding-top: .25rem; }
+.cabecera-vm { display: flex; justify-content: space-between; align-items: start; gap: .5rem; }
+.cabecera-vm .casilla { flex: 1; }
+button.desplegar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  margin-top: .1rem;
+  padding: .1rem .35rem;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--superficie);
+  font: inherit;
+  font-size: .75rem;
+  color: var(--tinta-2);
+  cursor: pointer;
 }
+button.desplegar::after { content: "▾"; transition: transform .15s; }
+button.desplegar[aria-expanded="true"]::after { transform: rotate(180deg); }
+.lista-tipos { padding: .1rem 0 .2rem 1.35rem; }
+.lista-tipos[hidden] { display: none; }
 
-.lista-tipos {
-  max-height: 15rem;
-  overflow-y: auto;
+/* Subtítulos dentro de un grupo («Textos» y «Elementos» en Layout). */
+.subtitulo-grupo {
+  margin: .5rem 0 .1rem;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--tinta-3);
 }
 
 .acciones-linea { display: flex; gap: .75rem; margin: .1rem 0 .45rem; }
@@ -176,7 +227,9 @@ button.generar {
 }
 button.generar:disabled { background: var(--tinta-3); cursor: progress; }
 
+.estado { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
 .progreso { margin: .4rem 0 0; font-size: .82rem; color: var(--tinta-2); min-height: 1.2em; }
+.reloj { font-size: .82rem; color: var(--tinta-3); font-variant-numeric: tabular-nums; }
 .nota { margin: .3rem 0 0; font-size: .78rem; color: var(--tinta-2); }
 
 /* ------------------------------ zoom --------------------------------- */
@@ -269,6 +322,27 @@ button.secundario:disabled { color: var(--tinta-3); cursor: not-allowed; }
 }
 .vista.arrastrando { cursor: grabbing; }
 .vista.ocupado { cursor: progress; }
+/* Mientras se compone, una barra recorre el borde superior de la vista: el mapa que se
+   ve es el anterior y tiene que notarse. Con la composición en segundo plano (Fase 22)
+   la página sigue viva y la barra se mueve. */
+.vista.ocupado::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 35%;
+  background: var(--foco);
+  animation: componiendo 1.2s ease-in-out infinite;
+}
+@keyframes componiendo {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(290%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vista.ocupado::before { animation: none; width: 100%; opacity: .6; }
+}
 
 .lienzo {
   background: #fff;
@@ -363,9 +437,21 @@ button.secundario:disabled { color: var(--tinta-3); cursor: not-allowed; }
 .dialogo .avisos { margin: .7rem 0 0; }
 
 .avisos { padding-left: 1.1rem; font-size: .85rem; color: #8a5a00; }
-.avisos li { margin: .25rem 0; }
+.avisos li { margin: .25rem 0 .5rem; }
+/* El remedio del aviso, cuando lo hay («Probar en A3»). */
+.avisos .accion-aviso { display: block; margin: .3rem 0 0; color: var(--tinta); }
 
+/* Pantallas angostas. Hasta la Fase 22 la página seguía clavada al alto de la pantalla:
+   el panel se llevaba la mitad, la barra y el resumen otro tanto, y a la vista previa
+   le quedaban unos cincuenta píxeles. Ahora la página se desplaza, la vista va primero
+   con un alto propio y la barra se parte en dos líneas si no cabe. */
 @media (max-width: 860px) {
-  .disposicion { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .panel { border-right: 0; border-bottom: 1px solid var(--borde); max-height: 50vh; }
+  html, body { height: auto; min-height: 100%; }
+  .disposicion { display: flex; flex-direction: column; }
+  .disposicion > * { min-width: 0; }
+  .area-vista { order: -1; min-height: 78vh; border-bottom: 1px solid var(--borde); }
+  .vista { min-height: 55vh; }
+  .barra-vista { flex-wrap: wrap; gap: .4rem .75rem; }
+  .panel { overflow: visible; border-right: 0; max-height: none; }
+  .pie-panel { bottom: 0; padding-bottom: .6rem; }
 }
